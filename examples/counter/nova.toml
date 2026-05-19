@@ -1,0 +1,10 @@
+[project]
+name = "Nova Counter"
+version = "0.1.0"
+entry = "src/App.nova"
+
+[targets.web]
+renderer = "@nova/web"
+
+[targets.android]
+renderer = "@nova/android"

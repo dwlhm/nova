@@ -1,0 +1,29 @@
+# macOS
+.DS_Store
+
+# Local caches
+.gocache/
+.cache/
+
+# Go
+bin/
+*.test
+*.out
+coverage.*
+
+# Nova/example build outputs
+/build/
+/examples/**/build/
+
+# Android/Gradle build artifacts
+.gradle/
+**/.gradle/
+*.apk
+*.aab
+local.properties
+
+# Editor/IDE metadata
+.idea/
+.vscode/
+*.swp
+*.swo

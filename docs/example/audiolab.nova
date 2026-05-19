@@ -1,0 +1,147 @@
+<import external storage from "@env/storage">
+  operation load {
+    input {
+      key: string;
+    }
+
+    output unknown;
+  }
+
+  operation remove {
+    input {
+      key: string;
+    }
+
+    output void;
+  }
+/|
+
+<import external audio from "@env/dsp">
+  operation setProfile {
+    input {
+      bass: number;
+      mid: number;
+      treble: number;
+      masterGain: number;
+    }
+
+    output void;
+  }
+
+  operation reset {
+    input {
+    }
+
+    output void;
+  }
+/|
+
+<import external notify from "@env/os">
+  operation send {
+    input {
+      msg: string;
+      type?: string;
+    }
+
+    output void;
+  }
+/|
+
+// --- CONTRACTS ---
+
+<contract type IEM>
+  id: string;
+  brand: string;
+  model: string;
+  driver: string;
+  impedance: number;
+  sensitivity: number;
+  bass: number;
+  mid: number;
+  treble: number;
+/|
+
+<contract type Status>
+  "idle" | "loading" | "ready" | "error";
+/|
+
+<contract state AudioLab>
+  collection: IEM[] <- [] {
+    @loaded(items: IEM[]) -> items;
+    @remove(id: string) -> collection |> removeById id;
+    @reset -> [];
+  };
+
+  selected: IEM | null <- null {
+    @select(iem: IEM) -> iem;
+    @reset -> null;
+  };
+
+  engineOffset: number <- 0.0 {
+    @set_offset(value: number) -> value;
+    @reset -> 0.0;
+  };
+
+  status: Status <- "idle" {
+    @sync -> "loading";
+    @loaded(items: IEM[]) -> "ready";
+    @storage_failed(message: string) -> "error";
+  };
+/|
+
+<func removeById items: IEM[] id: string returns IEM[]>
+  items |> filter item.id != id
+/|
+
+<func gainFor iem: IEM offset: number returns number>
+  (iem.impedance / iem.sensitivity * 100) + offset
+/|
+
+// --- PROJECTION ---
+
+<template target <- web>
+  <section class <- "lab-root">
+    <header>
+      <h1>
+        "Nova Audio Lab"
+      /|
+      <text value <- "Total IEMs: " + collection.length /|
+      <text value <- "Engine Offset: " + engineOffset + "dB" /|
+    /|
+
+    <list items <- collection>
+      <item>
+        <text value <- item.brand + " " + item.model /|
+        <text value <- item.driver + " (" + item.impedance + " Ohm)" /|
+        <button on_press -> @select(item)>
+          "Select"
+        /|
+        <button on_press -> @remove(item.id)>
+          "Remove"
+        /|
+      /|
+    /|
+
+    <button on_press -> @sync>
+      "Sync"
+    /|
+    <button on_press -> @reset>
+      "Reset"
+    /|
+  /|
+/|
+
+// --- DIRTY BOUNDARY ---
+
+<lifecycle mount>
+  void -> @sync;
+/|
+
+<lifecycle after @sync>
+  "iem_vault" |> storage.load key <- "iem_vault";
+/|
+
+<lifecycle after @select>
+  selected |> audio.setProfile bass <- selected.bass mid <- selected.mid treble <- selected.treble masterGain <- gainFor selected engineOffset;
+  "Profile Applied" |> notify.send msg <- "Profile Applied" type <- "info";
+/|

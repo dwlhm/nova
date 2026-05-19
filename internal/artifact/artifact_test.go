@@ -1,0 +1,164 @@
+package artifact
+
+import (
+	"encoding/json"
+	"strings"
+	"testing"
+
+	"github.com/dwlhm/nova/internal/build"
+	"github.com/dwlhm/nova/internal/lexer"
+	"github.com/dwlhm/nova/internal/parser"
+	"github.com/dwlhm/nova/internal/project"
+)
+
+func TestGenerateWebArtifactIncludesRuntimeViewIRAndMetadata(t *testing.T) {
+	source := parseNova(t, `<import external storage from "@env/storage">
+  operation load {
+    input {
+      key: string;
+    }
+
+    output unknown;
+  }
+/|
+<contract state App>
+  title: string <- "Nova";
+/|
+<template target <- web>
+  <text value <- title /|
+/|`)
+	manifest := project.Manifest{
+		Project:     project.Project{Name: "demo", Version: "0.1.0", Entry: "src/App.nova"},
+		Permissions: project.PermissionMap{"storage.read": true},
+	}
+	targetManifest := build.WebTargetManifest()
+	plan := build.Resolve(build.ResolutionInput{
+		Project:        manifest,
+		Target:         "web",
+		Sources:        []build.SourceFile{{Path: "src/App.nova", File: source}},
+		TargetManifest: targetManifest,
+	})
+	if len(plan.Diagnostics) != 0 {
+		t.Fatalf("unexpected build diagnostics: %+v", plan.Diagnostics)
+	}
+
+	files, diagnostics := Generate(GenerateInput{
+		Project:        manifest,
+		Plan:           plan.Plan,
+		Sources:        []build.SourceFile{{Path: "src/App.nova", File: source}},
+		TargetManifest: targetManifest,
+	})
+	if len(diagnostics) != 0 {
+		t.Fatalf("unexpected diagnostics: %+v", diagnostics)
+	}
+
+	assertArtifactFile(t, files, "build/web/index.html", "<script src=\"assets/nova-runtime.js\"></script>")
+	assertArtifactFile(t, files, "build/web/assets/nova-runtime.js", "window.NovaRuntime")
+	assertArtifactFile(t, files, "build/web/app.bundle.js", "window.__NOVA_APP__")
+	assertArtifactFile(t, files, "build/web/app.nova-ir.json", "\"viewIR\"")
+	assertArtifactFile(t, files, "build/web/app.source-map.json", "src/App.nova")
+	assertArtifactFile(t, files, "build/web/permissions.json", "storage.read")
+	assertArtifactFile(t, files, "build/web/target-manifest.json", "\"id\": \"web\"")
+
+	metadata := mustJSONFile[map[string]any](t, files, "build/web/metadata.json")
+	if metadata["target"] != "web" || metadata["entryCapability"] != "src/App.nova" {
+		t.Fatalf("metadata = %+v", metadata)
+	}
+}
+
+func TestGenerateAndroidArtifactIncludesGradleAndGeneratedBindings(t *testing.T) {
+	source := parseNova(t, `<contract state Counter>
+  count: number <- 0 {
+    @increment -> count + 1;
+    @decrement -> count - 1;
+    @reset -> 0;
+  };
+/|
+<template target <- android>
+  <surface class <- "counter-shell">
+    <text value <- "Count: " + count /|
+    <button on_press -> @increment>
+      <text value <- "+" /|
+    /|
+  /|
+/|`)
+	manifest := project.Manifest{
+		Project: project.Project{Name: "demo", Version: "0.1.0", Entry: "src/App.nova"},
+	}
+	targetManifest := build.AndroidTargetManifest()
+	plan := build.Resolve(build.ResolutionInput{
+		Project:        manifest,
+		Target:         "android",
+		Sources:        []build.SourceFile{{Path: "src/App.nova", File: source}},
+		TargetManifest: targetManifest,
+	})
+	if len(plan.Diagnostics) != 0 {
+		t.Fatalf("unexpected build diagnostics: %+v", plan.Diagnostics)
+	}
+
+	files, diagnostics := Generate(GenerateInput{
+		Project:        manifest,
+		Plan:           plan.Plan,
+		Sources:        []build.SourceFile{{Path: "src/App.nova", File: source}},
+		TargetManifest: targetManifest,
+	})
+	if len(diagnostics) != 0 {
+		t.Fatalf("unexpected diagnostics: %+v", diagnostics)
+	}
+
+	assertArtifactFile(t, files, "build/android/settings.gradle.kts", "include(\":app\")")
+	assertArtifactFile(t, files, "build/android/build.gradle.kts", "com.android.tools.build:gradle:8.12.3")
+	assertArtifactFile(t, files, "build/android/app/build.gradle.kts", "apply(plugin = \"com.android.application\")")
+	assertArtifactFile(t, files, "build/android/app/build.gradle.kts", "JavaVersion.VERSION_17")
+	assertArtifactFile(t, files, "build/android/app/src/main/AndroidManifest.xml", ".MainActivity")
+	assertArtifactFile(t, files, "build/android/app/src/main/res/values/styles.xml", "Theme.Nova")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "setOnClickListener")
+	assertArtifactFile(t, files, "build/android/generated/NovaApp.kt", "class NovaApp")
+	assertArtifactFile(t, files, "build/android/generated/NovaExternalBindings.kt", "NovaExternalBindings")
+	assertArtifactFile(t, files, "build/android/nova-ir/app.nova-ir.json", "\"viewIR\"")
+	assertArtifactFile(t, files, "build/android/nova-ir/permissions.json", "\"permissions\": []")
+	assertArtifactFile(t, files, "build/android/nova-ir/target-manifest.json", "\"id\": \"android\"")
+}
+
+func parseNova(t *testing.T, input string) parser.File {
+	t.Helper()
+
+	file, diagnostics := parser.Parse(lexer.Tokenize(input))
+	if len(diagnostics) != 0 {
+		t.Fatalf("unexpected parser diagnostics: %+v", diagnostics)
+	}
+	return file
+}
+
+func assertArtifactFile(t *testing.T, files []File, path string, want string) {
+	t.Helper()
+
+	for _, file := range files {
+		if file.Path != path {
+			continue
+		}
+		if !strings.Contains(file.Content, want) {
+			t.Fatalf("%s = %s, want content containing %q", path, file.Content, want)
+		}
+		return
+	}
+	t.Fatalf("missing artifact file %s in %+v", path, files)
+}
+
+func mustJSONFile[T any](t *testing.T, files []File, path string) T {
+	t.Helper()
+
+	for _, file := range files {
+		if file.Path != path {
+			continue
+		}
+		var out T
+		if err := json.Unmarshal([]byte(file.Content), &out); err != nil {
+			t.Fatalf("decode %s: %v\n%s", path, err, file.Content)
+		}
+		return out
+	}
+	t.Fatalf("missing artifact file %s", path)
+	var zero T
+	return zero
+}
