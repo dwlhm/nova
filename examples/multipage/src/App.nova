@@ -1,0 +1,51 @@
+<contract type Route>
+  path: string;
+/|
+
+<contract state Router>
+  route: Route <- {
+    path <- "/";
+  } {
+    @route_changed(next: Route) -> next;
+  };
+/|
+
+<template>
+  <surface class <- "multipage-shell">
+    <row class <- "multipage-nav">
+      <button label <- "Open home page" on_press -> @route_changed({ path <- "/"; })>
+        <text value <- "Home" /|
+      /|
+      <button label <- "Open settings page" on_press -> @route_changed({ path <- "/settings"; })>
+        <text value <- "Settings" /|
+      /|
+      <button label <- "Open profile page" on_press -> @route_changed({ path <- "/profile"; })>
+        <text value <- "Profile" /|
+      /|
+    /|
+
+    <page path <- "/">
+      <column class <- "multipage-page">
+        <text class <- "multipage-eyebrow" value <- "Page /" /|
+        <text class <- "multipage-title" value <- "Workspace Home" /|
+        <text class <- "multipage-copy" value <- "This page is selected from route state without introducing a dirty view branch." /|
+      /|
+    /|
+
+    <page path <- "/settings">
+      <column class <- "multipage-page">
+        <text class <- "multipage-eyebrow" value <- "Page " + route.path /|
+        <text class <- "multipage-title" value <- "Settings" /|
+        <text class <- "multipage-copy" value <- "Route changes stay as serializable Nova data and the web adapter projects the matching page." /|
+      /|
+    /|
+
+    <page path <- "/profile">
+      <column class <- "multipage-page">
+        <text class <- "multipage-eyebrow" value <- "Page " + route.path /|
+        <text class <- "multipage-title" value <- "Profile" /|
+        <text class <- "multipage-copy" value <- "Each page remains plain template data; only the active route path decides which fragment is visible." /|
+      /|
+    /|
+  /|
+/|

@@ -87,6 +87,14 @@ func runBuild(args []string, cwd string, stdout io.Writer, stderr io.Writer) int
 		}
 	}
 
+	styleAssets, styleDiagnostics, ok := loadStyleAssets(cwd, manifest, *targetID)
+	for _, diagnostic := range styleDiagnostics {
+		fmt.Fprintln(stderr, diagnostic)
+	}
+	if !ok {
+		return 1
+	}
+
 	resolution := build.Resolve(build.ResolutionInput{
 		Project:        manifest,
 		Target:         *targetID,
@@ -105,6 +113,7 @@ func runBuild(args []string, cwd string, stdout io.Writer, stderr io.Writer) int
 		Plan:           resolution.Plan,
 		Sources:        sources,
 		TargetManifest: targetManifest,
+		StyleAssets:    styleAssets,
 	})
 	if len(artifactDiagnostics) > 0 {
 		for _, diagnostic := range artifactDiagnostics {
@@ -233,6 +242,37 @@ func projectFiles(sources []build.SourceFile) []project.File {
 		files = append(files, project.File{Path: source.Path})
 	}
 	return files
+}
+
+func loadStyleAssets(cwd string, manifest project.Manifest, targetID string) ([]artifact.StyleAsset, []string, bool) {
+	if targetID != "web" {
+		return nil, nil, true
+	}
+	target := manifest.Targets[targetID]
+	assets := make([]artifact.StyleAsset, 0, len(target.Styles))
+	diagnostics := make([]string, 0)
+	for _, stylePath := range target.Styles {
+		cleanPath, ok := cleanProjectStylePath(stylePath)
+		if !ok {
+			diagnostics = append(diagnostics, fmt.Sprintf("NVA-STYLE-001: refusing unsafe stylesheet path %s", stylePath))
+			continue
+		}
+		content, err := os.ReadFile(filepath.Join(cwd, filepath.FromSlash(cleanPath)))
+		if err != nil {
+			diagnostics = append(diagnostics, fmt.Sprintf("NVA-STYLE-002: read stylesheet %s: %s", cleanPath, err.Error()))
+			continue
+		}
+		assets = append(assets, artifact.StyleAsset{SourcePath: cleanPath, Content: string(content)})
+	}
+	return assets, diagnostics, len(diagnostics) == 0
+}
+
+func cleanProjectStylePath(stylePath string) (string, bool) {
+	cleanPath := filepath.Clean(filepath.FromSlash(stylePath))
+	if cleanPath == "." || filepath.IsAbs(cleanPath) || strings.HasPrefix(cleanPath, "..") || filepath.Ext(cleanPath) != ".css" {
+		return "", false
+	}
+	return filepath.ToSlash(cleanPath), true
 }
 
 func writeArtifactFiles(root string, files []artifact.File) error {

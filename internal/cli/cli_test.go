@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,10 +18,28 @@ entry = "src/App.nova"
 
 [targets.web]
 renderer = "@nova/web"
+styles = ["src/App.css"]
 
 [targets.android]
 renderer = "@nova/android"
-`)
+application_id = "dev.example.demo"
+namespace = "nova.generated"
+compile_sdk = 35
+min_sdk = 23
+target_sdk = 35
+version_code = 1
+version_name = "0.1.0"
+gradle_plugin = "8.12.3"
+kotlin_plugin = "2.0.21"
+compose_compiler_plugin = "2.0.21"
+compose_bom = "2024.10.00"
+activity_compose = "1.9.3"
+material3 = "1.3.0"
+theme = "Theme.Nova"
+theme_parent = "android:style/Theme.Material.Light.NoActionBar"
+java_version = "17"
+label = "demo"
+	`)
 	writeFile(t, cwd, "src/App.nova", `<contract state Counter>
   count: number <- 0 {
     @increment -> count + 1;
@@ -42,15 +61,21 @@ renderer = "@nova/android"
     <button on_press -> @increment>
       <text value <- "+" /|
     /|
-  /|
-/|`)
+	/|
+	/|`)
+	writeFile(t, cwd, "src/App.css", `.counter-shell {
+  display: grid;
+}
+`)
 
 	var out bytes.Buffer
 	var errOut bytes.Buffer
 	if code := Run([]string{"build", "--target", "web"}, cwd, &out, &errOut); code != 0 {
 		t.Fatalf("web build exit = %d\nstdout=%s\nstderr=%s", code, out.String(), errOut.String())
 	}
-	assertFileContains(t, cwd, "build/web/index.html", "Nova App")
+	assertFileContains(t, cwd, "build/web/index.html", "demo")
+	assertFileContains(t, cwd, "build/web/index.html", "assets/styles/src/App.css")
+	assertFileContains(t, cwd, "build/web/assets/styles/src/App.css", ".counter-shell")
 	assertFileContains(t, cwd, "build/web/app.nova-ir.json", "\"target\": \"web\"")
 	assertFileContains(t, cwd, "build/web/app.bundle.js", "@increment")
 	assertFileContains(t, cwd, "build/web/bundle-manifest.json", "\"format\": \"static-web\"")
@@ -62,18 +87,56 @@ renderer = "@nova/android"
 		t.Fatalf("android build exit = %d\nstdout=%s\nstderr=%s", code, out.String(), errOut.String())
 	}
 	assertFileContains(t, cwd, "build/android/build.gradle.kts", "com.android.tools.build:gradle:8.12.3")
-	assertFileContains(t, cwd, "build/android/app/src/main/java/nova/generated/MainActivity.java", "setOnClickListener")
+	assertFileContains(t, cwd, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "dispatch(\"@increment\"")
 	assertFileContains(t, cwd, "build/android/generated/NovaApp.kt", "target = \"android\"")
 	assertFileContains(t, cwd, "build/android/app/build/outputs/apk/debug/app-debug.apk", "apk")
 	assertFileContains(t, cwd, "build/android/bundle-manifest.json", "\"format\": \"apk\"")
 
-	writeFile(t, cwd, "build/android/app/src/main/java/nova/generated/Stale.kt", "stale")
+	writeFile(t, cwd, "build/android/app/src/main/kotlin/nova/generated/Stale.kt", "stale")
 	out.Reset()
 	errOut.Reset()
 	if code := Run([]string{"build", "--target", "android"}, cwd, &out, &errOut); code != 0 {
 		t.Fatalf("second android build exit = %d\nstdout=%s\nstderr=%s", code, out.String(), errOut.String())
 	}
-	assertFileMissing(t, cwd, "build/android/app/src/main/java/nova/generated/Stale.kt")
+	assertFileMissing(t, cwd, "build/android/app/src/main/kotlin/nova/generated/Stale.kt")
+}
+
+func TestRunBuildReportsStyleAssetDiagnostics(t *testing.T) {
+	cases := []struct {
+		name   string
+		styles string
+		want   string
+	}{
+		{name: "unsafe path", styles: `styles = ["../theme.css"]`, want: "NVA-STYLE-001"},
+		{name: "missing file", styles: `styles = ["src/Missing.css"]`, want: "NVA-STYLE-002"},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			cwd := t.TempDir()
+			writeFile(t, cwd, "nova.toml", fmt.Sprintf(`[project]
+name = "demo"
+version = "0.1.0"
+entry = "src/App.nova"
+
+[targets.web]
+renderer = "@nova/web"
+%s
+`, tt.styles))
+			writeFile(t, cwd, "src/App.nova", `<template target <- web>
+  <text value <- "web" /|
+/|`)
+
+			var out bytes.Buffer
+			var errOut bytes.Buffer
+			if code := Run([]string{"build", "--target", "web", "--bundle=false"}, cwd, &out, &errOut); code == 0 {
+				t.Fatalf("web build should fail, stdout=%s stderr=%s", out.String(), errOut.String())
+			}
+			if !strings.Contains(errOut.String(), tt.want) {
+				t.Fatalf("stderr = %s, want %s", errOut.String(), tt.want)
+			}
+		})
+	}
 }
 
 func TestRunBuildReportsDiagnosticsForMissingTargetTemplate(t *testing.T) {

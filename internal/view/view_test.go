@@ -64,3 +64,43 @@ func TestProjectKeepsComponentEventRoutesAsData(t *testing.T) {
 		t.Fatalf("component event route = %s, want @save", got)
 	}
 }
+
+func TestProjectRecordsPageProjectionMetadata(t *testing.T) {
+	input := `<contract type Route>
+  path: string;
+/|
+<contract state Router>
+  route: Route <- { path <- "/"; };
+/|
+<template target <- web>
+  <surface>
+    <page path <- "/">
+      <text value <- "Home" /|
+    /|
+    <page path <- "/settings">
+      <text value <- route.path /|
+    /|
+  /|
+/|`
+	file, diagnostics := parser.Parse(lexer.Tokenize(input))
+	if len(diagnostics) != 0 {
+		t.Fatalf("unexpected parser diagnostics: %v", diagnostics)
+	}
+
+	ir, viewDiagnostics := Project(file.Templates[0], map[string]bool{"route": true})
+	if len(viewDiagnostics) != 0 {
+		t.Fatalf("unexpected view diagnostics: %v", viewDiagnostics)
+	}
+	if len(ir.Metadata.Pages) != 2 {
+		t.Fatalf("pages = %+v, want 2 page refs", ir.Metadata.Pages)
+	}
+	if got := ir.Metadata.Pages[0].Path.Text; got != "/" {
+		t.Fatalf("first page path = %s, want /", got)
+	}
+	if got := ir.Metadata.Pages[1].Path.Text; got != "/settings" {
+		t.Fatalf("second page path = %s, want /settings", got)
+	}
+	if len(ir.Metadata.Pages[0].NodePath) != 2 || ir.Metadata.Pages[0].NodePath[0] != 0 || ir.Metadata.Pages[0].NodePath[1] != 0 {
+		t.Fatalf("first page node path = %+v, want [0 0]", ir.Metadata.Pages[0].NodePath)
+	}
+}

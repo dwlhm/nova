@@ -6,25 +6,7 @@
   };
 /|
 
-<template target <- web>
-  <surface class <- "counter-shell">
-    <text class <- "counter-title" value <- "Nova Counter" /|
-    <text class <- "counter-value" value <- "Count: " + count /|
-    <row class <- "counter-actions">
-      <button on_press -> @decrement>
-        <text value <- "-" /|
-      /|
-      <button on_press -> @reset>
-        <text value <- "Reset" /|
-      /|
-      <button on_press -> @increment>
-        <text value <- "+" /|
-      /|
-    /|
-  /|
-/|
-
-<template target <- android>
+<template>
   <surface class <- "counter-shell">
     <text class <- "counter-title" value <- "Nova Counter" /|
     <text class <- "counter-value" value <- "Count: " + count /|

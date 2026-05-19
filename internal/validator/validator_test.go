@@ -187,6 +187,19 @@ func TestValidateAudioLabExample(t *testing.T) {
 	}
 }
 
+func TestValidateMultiPageExample(t *testing.T) {
+	path := filepath.Join("..", "..", "examples", "multipage", "src", "App.nova")
+	input, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read example: %v", err)
+	}
+
+	diagnostics := parseAndValidate(t, string(input))
+	if len(diagnostics) != 0 {
+		t.Fatalf("unexpected diagnostics: %v", diagnostics)
+	}
+}
+
 func TestValidateRejectsUndeclaredEvents(t *testing.T) {
 	input := `<contract state Counter>
   count: number <- 0 {

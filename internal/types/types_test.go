@@ -78,3 +78,28 @@ func TestAssignableAndInferExpressionArePureDataRelations(t *testing.T) {
 		t.Fatalf("inferred = %s, ok=%v; want number", Format(inferred), ok)
 	}
 }
+
+func TestInferExpressionBuildsAssignableRecordLiteral(t *testing.T) {
+	input := `<contract type Route>
+  path: string;
+  title?: string;
+/|`
+	file, parserDiagnostics := parser.Parse(lexer.Tokenize(input))
+	if len(parserDiagnostics) != 0 {
+		t.Fatalf("unexpected parser diagnostics: %v", parserDiagnostics)
+	}
+	env, diagnostics := BuildEnvironment(file)
+	if len(diagnostics) != 0 {
+		t.Fatalf("unexpected type diagnostics: %v", diagnostics)
+	}
+
+	routeType := env.Definitions["Route"]
+	tokens := lexer.Tokenize(`{ path <- "/settings"; }`)
+	inferred, ok := env.InferExpression(nil, tokens[:len(tokens)-1])
+	if !ok {
+		t.Fatal("expected record literal inference")
+	}
+	if !env.Assignable(inferred, routeType) {
+		t.Fatalf("inferred = %s, want assignable Route", Format(inferred))
+	}
+}

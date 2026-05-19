@@ -29,11 +29,17 @@ type GenerateInput struct {
 	Plan           build.BuildPlan
 	Sources        []build.SourceFile
 	TargetManifest build.TargetManifest
+	StyleAssets    []StyleAsset
 }
 
 type File struct {
 	Path    string
 	Content string
+}
+
+type StyleAsset struct {
+	SourcePath string
+	Content    string
 }
 
 type Diagnostic = diagnostic.Diagnostic
@@ -68,7 +74,11 @@ func Generate(input GenerateInput) ([]File, []Diagnostic) {
 	case "web":
 		return webFiles(input, bundle, artifactMetadata), nil
 	case "android":
-		return androidFiles(input, bundle, artifactMetadata), nil
+		config, configDiagnostics := androidConfig(input.Project)
+		if len(configDiagnostics) > 0 {
+			return nil, configDiagnostics
+		}
+		return androidFiles(input, bundle, artifactMetadata, config), nil
 	default:
 		return nil, []Diagnostic{errorDiagnostic("NVA-TARGET-019", fmt.Sprintf("unsupported build target %s", input.Plan.Target))}
 	}
@@ -127,8 +137,9 @@ func buildBundle(input GenerateInput) (irBundle, []Diagnostic) {
 }
 
 func webFiles(input GenerateInput, bundle irBundle, metadata target.ArtifactMetadata) []File {
-	return []File{
-		{Path: "build/web/index.html", Content: webIndex(input.Project.Project.Name)},
+	styleFiles := webStyleFiles(input.StyleAssets)
+	files := []File{
+		{Path: "build/web/index.html", Content: webIndex(input.Project.Project.Name, webStyleHrefs(styleFiles))},
 		{Path: "build/web/assets/nova-runtime.css", Content: webCSS()},
 		{Path: "build/web/assets/nova-runtime.js", Content: webRuntime()},
 		{Path: "build/web/app.bundle.js", Content: webBundle(bundle)},
@@ -138,24 +149,25 @@ func webFiles(input GenerateInput, bundle irBundle, metadata target.ArtifactMeta
 		{Path: "build/web/target-manifest.json", Content: mustJSON(targetManifestSummary(input.TargetManifest))},
 		{Path: "build/web/metadata.json", Content: mustJSON(metadataSummary(metadata))},
 	}
+	return append(files, styleFiles...)
 }
 
-func androidFiles(input GenerateInput, bundle irBundle, metadata target.ArtifactMetadata) []File {
+func androidFiles(input GenerateInput, bundle irBundle, metadata target.ArtifactMetadata, config androidTargetConfig) []File {
 	return []File{
 		{Path: "build/android/nova-ir/app.nova-ir.json", Content: mustJSON(bundle)},
 		{Path: "build/android/nova-ir/app.source-map.json", Content: mustJSON(sourceMapSummary(input.Plan, bundle))},
 		{Path: "build/android/nova-ir/permissions.json", Content: mustJSON(permissionSummary(input.Plan.Permissions))},
 		{Path: "build/android/nova-ir/target-manifest.json", Content: mustJSON(targetManifestSummary(input.TargetManifest))},
 		{Path: "build/android/nova-ir/metadata.json", Content: mustJSON(metadataSummary(metadata))},
-		{Path: "build/android/settings.gradle.kts", Content: androidSettings(input.Project.Project.Name)},
-		{Path: "build/android/build.gradle.kts", Content: androidGradle(input.Project.Project.Name)},
-		{Path: "build/android/app/build.gradle.kts", Content: androidAppGradle()},
-		{Path: "build/android/app/src/main/AndroidManifest.xml", Content: androidManifest()},
-		{Path: "build/android/app/src/main/res/values/styles.xml", Content: androidStyles()},
-		{Path: "build/android/app/src/main/java/nova/generated/MainActivity.java", Content: androidMainActivity(input.Project.Project.Name, bundle)},
-		{Path: "build/android/generated/NovaApp.kt", Content: androidApp(input.Project.Project.Name, bundle.Target)},
-		{Path: "build/android/generated/NovaRoutes.kt", Content: androidRoutes()},
-		{Path: "build/android/generated/NovaExternalBindings.kt", Content: androidExternalBindings(input.Plan.ExternalOperations)},
+		{Path: "build/android/settings.gradle.kts", Content: androidSettings(input.Project.Project.Name, config)},
+		{Path: "build/android/build.gradle.kts", Content: androidGradle(input.Project.Project.Name, config)},
+		{Path: "build/android/app/build.gradle.kts", Content: androidAppGradle(config)},
+		{Path: "build/android/app/src/main/AndroidManifest.xml", Content: androidManifest(config)},
+		{Path: "build/android/app/src/main/res/values/styles.xml", Content: androidStyles(config)},
+		{Path: "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", Content: androidMainActivity(input.Project.Project.Name, bundle, config)},
+		{Path: "build/android/generated/NovaApp.kt", Content: androidApp(input.Project.Project.Name, bundle.Target, config)},
+		{Path: "build/android/generated/NovaRoutes.kt", Content: androidRoutes(bundle, config)},
+		{Path: "build/android/generated/NovaExternalBindings.kt", Content: androidExternalBindings(input.Plan.ExternalOperations, config)},
 	}
 }
 
@@ -302,11 +314,47 @@ func runtimeContract(targetID string) (target.RuntimeContract, bool) {
 	}
 }
 
-func webIndex(name string) string {
+func webIndex(name string, styleHrefs []string) string {
 	if strings.TrimSpace(name) == "" {
 		name = "Nova App"
 	}
-	return "<!doctype html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n  <title>" + escapeHTML(name) + "</title>\n  <link rel=\"stylesheet\" href=\"assets/nova-runtime.css\">\n</head>\n<body>\n  <main id=\"nova-root\" aria-label=\"Nova App\"></main>\n  <script src=\"assets/nova-runtime.js\"></script>\n  <script src=\"app.bundle.js\"></script>\n</body>\n</html>\n"
+	links := "  <link rel=\"stylesheet\" href=\"assets/nova-runtime.css\">\n"
+	for _, href := range styleHrefs {
+		links += "  <link rel=\"stylesheet\" href=\"" + escapeHTML(href) + "\">\n"
+	}
+	return "<!doctype html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n  <title>" + escapeHTML(name) + "</title>\n" + links + "</head>\n<body>\n  <main id=\"nova-root\" aria-label=\"" + escapeHTML(name) + "\"></main>\n  <script src=\"assets/nova-runtime.js\"></script>\n  <script src=\"app.bundle.js\"></script>\n</body>\n</html>\n"
+}
+
+func webStyleFiles(styles []StyleAsset) []File {
+	files := make([]File, 0, len(styles))
+	seen := make(map[string]bool, len(styles))
+	for _, style := range styles {
+		outputPath := webStyleOutputPath(style.SourcePath)
+		if outputPath == "" || seen[outputPath] {
+			continue
+		}
+		seen[outputPath] = true
+		files = append(files, File{Path: outputPath, Content: style.Content})
+	}
+	return files
+}
+
+func webStyleHrefs(files []File) []string {
+	hrefs := make([]string, 0, len(files))
+	for _, file := range files {
+		if href, ok := strings.CutPrefix(file.Path, "build/web/"); ok {
+			hrefs = append(hrefs, href)
+		}
+	}
+	return hrefs
+}
+
+func webStyleOutputPath(sourcePath string) string {
+	clean := strings.Trim(strings.ReplaceAll(sourcePath, "\\", "/"), "/")
+	if clean == "" || strings.HasPrefix(clean, "../") || strings.Contains(clean, "/../") {
+		return ""
+	}
+	return "build/web/assets/styles/" + clean
 }
 
 func mustJSON(value any) string {

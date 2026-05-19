@@ -1,16 +1,16 @@
 [project]
-name = "Nova Counter"
+name = "Nova Multipage"
 version = "0.1.0"
 entry = "src/App.nova"
 
 [targets.web]
 renderer = "@nova/web"
-styles = ["src/Counter.css"]
+styles = ["src/Multipage.css"]
 
 [targets.android]
 renderer = "@nova/android"
-application_id = "dev.nova.example.counter"
-namespace = "nova.generated.counter"
+application_id = "dev.nova.example.multipage"
+namespace = "nova.generated.multipage"
 compile_sdk = 35
 min_sdk = 23
 target_sdk = 35
@@ -25,4 +25,4 @@ material3 = "1.3.0"
 theme = "Theme.Nova"
 theme_parent = "android:style/Theme.Material.Light.NoActionBar"
 java_version = "17"
-label = "Nova Counter"
+label = "Nova Multipage"

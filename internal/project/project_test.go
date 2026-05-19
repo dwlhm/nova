@@ -13,11 +13,14 @@ entry = "src/App.nova"
 
 [targets.web]
 renderer = "@nova/web"
+styles = ["src/global.css", "src/counter.css"]
 
 [targets.android]
-renderer = "@nova/android"
+	renderer = "@nova/android"
+application_id = "dev.example.audiolab"
+compile_sdk = 35
 
-[permissions]
+	[permissions]
 storage.read = true
 storage.write = false
 `
@@ -31,6 +34,15 @@ storage.write = false
 	}
 	if manifest.Targets["web"].Renderer != "@nova/web" {
 		t.Fatalf("web renderer = %q, want @nova/web", manifest.Targets["web"].Renderer)
+	}
+	if got := manifest.Targets["web"].Styles; len(got) != 2 || got[0] != "src/global.css" || got[1] != "src/counter.css" {
+		t.Fatalf("web styles = %+v, want global/counter css", got)
+	}
+	if got := manifest.Targets["android"].Options["application_id"]; got != "dev.example.audiolab" {
+		t.Fatalf("android application_id = %q, want dev.example.audiolab", got)
+	}
+	if got := manifest.Targets["android"].Options["compile_sdk"]; got != "35" {
+		t.Fatalf("android compile_sdk = %q, want 35", got)
 	}
 	if !manifest.Permissions["storage.read"] {
 		t.Fatalf("storage.read should be granted: %+v", manifest.Permissions)

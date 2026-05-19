@@ -238,7 +238,7 @@ func collectAndroidOutputs(artifactDir string, outputPath string) ([]bundleOutpu
 		filepath.Join(artifactDir, "build.gradle.kts"),
 		filepath.Join(artifactDir, "app", "build.gradle.kts"),
 		filepath.Join(artifactDir, "app", "src", "main", "AndroidManifest.xml"),
-		filepath.Join(artifactDir, "app", "src", "main", "java", "nova", "generated", "MainActivity.java"),
+		filepath.Join(artifactDir, "app", "src", "main", "kotlin", "nova", "generated", "MainActivity.kt"),
 		filepath.Join(artifactDir, "app", "src", "main", "res", "values", "styles.xml"),
 		filepath.Join(artifactDir, "generated", "NovaApp.kt"),
 		filepath.Join(artifactDir, "generated", "NovaRoutes.kt"),

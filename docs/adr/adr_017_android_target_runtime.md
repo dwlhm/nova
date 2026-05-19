@@ -163,6 +163,47 @@ tergantung mode project.
 
 ---
 
+# Android App Identity
+
+APK identity harus berasal dari konfigurasi target di project manifest, bukan dari contoh atau runtime package.
+
+Konfigurasi wajib target Android:
+
+```txt
+application_id
+namespace
+compile_sdk
+min_sdk
+target_sdk
+version_code
+version_name or project.version
+gradle_plugin
+kotlin_plugin
+compose_compiler_plugin
+compose_bom
+activity_compose
+material3
+theme
+theme_parent
+java_version
+label or project.name
+```
+
+`namespace` dan package generated code boleh tetap stabil untuk kebutuhan compiler/runtime, tetapi
+Android install identity adalah `applicationId`. Dua project Nova berbeda harus menghasilkan
+`applicationId` berbeda agar Android tidak menganggap APK sebagai update dari app lain.
+
+Rule:
+
+```txt
+1. Artifact builder tidak boleh menurunkan applicationId dari nama example.
+2. Versi Gradle, SDK, dependency Compose, namespace, theme, Java version, dan label harus berasal dari manifest project.
+3. Jika konfigurasi wajib kosong, build gagal dengan diagnostic.
+4. Nilai fallback hanya boleh berasal dari field user-side lain, misalnya versionName dari project.version.
+```
+
+---
+
 # Rendering Strategy
 
 Primitive mapping awal:

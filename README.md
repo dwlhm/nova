@@ -6,8 +6,8 @@ Nova adalah eksperimen bahasa dan runtime lintas target untuk membangun aplikasi
 
 - Source Nova diparse, divalidasi, dan diturunkan menjadi IR.
 - Target `web` menghasilkan aplikasi static browser.
-- Target `android` menghasilkan project Gradle dan menjalankan `assembleDebug` lewat CLI.
-- Example pertama tersedia di `examples/counter`.
+- Target `android` menghasilkan project Gradle Compose dan menjalankan `assembleDebug` lewat CLI.
+- Example tersedia di `examples/counter` dan `examples/multipage`.
 
 ## Struktur Penting
 
@@ -19,6 +19,7 @@ internal/build/           target resolution
 internal/parser/          parser Nova
 internal/validator/       semantic validation
 examples/counter/         example app counter
+examples/multipage/       example route state dan page projection
 docs/adr/                 ADR desain Nova
 ```
 
@@ -55,6 +56,52 @@ build/web/bundle-manifest.json
 ```
 
 `index.html` bisa dibuka langsung di browser.
+
+Untuk MVP, CSS project web didaftarkan sebagai stylesheet global dari manifest:
+
+```toml
+[targets.web]
+renderer = "@nova/web"
+styles = ["src/Counter.css"]
+```
+
+File CSS disalin ke artifact web dan di-link setelah runtime base CSS. Detail scoping,
+CSS module, dan style per capability sengaja belum diputuskan di MVP; lihat
+`docs/adr/adr_024_style_asset_injection.md`.
+
+## Example Multi Page
+
+Source utama:
+
+```txt
+examples/multipage/src/App.nova
+```
+
+Example ini memakai state `route: Route`, event `@route_changed`, dan node `<page path <- "...">`
+untuk memilih page aktif tanpa dirty operation di template.
+
+```bash
+cd examples/multipage
+go run ../../cmd/nova build --target web
+```
+
+Target Android memakai source yang sama:
+
+```bash
+cd examples/multipage
+go run ../../cmd/nova build --target android
+```
+
+Jika hanya ingin memeriksa generated Android project tanpa menjalankan Gradle:
+
+```bash
+go run ../../cmd/nova build --target android --bundle=false
+```
+
+`[targets.android]` wajib membawa konfigurasi build dari sisi project, termasuk
+`application_id`, `namespace`, SDK version, plugin/dependency version, `theme`,
+`theme_parent`, `java_version`, dan `label`.
+Lihat `examples/*/nova.toml` untuk contoh lengkap.
 
 ## Build Android
 

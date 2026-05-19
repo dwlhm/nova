@@ -39,6 +39,7 @@ type EventRoute struct {
 type DependencyMetadata struct {
 	Bindings    []BindingRef
 	EventRoutes []EventRouteRef
+	Pages       []PageRef
 }
 
 type BindingRef struct {
@@ -52,6 +53,11 @@ type EventRouteRef struct {
 	Slot     string
 	Event    scheduler.SchedulerEvent
 	Arity    int
+}
+
+type PageRef struct {
+	NodePath []int
+	Path     Binding
 }
 
 type Diagnostic struct {
@@ -87,6 +93,14 @@ func BuildMetadata(nodes []Node, stateNames map[string]bool) DependencyMetadata 
 func appendNodeMetadata(metadata DependencyMetadata, node Node, path []int, stateNames map[string]bool) DependencyMetadata {
 	if node.Key != nil {
 		metadata = appendBindingMetadata(metadata, path, "key", *node.Key, stateNames)
+	}
+	if node.Kind == "page" {
+		if pagePath, ok := node.Props["path"]; ok {
+			metadata.Pages = append(metadata.Pages, PageRef{
+				NodePath: clonePath(path),
+				Path:     pagePath,
+			})
+		}
 	}
 	for prop, binding := range node.Props {
 		metadata = appendBindingMetadata(metadata, path, prop, binding, stateNames)

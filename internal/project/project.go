@@ -17,6 +17,8 @@ type Project struct {
 
 type Target struct {
 	Renderer string
+	Options  map[string]string
+	Styles   []string
 }
 
 type PermissionMap map[string]bool
@@ -153,8 +155,16 @@ func assignManifestValue(manifest Manifest, section string, key string, value st
 		}
 		if targetID, ok := strings.CutPrefix(section, "targets."); ok {
 			target := manifest.Targets[targetID]
-			if key == "renderer" {
+			if target.Options == nil {
+				target.Options = make(map[string]string)
+			}
+			switch key {
+			case "renderer":
 				target.Renderer = parseString(value, diagnostics, lineNumber)
+			case "styles":
+				target.Styles = parseTargetStyles(value, diagnostics, lineNumber)
+			default:
+				target.Options[key] = parseScalar(value, diagnostics, lineNumber)
 			}
 			manifest.Targets[targetID] = target
 		}
@@ -183,6 +193,40 @@ func parseString(value string, diagnostics *[]Diagnostic, lineNumber int) string
 		Message: fmt.Sprintf("manifest value must be quoted string on line %d", lineNumber),
 	})
 	return strings.Trim(value, `"`)
+}
+
+func parseScalar(value string, diagnostics *[]Diagnostic, lineNumber int) string {
+	value = strings.TrimSpace(value)
+	unquoted, err := strconv.Unquote(value)
+	if err == nil {
+		return unquoted
+	}
+	if value == "" {
+		*diagnostics = append(*diagnostics, Diagnostic{
+			Code:    "NVA-PROJECT-003",
+			Message: fmt.Sprintf("manifest value must not be empty on line %d", lineNumber),
+		})
+	}
+	return value
+}
+
+func parseTargetStyles(value string, diagnostics *[]Diagnostic, lineNumber int) []string {
+	styles, ok := parseStringArray(value, diagnostics, lineNumber)
+	if !ok {
+		*diagnostics = append(*diagnostics, Diagnostic{
+			Code:    "NVA-PROJECT-004",
+			Message: fmt.Sprintf("target styles must be a string array on line %d", lineNumber),
+		})
+		return nil
+	}
+	out := make([]string, 0, len(styles))
+	for _, style := range styles {
+		normalized := normalizePath(style)
+		if normalized != "" {
+			out = append(out, normalized)
+		}
+	}
+	return out
 }
 
 func parseBool(value string) (bool, bool) {

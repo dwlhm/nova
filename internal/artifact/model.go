@@ -89,14 +89,118 @@ func collectModelStateNames(modules []build.ModuleRef, sources map[string]parser
 }
 
 func expressionToJS(tokens []lexer.Token, stateNames map[string]bool, paramNames map[string]bool) string {
+	tokens = trimExpressionTokens(tokens)
+	if record, ok := recordLiteralToJS(tokens, stateNames, paramNames); ok {
+		return record
+	}
+
 	parts := make([]string, 0, len(tokens))
 	for _, tok := range tokens {
-		if tok.Type == lexer.EOF || tok.Type == lexer.COMMENT || tok.Type == lexer.SEMICOLON {
-			continue
-		}
 		parts = append(parts, tokenToJS(tok, stateNames, paramNames))
 	}
 	return strings.Join(parts, " ")
+}
+
+func recordLiteralToJS(tokens []lexer.Token, stateNames map[string]bool, paramNames map[string]bool) (string, bool) {
+	fields, ok := parseRecordExpressionFields(tokens)
+	if !ok {
+		return "", false
+	}
+
+	parts := make([]string, 0, len(fields))
+	for _, field := range fields {
+		parts = append(parts, field.Name.Literal+": "+expressionToJS(field.Value, stateNames, paramNames))
+	}
+	return "({ " + strings.Join(parts, ", ") + " })", true
+}
+
+type recordExpressionField struct {
+	Name  lexer.Token
+	Value []lexer.Token
+}
+
+func parseRecordExpressionFields(tokens []lexer.Token) ([]recordExpressionField, bool) {
+	if len(tokens) < 2 || tokens[0].Type != lexer.LBRACE || tokens[len(tokens)-1].Type != lexer.RBRACE {
+		return nil, false
+	}
+
+	body := tokens[1 : len(tokens)-1]
+	fields := make([]recordExpressionField, 0)
+	pos := 0
+	for pos < len(body) {
+		for pos < len(body) && isRecordExpressionSeparator(body[pos].Type) {
+			pos++
+		}
+		if pos >= len(body) {
+			break
+		}
+
+		name := body[pos]
+		if !isRecordExpressionName(name.Type) {
+			return nil, false
+		}
+		pos++
+		if pos >= len(body) || body[pos].Type != lexer.ASSIGN_IN {
+			return nil, false
+		}
+		pos++
+
+		start := pos
+		depth := 0
+		for pos < len(body) {
+			tok := body[pos]
+			if depth == 0 && isRecordExpressionSeparator(tok.Type) {
+				break
+			}
+			depth = expressionDepth(depth, tok.Type)
+			pos++
+		}
+		value := trimExpressionTokens(body[start:pos])
+		if len(value) == 0 {
+			return nil, false
+		}
+		fields = append(fields, recordExpressionField{Name: name, Value: value})
+	}
+	return fields, len(fields) > 0
+}
+
+func trimExpressionTokens(tokens []lexer.Token) []lexer.Token {
+	start := 0
+	for start < len(tokens) && (tokens[start].Type == lexer.EOF || tokens[start].Type == lexer.COMMENT || tokens[start].Type == lexer.SEMICOLON) {
+		start++
+	}
+	end := len(tokens)
+	for end > start && (tokens[end-1].Type == lexer.EOF || tokens[end-1].Type == lexer.COMMENT || tokens[end-1].Type == lexer.SEMICOLON) {
+		end--
+	}
+	return tokens[start:end]
+}
+
+func isRecordExpressionSeparator(typ lexer.TokenType) bool {
+	return typ == lexer.SEMICOLON || typ == lexer.COMMA || typ == lexer.COMMENT
+}
+
+func isRecordExpressionName(typ lexer.TokenType) bool {
+	switch typ {
+	case lexer.IDENT, lexer.TYPE, lexer.STATE, lexer.EVENT, lexer.CAPABILITY, lexer.EXTERNAL,
+		lexer.OPERATION, lexer.INPUT, lexer.OUTPUT, lexer.PROPS, lexer.EMITS, lexer.RETURNS,
+		lexer.TARGET, lexer.MOUNT, lexer.DISPOSE, lexer.BEFORE, lexer.AFTER, lexer.ERROR:
+		return true
+	default:
+		return false
+	}
+}
+
+func expressionDepth(depth int, typ lexer.TokenType) int {
+	switch typ {
+	case lexer.LPAREN, lexer.LBRACKET, lexer.LBRACE:
+		return depth + 1
+	case lexer.RPAREN, lexer.RBRACKET, lexer.RBRACE:
+		if depth > 0 {
+			return depth - 1
+		}
+	}
+	return depth
 }
 
 func tokenToJS(tok lexer.Token, stateNames map[string]bool, paramNames map[string]bool) string {

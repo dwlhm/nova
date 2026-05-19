@@ -22,8 +22,8 @@ body {
   padding: 24px;
 }
 
-.counter-shell {
-  width: min(420px, 100%);
+[data-nova-kind="surface"] {
+  width: min(760px, 100%);
   display: grid;
   gap: 18px;
   padding: 24px;
@@ -33,21 +33,21 @@ body {
   box-shadow: 0 18px 50px rgba(39, 52, 79, 0.12);
 }
 
-.counter-title {
-  font-size: 20px;
-  font-weight: 700;
-}
-
-.counter-value {
-  font-size: 48px;
-  font-weight: 800;
-  text-align: center;
-}
-
-.counter-actions {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+[data-nova-kind="row"] {
+  display: flex;
+  flex-wrap: wrap;
   gap: 10px;
+}
+
+[data-nova-kind="column"] {
+  display: grid;
+  gap: 12px;
+}
+
+[data-nova-kind="text"] {
+  max-width: 58ch;
+  font-size: 16px;
+  line-height: 1.6;
 }
 
 button {
@@ -77,7 +77,14 @@ window.NovaRuntime = (() => {
   }
 
   function tokenExpression(tokens, stateNames) {
-    return (tokens || []).map((token) => {
+    return expressionFromTokens(tokens || [], stateNames);
+  }
+
+  function expressionFromTokens(tokens, stateNames) {
+    const clean = trimExpressionTokens(tokens);
+    const record = recordExpression(clean, stateNames);
+    if (record) return record;
+    return clean.map((token) => {
       const type = pick(token, "type", "Type", "");
       const literal = pick(token, "literal", "Literal", "");
       if (type === "STRING") return JSON.stringify(literal);
@@ -86,6 +93,77 @@ window.NovaRuntime = (() => {
       if (type === "void") return "undefined";
       return literal;
     }).filter(Boolean).join(" ");
+  }
+
+  function recordExpression(tokens, stateNames) {
+    if (tokens.length < 2 || tokenType(tokens[0]) !== "{" || tokenType(tokens[tokens.length - 1]) !== "}") {
+      return null;
+    }
+    const fields = recordFields(tokens.slice(1, -1));
+    if (!fields) return null;
+    return "({ " + fields.map((field) => propertyName(field.name) + ": " + expressionFromTokens(field.value, stateNames)).join(", ") + " })";
+  }
+
+  function recordFields(tokens) {
+    const fields = [];
+    let pos = 0;
+    while (pos < tokens.length) {
+      while (pos < tokens.length && isRecordSeparator(tokenType(tokens[pos]))) pos++;
+      if (pos >= tokens.length) break;
+
+      const name = tokenLiteral(tokens[pos]);
+      if (!name) return null;
+      pos++;
+      if (pos >= tokens.length || tokenType(tokens[pos]) !== "<-") return null;
+      pos++;
+
+      const start = pos;
+      let depth = 0;
+      while (pos < tokens.length) {
+        const type = tokenType(tokens[pos]);
+        if (depth === 0 && isRecordSeparator(type)) break;
+        depth = expressionDepth(depth, type);
+        pos++;
+      }
+      const value = trimExpressionTokens(tokens.slice(start, pos));
+      if (!value.length) return null;
+      fields.push({ name, value });
+    }
+    return fields.length ? fields : null;
+  }
+
+  function trimExpressionTokens(tokens) {
+    let start = 0;
+    while (start < tokens.length && isExpressionNoise(tokenType(tokens[start]))) start++;
+    let end = tokens.length;
+    while (end > start && isExpressionNoise(tokenType(tokens[end - 1]))) end--;
+    return tokens.slice(start, end);
+  }
+
+  function expressionDepth(depth, type) {
+    if (type === "(" || type === "[" || type === "{") return depth + 1;
+    if ((type === ")" || type === "]" || type === "}") && depth > 0) return depth - 1;
+    return depth;
+  }
+
+  function tokenType(token) {
+    return pick(token, "type", "Type", "");
+  }
+
+  function tokenLiteral(token) {
+    return pick(token, "literal", "Literal", "");
+  }
+
+  function propertyName(name) {
+    return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name) ? name : JSON.stringify(name);
+  }
+
+  function isExpressionNoise(type) {
+    return type === "EOF" || type === "//" || type === ";";
+  }
+
+  function isRecordSeparator(type) {
+    return type === ";" || type === "," || type === "//";
   }
 
   function evaluate(expression, state, payload) {
@@ -146,10 +224,14 @@ window.NovaRuntime = (() => {
     const props = pick(node, "props", "Props", {}) || {};
     const events = pick(node, "events", "Events", {}) || {};
     const children = pick(node, "children", "Children", []) || [];
+    if (kind === "page") {
+      return renderPage(props, children, runtime);
+    }
     if (kind === "#text") {
       return document.createTextNode(String(evaluate(bindingExpression(props.value, runtime.app), runtime.state, {})));
     }
     const element = document.createElement(tagFor(kind));
+    element.dataset.novaKind = kind;
     applyProps(element, props, runtime);
     applyEvents(element, events, runtime);
     element.append(...renderNodes(children, runtime));
@@ -157,6 +239,26 @@ window.NovaRuntime = (() => {
       element.textContent = String(evaluate(bindingExpression(props.value, runtime.app), runtime.state, {}));
     }
     return element;
+  }
+
+  function renderPage(props, children, runtime) {
+    const expected = normalizePath(evaluate(bindingExpression(props.path, runtime.app), runtime.state, {}));
+    if (expected !== activeRoutePath(runtime)) return null;
+    const fragment = document.createDocumentFragment();
+    fragment.append(...renderNodes(children, runtime));
+    return fragment;
+  }
+
+  function activeRoutePath(runtime) {
+    const route = runtime.state.route;
+    if (typeof route === "string") return normalizePath(route);
+    if (route && typeof route.path === "string") return normalizePath(route.path);
+    return "/";
+  }
+
+  function normalizePath(value) {
+    const path = String(value || "/");
+    return path.startsWith("/") ? path : "/" + path;
   }
 
   function tagFor(kind) {

@@ -257,6 +257,29 @@ func TestParseAudioLabExample(t *testing.T) {
 	}
 }
 
+func TestParseMultiPageExample(t *testing.T) {
+	path := filepath.Join("..", "..", "examples", "multipage", "src", "App.nova")
+	input, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read example: %v", err)
+	}
+
+	file, diagnostics := Parse(lexer.Tokenize(string(input)))
+	if len(diagnostics) != 0 {
+		t.Fatalf("unexpected diagnostics: %v", diagnostics)
+	}
+
+	if len(file.ContractTypes) != 1 || file.ContractTypes[0].Name != "Route" {
+		t.Fatalf("unexpected route type: %+v", file.ContractTypes)
+	}
+	if len(file.ContractStates) != 1 || file.ContractStates[0].Name != "Router" {
+		t.Fatalf("unexpected router state: %+v", file.ContractStates)
+	}
+	if len(file.Templates) != 1 || file.Templates[0].Target != "" {
+		t.Fatalf("unexpected templates: %+v", file.Templates)
+	}
+}
+
 func hasDiagnostic(diagnostics []Diagnostic, want string) bool {
 	for _, diagnostic := range diagnostics {
 		if strings.Contains(diagnostic.Message, want) {

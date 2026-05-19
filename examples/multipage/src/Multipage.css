@@ -1,0 +1,42 @@
+.multipage-shell {
+  width: min(760px, 100%);
+  display: grid;
+  gap: 22px;
+}
+
+.multipage-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.multipage-page {
+  min-height: 260px;
+  display: grid;
+  align-content: center;
+  gap: 12px;
+  padding: 28px;
+  border: 1px solid #dfe5ef;
+  border-radius: 8px;
+  background: #fbfcfe;
+}
+
+.multipage-eyebrow {
+  color: #2e6f64;
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.multipage-title {
+  color: #151923;
+  font-size: 34px;
+  font-weight: 800;
+}
+
+.multipage-copy {
+  max-width: 58ch;
+  color: #4c5668;
+  font-size: 16px;
+  line-height: 1.6;
+}
