@@ -16,9 +16,10 @@ type Project struct {
 }
 
 type Target struct {
-	Renderer string
-	Options  map[string]string
-	Styles   []string
+	Renderer     string
+	Options      map[string]string
+	Styles       []string
+	ScopedStyles []string
 }
 
 type PermissionMap map[string]bool
@@ -163,6 +164,8 @@ func assignManifestValue(manifest Manifest, section string, key string, value st
 				target.Renderer = parseString(value, diagnostics, lineNumber)
 			case "styles":
 				target.Styles = parseTargetStyles(value, diagnostics, lineNumber)
+			case "scoped_styles":
+				target.ScopedStyles = parseTargetStyles(value, diagnostics, lineNumber)
 			default:
 				target.Options[key] = parseScalar(value, diagnostics, lineNumber)
 			}

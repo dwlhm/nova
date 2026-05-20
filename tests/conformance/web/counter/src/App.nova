@@ -1,0 +1,10 @@
+<contract state Counter>
+  count: number <- 0 {
+    @increment -> count + 1;
+  };
+/|
+<template target <- web>
+  <button on_press -> @increment>
+    <text value <- "Count " + count /|
+  /|
+/|

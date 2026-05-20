@@ -14,6 +14,7 @@ entry = "src/App.nova"
 [targets.web]
 renderer = "@nova/web"
 styles = ["src/global.css", "src/counter.css"]
+scoped_styles = ["src/App.css"]
 
 [targets.android]
 	renderer = "@nova/android"
@@ -37,6 +38,9 @@ storage.write = false
 	}
 	if got := manifest.Targets["web"].Styles; len(got) != 2 || got[0] != "src/global.css" || got[1] != "src/counter.css" {
 		t.Fatalf("web styles = %+v, want global/counter css", got)
+	}
+	if got := manifest.Targets["web"].ScopedStyles; len(got) != 1 || got[0] != "src/App.css" {
+		t.Fatalf("web scoped styles = %+v, want App.css", got)
 	}
 	if got := manifest.Targets["android"].Options["application_id"]; got != "dev.example.audiolab" {
 		t.Fatalf("android application_id = %q, want dev.example.audiolab", got)

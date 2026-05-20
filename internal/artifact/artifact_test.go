@@ -71,6 +71,46 @@ func TestGenerateWebArtifactIncludesRuntimeViewIRAndMetadata(t *testing.T) {
 	}
 }
 
+func TestGenerateWebArtifactScopesScopedStylesAndWritesStyleManifest(t *testing.T) {
+	source := parseNova(t, `<template target <- web>
+  <surface class <- "counter-shell">
+    <text value <- "Counter" /|
+  /|
+/|`)
+	manifest := project.Manifest{
+		Project: project.Project{Name: "demo", Version: "0.1.0", Entry: "src/App.nova"},
+	}
+	targetManifest := build.WebTargetManifest()
+	plan := build.Resolve(build.ResolutionInput{
+		Project:        manifest,
+		Target:         "web",
+		Sources:        []build.SourceFile{{Path: "src/App.nova", File: source}},
+		TargetManifest: targetManifest,
+	})
+	if len(plan.Diagnostics) != 0 {
+		t.Fatalf("unexpected build diagnostics: %+v", plan.Diagnostics)
+	}
+
+	files, diagnostics := Generate(GenerateInput{
+		Project:        manifest,
+		Plan:           plan.Plan,
+		Sources:        []build.SourceFile{{Path: "src/App.nova", File: source}},
+		TargetManifest: targetManifest,
+		StyleAssets: []StyleAsset{
+			{SourcePath: "src/App.css", Content: ".counter-shell, button:hover {\n  color: red;\n}\n", Scope: StyleScopeApp},
+		},
+	})
+	if len(diagnostics) != 0 {
+		t.Fatalf("unexpected diagnostics: %+v", diagnostics)
+	}
+
+	assertArtifactFile(t, files, "build/web/index.html", `data-nova-style-scope="app"`)
+	assertArtifactFile(t, files, "build/web/assets/styles/src/App.css", `#nova-root[data-nova-style-scope~="app"] .counter-shell`)
+	assertArtifactFile(t, files, "build/web/assets/styles/src/App.css", `#nova-root[data-nova-style-scope~="app"] button:hover`)
+	assertArtifactFile(t, files, "build/web/style-manifest.json", `"scope": "app"`)
+	assertArtifactFile(t, files, "build/web/style-manifest.json", `"outputPath": "assets/styles/src/App.css"`)
+}
+
 func TestGenerateAndroidArtifactIncludesGradleAndGeneratedBindings(t *testing.T) {
 	source := parseNova(t, `<contract state Counter>
   count: number <- 0 {

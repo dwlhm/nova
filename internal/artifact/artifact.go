@@ -40,9 +40,17 @@ type File struct {
 type StyleAsset struct {
 	SourcePath string
 	Content    string
+	Scope      StyleScope
 }
 
 type Diagnostic = diagnostic.Diagnostic
+
+type StyleScope string
+
+const (
+	StyleScopeGlobal StyleScope = "global"
+	StyleScopeApp    StyleScope = "app"
+)
 
 func Generate(input GenerateInput) ([]File, []Diagnostic) {
 	contract, ok := runtimeContract(input.Plan.Target)
@@ -137,9 +145,9 @@ func buildBundle(input GenerateInput) (irBundle, []Diagnostic) {
 }
 
 func webFiles(input GenerateInput, bundle irBundle, metadata target.ArtifactMetadata) []File {
-	styleFiles := webStyleFiles(input.StyleAssets)
+	styles := webStyleBundle(input.StyleAssets)
 	files := []File{
-		{Path: "build/web/index.html", Content: webIndex(input.Project.Project.Name, webStyleHrefs(styleFiles))},
+		{Path: "build/web/index.html", Content: webIndex(input.Project.Project.Name, webStyleHrefs(styles.Files), styles.RootScope)},
 		{Path: "build/web/assets/nova-runtime.css", Content: webCSS()},
 		{Path: "build/web/assets/nova-runtime.js", Content: webRuntime()},
 		{Path: "build/web/app.bundle.js", Content: webBundle(bundle)},
@@ -148,8 +156,9 @@ func webFiles(input GenerateInput, bundle irBundle, metadata target.ArtifactMeta
 		{Path: "build/web/permissions.json", Content: mustJSON(permissionSummary(input.Plan.Permissions))},
 		{Path: "build/web/target-manifest.json", Content: mustJSON(targetManifestSummary(input.TargetManifest))},
 		{Path: "build/web/metadata.json", Content: mustJSON(metadataSummary(metadata))},
+		{Path: "build/web/style-manifest.json", Content: mustJSON(styles.Manifest)},
 	}
-	return append(files, styleFiles...)
+	return append(files, styles.Files...)
 }
 
 func androidFiles(input GenerateInput, bundle irBundle, metadata target.ArtifactMetadata, config androidTargetConfig) []File {
@@ -315,7 +324,7 @@ func runtimeContract(targetID string) (target.RuntimeContract, bool) {
 	}
 }
 
-func webIndex(name string, styleHrefs []string) string {
+func webIndex(name string, styleHrefs []string, rootStyleScope string) string {
 	if strings.TrimSpace(name) == "" {
 		name = "Nova App"
 	}
@@ -323,21 +332,78 @@ func webIndex(name string, styleHrefs []string) string {
 	for _, href := range styleHrefs {
 		links += "  <link rel=\"stylesheet\" href=\"" + escapeHTML(href) + "\">\n"
 	}
-	return "<!doctype html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n  <title>" + escapeHTML(name) + "</title>\n" + links + "</head>\n<body>\n  <main id=\"nova-root\" aria-label=\"" + escapeHTML(name) + "\"></main>\n  <script src=\"assets/nova-runtime.js\"></script>\n  <script src=\"app.bundle.js\"></script>\n</body>\n</html>\n"
+	scopeAttr := ""
+	if strings.TrimSpace(rootStyleScope) != "" {
+		scopeAttr = " data-nova-style-scope=\"" + escapeHTML(rootStyleScope) + "\""
+	}
+	return "<!doctype html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n  <title>" + escapeHTML(name) + "</title>\n" + links + "</head>\n<body>\n  <main id=\"nova-root\"" + scopeAttr + " aria-label=\"" + escapeHTML(name) + "\"></main>\n  <script src=\"assets/nova-runtime.js\"></script>\n  <script src=\"app.bundle.js\"></script>\n</body>\n</html>\n"
 }
 
-func webStyleFiles(styles []StyleAsset) []File {
+type webStyles struct {
+	Files     []File
+	Manifest  map[string]any
+	RootScope string
+}
+
+type webStyleManifestAsset struct {
+	SourcePath string `json:"sourcePath"`
+	OutputPath string `json:"outputPath"`
+	Scope      string `json:"scope"`
+	Order      int    `json:"order"`
+}
+
+func webStyleBundle(styles []StyleAsset) webStyles {
 	files := make([]File, 0, len(styles))
+	manifestAssets := make([]webStyleManifestAsset, 0, len(styles))
 	seen := make(map[string]bool, len(styles))
+	hasAppScope := false
 	for _, style := range styles {
 		outputPath := webStyleOutputPath(style.SourcePath)
 		if outputPath == "" || seen[outputPath] {
 			continue
 		}
 		seen[outputPath] = true
-		files = append(files, File{Path: outputPath, Content: style.Content})
+		scope := normalizeStyleScope(style.Scope)
+		if scope == StyleScopeApp {
+			hasAppScope = true
+		}
+		files = append(files, File{Path: outputPath, Content: webStyleContent(style.Content, scope)})
+		manifestAssets = append(manifestAssets, webStyleManifestAsset{
+			SourcePath: style.SourcePath,
+			OutputPath: strings.TrimPrefix(outputPath, "build/web/"),
+			Scope:      string(scope),
+			Order:      len(manifestAssets),
+		})
 	}
-	return files
+	rootScope := ""
+	if hasAppScope {
+		rootScope = string(StyleScopeApp)
+	}
+	return webStyles{
+		Files: files,
+		Manifest: map[string]any{
+			"assets": manifestAssets,
+		},
+		RootScope: rootScope,
+	}
+}
+
+func webStyleFiles(styles []StyleAsset) []File {
+	return webStyleBundle(styles).Files
+}
+
+func normalizeStyleScope(scope StyleScope) StyleScope {
+	if scope == StyleScopeApp {
+		return StyleScopeApp
+	}
+	return StyleScopeGlobal
+}
+
+func webStyleContent(content string, scope StyleScope) string {
+	if scope != StyleScopeApp {
+		return content
+	}
+	return scopeCSS(content, `#nova-root[data-nova-style-scope~="app"]`)
 }
 
 func webStyleHrefs(files []File) []string {

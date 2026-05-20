@@ -289,6 +289,164 @@ entry = "src/App.nova"
 	}
 }
 
+func TestRunInitCreatesReadableStarterProject(t *testing.T) {
+	cwd := t.TempDir()
+
+	var out bytes.Buffer
+	var errOut bytes.Buffer
+	if code := Run([]string{"init", "--name", "hello"}, cwd, &out, &errOut); code != 0 {
+		t.Fatalf("init exit = %d\nstdout=%s\nstderr=%s", code, out.String(), errOut.String())
+	}
+
+	assertFileContains(t, cwd, "nova.toml", `name = "hello"`)
+	assertFileContains(t, cwd, "nova.toml", `scoped_styles = ["src/App.css"]`)
+	assertFileContains(t, cwd, "src/App.nova", `<contract state Counter>`)
+	assertFileContains(t, cwd, "src/App.css", `.counter-shell`)
+	if !strings.Contains(out.String(), "initialized Nova project hello") {
+		t.Fatalf("stdout = %s, want init summary", out.String())
+	}
+}
+
+func TestRunInitRefusesToOverwriteProjectWithoutForce(t *testing.T) {
+	cwd := t.TempDir()
+	writeFile(t, cwd, "nova.toml", `[project]
+name = "existing"
+`)
+
+	var out bytes.Buffer
+	var errOut bytes.Buffer
+	if code := Run([]string{"init", "--name", "next"}, cwd, &out, &errOut); code == 0 {
+		t.Fatalf("init should fail without --force, stdout=%s stderr=%s", out.String(), errOut.String())
+	}
+	if !strings.Contains(errOut.String(), "NVA-INIT-001") {
+		t.Fatalf("stderr = %s, want overwrite diagnostic", errOut.String())
+	}
+}
+
+func TestRunCheckValidatesProjectWithoutWritingArtifacts(t *testing.T) {
+	cwd := t.TempDir()
+	writeFile(t, cwd, "nova.toml", `[project]
+name = "demo"
+version = "0.1.0"
+entry = "src/App.nova"
+
+[targets.web]
+renderer = "@nova/web"
+`)
+	writeFile(t, cwd, "src/App.nova", `<template target <- web>
+  <text value <- "web" /|
+/|`)
+
+	var out bytes.Buffer
+	var errOut bytes.Buffer
+	if code := Run([]string{"check", "--target", "web"}, cwd, &out, &errOut); code != 0 {
+		t.Fatalf("check exit = %d\nstdout=%s\nstderr=%s", code, out.String(), errOut.String())
+	}
+	if !strings.Contains(out.String(), "checked web project demo") {
+		t.Fatalf("stdout = %s, want check summary", out.String())
+	}
+	assertFileMissing(t, cwd, "build/web/index.html")
+}
+
+func TestRunInspectPrintsBuildPlanJSON(t *testing.T) {
+	cwd := t.TempDir()
+	writeFile(t, cwd, "nova.toml", `[project]
+name = "demo"
+version = "0.1.0"
+entry = "src/App.nova"
+
+[targets.web]
+renderer = "@nova/web"
+`)
+	writeFile(t, cwd, "src/App.nova", `<template target <- web>
+  <text value <- "web" /|
+/|`)
+
+	var out bytes.Buffer
+	var errOut bytes.Buffer
+	if code := Run([]string{"inspect", "--target", "web"}, cwd, &out, &errOut); code != 0 {
+		t.Fatalf("inspect exit = %d\nstdout=%s\nstderr=%s", code, out.String(), errOut.String())
+	}
+	if !strings.Contains(out.String(), `"target": "web"`) || !strings.Contains(out.String(), `"entry": "src/App.nova"`) {
+		t.Fatalf("inspect output = %s, want target and entry JSON", out.String())
+	}
+}
+
+func TestRunFmtCheckReportsUnformattedSources(t *testing.T) {
+	cwd := t.TempDir()
+	writeFile(t, cwd, "src/App.nova", `<template target <- web>
+<surface>
+<text value <- "web" /|
+/|
+/|`)
+
+	var out bytes.Buffer
+	var errOut bytes.Buffer
+	if code := Run([]string{"fmt", "--check", "src/App.nova"}, cwd, &out, &errOut); code == 0 {
+		t.Fatalf("fmt --check should fail for unformatted source, stdout=%s stderr=%s", out.String(), errOut.String())
+	}
+	if !strings.Contains(errOut.String(), "NVA-FMT-001") {
+		t.Fatalf("stderr = %s, want fmt diagnostic", errOut.String())
+	}
+
+	out.Reset()
+	errOut.Reset()
+	if code := Run([]string{"fmt", "src/App.nova"}, cwd, &out, &errOut); code != 0 {
+		t.Fatalf("fmt exit = %d\nstdout=%s\nstderr=%s", code, out.String(), errOut.String())
+	}
+	assertFileContains(t, cwd, "src/App.nova", "  <surface>")
+	assertFileContains(t, cwd, "src/App.nova", "    <text value <- \"web\" /|")
+}
+
+func TestRunTestExecutesConformanceFixtures(t *testing.T) {
+	cwd := t.TempDir()
+	writeFile(t, cwd, "tests/conformance/web/counter/nova.toml", `[project]
+name = "counter"
+version = "0.1.0"
+entry = "src/App.nova"
+
+[targets.web]
+renderer = "@nova/web"
+`)
+	writeFile(t, cwd, "tests/conformance/web/counter/src/App.nova", `<contract state Counter>
+  count: number <- 0 {
+    @increment -> count + 1;
+  };
+/|
+<template target <- web>
+  <button on_press -> @increment>
+    <text value <- "Count " + count /|
+  /|
+/|`)
+	writeFile(t, cwd, "tests/conformance/web/counter/nova.conformance.json", `{
+  "target": "web",
+  "expected": {
+    "diagnosticCodes": [],
+    "artifact": {
+      "target": "web",
+      "entry": "src/App.nova",
+      "modules": ["src/App.nova"],
+      "permissions": []
+    },
+    "view": {
+      "bindings": 1,
+      "eventRoutes": 1,
+      "pages": 0
+    }
+  }
+}
+`)
+
+	var out bytes.Buffer
+	var errOut bytes.Buffer
+	if code := Run([]string{"test"}, cwd, &out, &errOut); code != 0 {
+		t.Fatalf("test exit = %d\nstdout=%s\nstderr=%s", code, out.String(), errOut.String())
+	}
+	if !strings.Contains(out.String(), "1 conformance fixture passed") {
+		t.Fatalf("stdout = %s, want conformance summary", out.String())
+	}
+}
+
 func writeFile(t *testing.T, root string, path string, content string) {
 	t.Helper()
 

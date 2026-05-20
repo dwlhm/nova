@@ -20,8 +20,25 @@ internal/parser/          parser Nova
 internal/validator/       semantic validation
 examples/counter/         example app counter
 examples/multipage/       example route state dan page projection
+tests/conformance/        fixture conformance resmi
 docs/adr/                 ADR desain Nova
 ```
+
+## Command MVP
+
+```bash
+go run ./cmd/nova init --name demo
+go run ./cmd/nova check --target web
+go run ./cmd/nova build --target web
+go run ./cmd/nova dev --target web
+go run ./cmd/nova test
+go run ./cmd/nova inspect --target web
+go run ./cmd/nova fmt
+```
+
+`check` menjalankan pipeline validasi tanpa menulis artifact. `inspect` mencetak ringkasan
+build plan JSON. `test` menjalankan fixture conformance dari `tests/conformance` secara default.
+`fmt` menormalkan indentasi source `.nova`.
 
 ## Example Counter
 
@@ -57,16 +74,19 @@ build/web/bundle-manifest.json
 
 `index.html` bisa dibuka langsung di browser.
 
-Untuk MVP, CSS project web didaftarkan sebagai stylesheet global dari manifest:
+CSS project web bisa didaftarkan sebagai stylesheet global atau app-scoped dari manifest:
 
 ```toml
 [targets.web]
 renderer = "@nova/web"
 styles = ["src/Counter.css"]
+scoped_styles = ["src/App.css"]
 ```
 
-File CSS disalin ke artifact web dan di-link setelah runtime base CSS. Detail scoping,
-CSS module, dan style per capability sengaja belum diputuskan di MVP; lihat
+File CSS disalin ke artifact web dan di-link setelah runtime base CSS. `scoped_styles`
+diprefix ke root app web (`#nova-root[data-nova-style-scope~="app"]`) dan dicatat di
+`build/web/style-manifest.json`. Detail CSS module dan style per capability masih area
+lanjutan; lihat
 `docs/adr/adr_024_style_asset_injection.md`.
 
 ## Dev Web
@@ -178,6 +198,8 @@ go run ../../cmd/nova dev --target android --adb /path/to/adb
 
 ```bash
 go test ./...
+go run ./cmd/nova test
 ```
 
 Test mencakup parser, build resolution, artifact generator, bundler, CLI, dan runtime core.
+Conformance fixture membandingkan diagnostic code, metadata artifact, dan metadata ViewIR.

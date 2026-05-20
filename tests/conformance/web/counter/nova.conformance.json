@@ -1,0 +1,17 @@
+{
+  "target": "web",
+  "expected": {
+    "diagnosticCodes": [],
+    "artifact": {
+      "target": "web",
+      "entry": "src/App.nova",
+      "modules": ["src/App.nova"],
+      "permissions": []
+    },
+    "view": {
+      "bindings": 1,
+      "eventRoutes": 1,
+      "pages": 0
+    }
+  }
+}
