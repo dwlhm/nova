@@ -87,10 +87,12 @@ label = "demo"
 		t.Fatalf("android build exit = %d\nstdout=%s\nstderr=%s", code, out.String(), errOut.String())
 	}
 	assertFileContains(t, cwd, "build/android/build.gradle.kts", "com.android.tools.build:gradle:8.12.3")
+	assertFileContains(t, cwd, "build/android/gradle.properties", "android.useAndroidX=true")
 	assertFileContains(t, cwd, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "dispatch(\"@increment\"")
 	assertFileContains(t, cwd, "build/android/generated/NovaApp.kt", "target = \"android\"")
 	assertFileContains(t, cwd, "build/android/app/build/outputs/apk/debug/app-debug.apk", "apk")
 	assertFileContains(t, cwd, "build/android/bundle-manifest.json", "\"format\": \"apk\"")
+	assertFileContains(t, cwd, "gradle.log", "--offline assembleDebug")
 
 	writeFile(t, cwd, "build/android/app/src/main/kotlin/nova/generated/Stale.kt", "stale")
 	out.Reset()
@@ -99,6 +101,133 @@ label = "demo"
 		t.Fatalf("second android build exit = %d\nstdout=%s\nstderr=%s", code, out.String(), errOut.String())
 	}
 	assertFileMissing(t, cwd, "build/android/app/src/main/kotlin/nova/generated/Stale.kt")
+}
+
+func TestRunDevOnceBuildsWebArtifact(t *testing.T) {
+	cwd := t.TempDir()
+	writeFile(t, cwd, "nova.toml", `[project]
+name = "demo"
+version = "0.1.0"
+entry = "src/App.nova"
+
+[targets.web]
+renderer = "@nova/web"
+`)
+	writeFile(t, cwd, "src/App.nova", `<template target <- web>
+  <text value <- "web" /|
+/|`)
+
+	var out bytes.Buffer
+	var errOut bytes.Buffer
+	if code := Run([]string{"dev", "--target", "web", "--once"}, cwd, &out, &errOut); code != 0 {
+		t.Fatalf("web dev exit = %d\nstdout=%s\nstderr=%s", code, out.String(), errOut.String())
+	}
+	assertFileContains(t, cwd, "build/web/bundle-manifest.json", "\"format\": \"static-web\"")
+	if !strings.Contains(out.String(), "dev strategy: browser_full_reload") {
+		t.Fatalf("stdout = %s, want dev strategy", out.String())
+	}
+}
+
+func TestRunDevOnceInstallsAndLaunchesAndroid(t *testing.T) {
+	cwd := t.TempDir()
+	writeFile(t, cwd, "nova.toml", `[project]
+name = "demo"
+version = "0.1.0"
+entry = "src/App.nova"
+
+[targets.android]
+renderer = "@nova/android"
+application_id = "dev.example.demo"
+namespace = "nova.generated"
+compile_sdk = 35
+min_sdk = 23
+target_sdk = 35
+version_code = 1
+version_name = "0.1.0"
+gradle_plugin = "8.12.3"
+kotlin_plugin = "2.0.21"
+compose_compiler_plugin = "2.0.21"
+compose_bom = "2024.10.00"
+activity_compose = "1.9.3"
+material3 = "1.3.0"
+theme = "Theme.Nova"
+theme_parent = "android:style/Theme.Material.Light.NoActionBar"
+java_version = "17"
+label = "demo"
+`)
+	writeFile(t, cwd, "src/App.nova", `<template target <- android>
+  <text value <- "android" /|
+/|`)
+
+	adb := fakeADB(t, cwd)
+	t.Setenv("NOVA_GRADLE", fakeGradle(t, cwd))
+
+	var out bytes.Buffer
+	var errOut bytes.Buffer
+	if code := Run([]string{"dev", "--target", "android", "--once", "--adb", adb}, cwd, &out, &errOut); code != 0 {
+		t.Fatalf("android dev exit = %d\nstdout=%s\nstderr=%s", code, out.String(), errOut.String())
+	}
+	assertFileContains(t, cwd, "build/android/app/build/outputs/apk/debug/app-debug.apk", "apk")
+	assertFileContains(t, cwd, "gradle.log", "assembleDebug")
+	assertFileNotContains(t, cwd, "gradle.log", "--offline")
+	assertFileContains(t, cwd, "adb.log", "install --user 0 -r")
+	assertFileContains(t, cwd, "adb.log", "shell am start --user 0 -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -n dev.example.demo/nova.generated.MainActivity")
+	if !strings.Contains(out.String(), "dev strategy: android_install_sync") {
+		t.Fatalf("stdout = %s, want android install sync strategy", out.String())
+	}
+}
+
+func TestRunDevOnceCanTargetCustomAndroidUser(t *testing.T) {
+	cwd := t.TempDir()
+	writeFile(t, cwd, "nova.toml", `[project]
+name = "demo"
+version = "0.1.0"
+entry = "src/App.nova"
+
+[targets.android]
+renderer = "@nova/android"
+application_id = "dev.example.demo"
+namespace = "nova.generated"
+compile_sdk = 35
+min_sdk = 23
+target_sdk = 35
+version_code = 1
+version_name = "0.1.0"
+gradle_plugin = "8.12.3"
+kotlin_plugin = "2.0.21"
+compose_compiler_plugin = "2.0.21"
+compose_bom = "2024.10.00"
+activity_compose = "1.9.3"
+material3 = "1.3.0"
+theme = "Theme.Nova"
+theme_parent = "android:style/Theme.Material.Light.NoActionBar"
+java_version = "17"
+label = "demo"
+`)
+	writeFile(t, cwd, "src/App.nova", `<template target <- android>
+  <text value <- "android" /|
+/|`)
+
+	adb := fakeADB(t, cwd)
+	t.Setenv("NOVA_GRADLE", fakeGradle(t, cwd))
+
+	var out bytes.Buffer
+	var errOut bytes.Buffer
+	if code := Run([]string{"dev", "--target", "android", "--once", "--adb", adb, "--android-user", "10"}, cwd, &out, &errOut); code != 0 {
+		t.Fatalf("android dev exit = %d\nstdout=%s\nstderr=%s", code, out.String(), errOut.String())
+	}
+	assertFileContains(t, cwd, "adb.log", "install --user 10 -r")
+	assertFileContains(t, cwd, "adb.log", "shell am start --user 10 -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -n dev.example.demo/nova.generated.MainActivity")
+}
+
+func TestCommandOutputErrorDetectsAndroidActivityManagerFailure(t *testing.T) {
+	message, ok := commandOutputError("Starting: Intent {}\nError: Activity not started, unable to resolve Intent {}\n")
+	if !ok {
+		t.Fatalf("expected Android Activity Manager error to be detected")
+	}
+	if !strings.Contains(message, "unable to resolve Intent") {
+		t.Fatalf("message = %q", message)
+	}
 }
 
 func TestRunBuildReportsStyleAssetDiagnostics(t *testing.T) {
@@ -176,9 +305,22 @@ func fakeGradle(t *testing.T, root string) string {
 	t.Helper()
 
 	path := filepath.Join(root, "fake-gradle")
-	content := "#!/bin/sh\nmkdir -p app/build/outputs/apk/debug\nprintf apk > app/build/outputs/apk/debug/app-debug.apk\n"
+	logPath := filepath.Join(root, "gradle.log")
+	content := "#!/bin/sh\nprintf '%s ' \"$@\" >> " + logPath + "\nprintf '\\n' >> " + logPath + "\nmkdir -p app/build/outputs/apk/debug\nprintf apk > app/build/outputs/apk/debug/app-debug.apk\n"
 	if err := os.WriteFile(path, []byte(content), 0o755); err != nil {
 		t.Fatalf("write fake gradle: %v", err)
+	}
+	return path
+}
+
+func fakeADB(t *testing.T, root string) string {
+	t.Helper()
+
+	path := filepath.Join(root, "fake-adb")
+	logPath := filepath.Join(root, "adb.log")
+	content := "#!/bin/sh\nprintf '%s ' \"$@\" >> " + logPath + "\nprintf '\\n' >> " + logPath + "\n"
+	if err := os.WriteFile(path, []byte(content), 0o755); err != nil {
+		t.Fatalf("write fake adb: %v", err)
 	}
 	return path
 }
@@ -192,6 +334,18 @@ func assertFileContains(t *testing.T, root string, path string, want string) {
 	}
 	if !strings.Contains(string(content), want) {
 		t.Fatalf("%s = %s, want %q", path, string(content), want)
+	}
+}
+
+func assertFileNotContains(t *testing.T, root string, path string, unwanted string) {
+	t.Helper()
+
+	content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	if strings.Contains(string(content), unwanted) {
+		t.Fatalf("%s = %s, did not want %q", path, string(content), unwanted)
 	}
 }
 

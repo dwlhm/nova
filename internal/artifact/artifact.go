@@ -160,6 +160,7 @@ func androidFiles(input GenerateInput, bundle irBundle, metadata target.Artifact
 		{Path: "build/android/nova-ir/target-manifest.json", Content: mustJSON(targetManifestSummary(input.TargetManifest))},
 		{Path: "build/android/nova-ir/metadata.json", Content: mustJSON(metadataSummary(metadata))},
 		{Path: "build/android/settings.gradle.kts", Content: androidSettings(input.Project.Project.Name, config)},
+		{Path: "build/android/gradle.properties", Content: androidGradleProperties()},
 		{Path: "build/android/build.gradle.kts", Content: androidGradle(input.Project.Project.Name, config)},
 		{Path: "build/android/app/build.gradle.kts", Content: androidAppGradle(config)},
 		{Path: "build/android/app/src/main/AndroidManifest.xml", Content: androidManifest(config)},

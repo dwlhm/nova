@@ -103,6 +103,11 @@ hot reload when compatible
 fallback full reload when necessary
 ```
 
+MVP dev mode berjalan sebagai proses long-running. Developer menjalankan `nova dev`
+sekali, lalu CLI melakukan rebuild/deploy setiap kali file project berubah. Ini menjadi
+kontrak ergonomi lintas target: user tidak perlu menjalankan command build/dev ulang
+untuk setiap perubahan source.
+
 ## nova test
 
 Menjalankan:
@@ -212,6 +217,16 @@ hot reload
 source-mapped errors
 ```
 
+MVP implementation:
+
+```txt
+poll watched project files
+generate web artifact through official build pipeline
+serve build/web over local HTTP
+inject development-only EventSource client at response time
+send browser full-reload event after successful rebuild
+```
+
 Rule:
 
 ```txt
@@ -219,6 +234,7 @@ Rule:
 2. Event injection devtools harus melewati event contract validation.
 3. State editing devtools hanya tersedia dalam dev mode dan harus tercatat di trace.
 4. Dev server external adapters tetap dianggap dirty.
+5. MVP boleh memakai full browser reload sampai ABI patching tersedia.
 ```
 
 ---
@@ -237,6 +253,29 @@ state-preserving renderer patch when compatible
 source-mapped errors
 ```
 
+MVP implementation memilih install/update sync, bukan runtime HMR:
+
+```txt
+poll watched project files
+generate Android project through official build pipeline
+run Gradle debug task
+install or update APK with adb install --user <id> -r
+launch explicit activity component with adb shell am start --user <id> when enabled
+repeat on every project file change
+```
+
+Pendekatan ini meniru workflow "Run" Android Studio pada level minimum yang dibutuhkan:
+APK debug langsung dipasang/diperbarui ke device atau emulator dari proses dev yang
+tetap berjalan. Runtime HMR Android ditunda karena biaya bridge, ABI diff, state
+migration, dan Compose patching belum sepadan untuk MVP.
+
+Karena dev mode mengutamakan first-run ergonomics, Android dev bundling default tidak
+memakai offline mode. Developer tetap dapat mengaktifkan `--offline` ketika Gradle cache
+sudah lengkap.
+
+Android dev deploy default memakai user `0` supaya device multi-user/profile tidak menerima
+install ganda. CLI boleh mengekspos override user id untuk Work Profile atau profile lain.
+
 Implementation may use:
 
 ```txt
@@ -252,6 +291,9 @@ Rule:
 1. Android dev runtime must not require production app to expose debug bridge.
 2. Generated code changes must be deterministic.
 3. Runtime event trace must use the same format as conformance trace.
+4. MVP Android dev mode must not require repeating `nova dev` after every source change.
+5. Android HMR is optional; install/update sync is the required fallback strategy.
+6. Android install/update sync must target exactly one Android user/profile by default.
 ```
 
 ---

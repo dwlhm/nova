@@ -235,6 +235,7 @@ func collectAndroidOutputs(artifactDir string, outputPath string) ([]bundleOutpu
 	candidates := []string{
 		outputPath,
 		filepath.Join(artifactDir, "settings.gradle.kts"),
+		filepath.Join(artifactDir, "gradle.properties"),
 		filepath.Join(artifactDir, "build.gradle.kts"),
 		filepath.Join(artifactDir, "app", "build.gradle.kts"),
 		filepath.Join(artifactDir, "app", "src", "main", "AndroidManifest.xml"),

@@ -69,6 +69,8 @@ func webRuntime() string {
 	return `"use strict";
 
 window.NovaRuntime = (() => {
+  const ROUTE_CHANGED_EVENT = "@route_changed";
+
   function pick(value, lower, upper, fallback) {
     if (!value) return fallback;
     if (Object.prototype.hasOwnProperty.call(value, lower)) return value[lower];
@@ -200,7 +202,8 @@ window.NovaRuntime = (() => {
     return payload;
   }
 
-  function dispatch(runtime, event, args) {
+  function dispatch(runtime, event, args, options) {
+    const beforeRoute = routeKey(runtime);
     const payload = payloadFor(runtime.app, event, args || []);
     for (const cell of (runtime.app.model || {}).states || []) {
       const transition = (cell.transitions || []).find((candidate) => candidate.event === event);
@@ -208,6 +211,7 @@ window.NovaRuntime = (() => {
       runtime.state[cell.name] = evaluate(transition.expression, runtime.state, payload);
     }
     render(runtime);
+    reconcileNavigation(runtime, beforeRoute, options || {});
   }
 
   function render(runtime) {
@@ -256,6 +260,140 @@ window.NovaRuntime = (() => {
     return "/";
   }
 
+  function routeStateCell(app) {
+    return ((app.model || {}).states || []).find((state) => state.name === "route");
+  }
+
+  function hasRouteState(runtime) {
+    return !!routeStateCell(runtime.app);
+  }
+
+  function routeKey(runtime) {
+    if (!hasRouteState(runtime)) return null;
+    return routeURL(routeObject(runtime.state.route));
+  }
+
+  function canUseHistory(runtime) {
+    return hasRouteState(runtime) &&
+      typeof window !== "undefined" &&
+      !!window.history &&
+      !!window.location &&
+      window.location.protocol !== "file:";
+  }
+
+  function setupNavigation(runtime) {
+    if (!canUseHistory(runtime)) return;
+    const platformRoute = routeObjectFromLocation(window.location);
+    if (isExplicitPlatformRoute(window.location)) {
+      runtime.state.route = routeValueForShape(platformRoute, runtime.state.route);
+    }
+    writeHistoryState(runtime, "replace");
+    window.addEventListener("popstate", (event) => {
+      const route = event && event.state && event.state.novaRoute
+        ? routeObject(event.state.novaRoute)
+        : routeObjectFromLocation(window.location);
+      dispatch(runtime, ROUTE_CHANGED_EVENT, [routeValueForShape(route, runtime.state.route)], { source: "platform" });
+    });
+  }
+
+  function reconcileNavigation(runtime, beforeRoute, options) {
+    if (!canUseHistory(runtime)) return;
+    const afterRoute = routeKey(runtime);
+    if (beforeRoute === afterRoute) return;
+    writeHistoryState(runtime, options.source === "platform" ? "replace" : "push");
+  }
+
+  function writeHistoryState(runtime, mode) {
+    const url = routeURL(routeObject(runtime.state.route));
+    const method = mode === "push" ? "pushState" : "replaceState";
+    try {
+      if (currentPlatformRouteKey() === url && method === "pushState") {
+        window.history.replaceState(historyState(runtime.state.route), "", url);
+        return;
+      }
+      window.history[method](historyState(runtime.state.route), "", url);
+    } catch (_) {
+      try {
+        window.history.replaceState(historyState(runtime.state.route), "", currentPlatformRouteKey());
+      } catch (_) {}
+    }
+  }
+
+  function historyState(route) {
+    return { nova: true, novaRoute: routeObject(route) };
+  }
+
+  function currentPlatformRouteKey() {
+    return routeURL(routeObjectFromLocation(window.location));
+  }
+
+  function isExplicitPlatformRoute(location) {
+    const route = routeObjectFromLocation(location);
+    return route.path !== "/" || Object.keys(route.query || {}).length > 0 || !!route.fragment;
+  }
+
+  function routeObjectFromLocation(location) {
+    return {
+      path: normalizePath(location.pathname || "/"),
+      query: queryFromSearch(location.search || ""),
+      fragment: location.hash ? decodeURIComponent(location.hash.slice(1)) : ""
+    };
+  }
+
+  function routeValueForShape(route, shape) {
+    if (typeof shape === "string") return route.path;
+    const next = shape && typeof shape === "object" && !Array.isArray(shape) ? { ...shape } : {};
+    next.path = route.path;
+    if (Object.keys(route.query || {}).length) next.query = route.query;
+    else delete next.query;
+    if (route.fragment) next.fragment = route.fragment;
+    else delete next.fragment;
+    return next;
+  }
+
+  function routeObject(value) {
+    if (typeof value === "string") return { path: normalizePath(value), query: {}, fragment: "" };
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      return {
+        ...value,
+        path: normalizePath(value.path || "/"),
+        query: value.query && typeof value.query === "object" ? value.query : {},
+        fragment: value.fragment ? String(value.fragment).replace(/^#/, "") : ""
+      };
+    }
+    return { path: "/", query: {}, fragment: "" };
+  }
+
+  function queryFromSearch(search) {
+    const query = {};
+    const params = new URLSearchParams(search || "");
+    for (const [key, value] of params.entries()) {
+      query[key] = value;
+    }
+    return query;
+  }
+
+  function searchFromQuery(query) {
+    if (!query || typeof query !== "object") return "";
+    const params = new URLSearchParams();
+    for (const key of Object.keys(query).sort()) {
+      const value = query[key];
+      if (value === undefined || value === null) continue;
+      if (Array.isArray(value)) {
+        value.forEach((item) => params.append(key, String(item)));
+      } else {
+        params.append(key, String(value));
+      }
+    }
+    const text = params.toString();
+    return text ? "?" + text : "";
+  }
+
+  function routeURL(route) {
+    const fragment = route.fragment ? "#" + encodeURIComponent(String(route.fragment).replace(/^#/, "")) : "";
+    return normalizePath(route.path) + searchFromQuery(route.query) + fragment;
+  }
+
   function normalizePath(value) {
     const path = String(value || "/");
     return path.startsWith("/") ? path : "/" + path;
@@ -298,6 +436,7 @@ window.NovaRuntime = (() => {
     const root = document.getElementById("nova-root");
     const runtime = { app, root, state: initialState(app) };
     window.__NOVA_RUNTIME__ = runtime;
+    setupNavigation(runtime);
     render(runtime);
     return runtime;
   }

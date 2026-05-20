@@ -69,6 +69,17 @@ File CSS disalin ke artifact web dan di-link setelah runtime base CSS. Detail sc
 CSS module, dan style per capability sengaja belum diputuskan di MVP; lihat
 `docs/adr/adr_024_style_asset_injection.md`.
 
+## Dev Web
+
+```bash
+cd examples/counter
+go run ../../cmd/nova dev --target web
+```
+
+CLI menjalankan proses development long-running: source project dipantau, artifact web
+dibangun ulang lewat pipeline resmi, `build/web` disajikan lewat HTTP lokal, dan browser
+yang terhubung menerima full reload setelah rebuild sukses.
+
 ## Example Multi Page
 
 Source utama:
@@ -135,6 +146,32 @@ Jika hanya ingin generate artifact tanpa bundling:
 
 ```bash
 go run ../../cmd/nova build --target android --bundle=false
+```
+
+## Dev Android
+
+```bash
+cd examples/counter
+go run ../../cmd/nova dev --target android
+```
+
+CLI menjalankan loop seperti workflow minimum Android Studio: perubahan source memicu
+generate project Android, Gradle debug build, `adb install --user 0 -r`, lalu app di-launch ulang.
+Ini sengaja memakai install/update sync sebagai fallback utama, bukan runtime HMR, agar
+developer cukup menjalankan `nova dev` sekali selama sesi kerja.
+
+Berbeda dari `nova build`, dev Android default berjalan online supaya Gradle dapat
+mengunduh dependency yang belum ada di cache pada run pertama. Setelah cache lengkap,
+mode offline bisa dipakai dengan `--offline`.
+
+Dev Android default memasang app hanya ke Android user `0`. Ini mencegah duplicate install
+di device multi-user/profile seperti Samsung Dual Messenger atau Work Profile. Untuk target
+profile lain, gunakan `--android-user <id>`.
+
+Jika perlu override ADB:
+
+```bash
+go run ../../cmd/nova dev --target android --adb /path/to/adb
 ```
 
 ## Test

@@ -101,6 +101,10 @@ func androidSettings(name string, config androidTargetConfig) string {
 	return "pluginManagement {\n    repositories {\n        google()\n        mavenCentral()\n        gradlePluginPortal()\n    }\n}\n\ndependencyResolutionManagement {\n    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)\n    repositories {\n        google()\n        mavenCentral()\n    }\n}\n\nrootProject.name = " + quoteKotlin(name) + "\ninclude(\":app\")\n"
 }
 
+func androidGradleProperties() string {
+	return "android.useAndroidX=true\nandroid.nonTransitiveRClass=true\n"
+}
+
 func androidGradle(name string, config androidTargetConfig) string {
 	if strings.TrimSpace(name) == "" {
 		name = "nova-app"
@@ -110,11 +114,12 @@ func androidGradle(name string, config androidTargetConfig) string {
 
 func androidAppGradle(config androidTargetConfig) string {
 	javaVersion := "JavaVersion.VERSION_" + strings.ReplaceAll(config.JavaVersion, ".", "_")
-	return "import com.android.build.api.dsl.ApplicationExtension\n\napply(plugin = \"com.android.application\")\napply(plugin = \"org.jetbrains.kotlin.android\")\napply(plugin = \"org.jetbrains.kotlin.plugin.compose\")\n\nextensions.configure<ApplicationExtension>(\"android\") {\n    namespace = " + quoteKotlin(config.Namespace) + "\n    compileSdk = " + config.CompileSDK + "\n\n    defaultConfig {\n        applicationId = " + quoteKotlin(config.ApplicationID) + "\n        minSdk = " + config.MinSDK + "\n        targetSdk = " + config.TargetSDK + "\n        versionCode = " + config.VersionCode + "\n        versionName = " + quoteKotlin(config.VersionName) + "\n    }\n\n    buildFeatures {\n        compose = true\n    }\n\n    compileOptions {\n        sourceCompatibility = " + javaVersion + "\n        targetCompatibility = " + javaVersion + "\n    }\n}\n\ndependencies {\n    implementation(platform(\"androidx.compose:compose-bom:" + config.ComposeBOM + "\"))\n    implementation(\"androidx.activity:activity-compose:" + config.ActivityCompose + "\")\n    implementation(\"androidx.compose.material3:material3:" + config.Material3 + "\")\n}\n"
+	jvmTarget := "JvmTarget.JVM_" + strings.ReplaceAll(config.JavaVersion, ".", "_")
+	return "import com.android.build.api.dsl.ApplicationExtension\nimport org.jetbrains.kotlin.gradle.dsl.JvmTarget\nimport org.jetbrains.kotlin.gradle.tasks.KotlinCompile\n\napply(plugin = \"com.android.application\")\napply(plugin = \"org.jetbrains.kotlin.android\")\napply(plugin = \"org.jetbrains.kotlin.plugin.compose\")\n\nextensions.configure<ApplicationExtension>(\"android\") {\n    namespace = " + quoteKotlin(config.Namespace) + "\n    compileSdk = " + config.CompileSDK + "\n\n    defaultConfig {\n        applicationId = " + quoteKotlin(config.ApplicationID) + "\n        minSdk = " + config.MinSDK + "\n        targetSdk = " + config.TargetSDK + "\n        versionCode = " + config.VersionCode + "\n        versionName = " + quoteKotlin(config.VersionName) + "\n    }\n\n    buildFeatures {\n        compose = true\n    }\n\n    compileOptions {\n        sourceCompatibility = " + javaVersion + "\n        targetCompatibility = " + javaVersion + "\n    }\n}\n\ntasks.withType<KotlinCompile>().configureEach {\n    compilerOptions.jvmTarget.set(" + jvmTarget + ")\n}\n\ndependencies {\n    add(\"implementation\", platform(\"androidx.compose:compose-bom:" + config.ComposeBOM + "\"))\n    add(\"implementation\", \"androidx.activity:activity-compose:" + config.ActivityCompose + "\")\n    add(\"implementation\", \"androidx.compose.material3:material3:" + config.Material3 + "\")\n}\n"
 }
 
 func androidManifest(config androidTargetConfig) string {
-	return "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\">\n    <application android:theme=\"@style/" + escapeXML(config.Theme) + "\" android:label=" + quoteXML(config.Label) + ">\n        <activity android:name=\".MainActivity\" android:exported=\"true\">\n            <intent-filter>\n                <action android:name=\"android.intent.action.MAIN\" />\n                <category android:name=\"android.intent.category.LAUNCHER\" />\n            </intent-filter>\n        </activity>\n    </application>\n</manifest>\n"
+	return "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\">\n    <application android:theme=\"@style/" + escapeXML(config.Theme) + "\" android:label=" + quoteXML(config.Label) + ">\n        <activity android:name=\"" + escapeXML(config.Namespace) + ".MainActivity\" android:exported=\"true\">\n            <intent-filter>\n                <action android:name=\"android.intent.action.MAIN\" />\n                <category android:name=\"android.intent.category.LAUNCHER\" />\n            </intent-filter>\n        </activity>\n    </application>\n</manifest>\n"
 }
 
 func androidStyles(config androidTargetConfig) string {
@@ -127,6 +132,7 @@ func androidMainActivity(name string, bundle irBundle, config androidTargetConfi
 	builder.WriteString("package " + config.Namespace + "\n\n")
 	builder.WriteString("import android.os.Bundle\n")
 	builder.WriteString("import androidx.activity.ComponentActivity\n")
+	builder.WriteString("import androidx.activity.compose.BackHandler\n")
 	builder.WriteString("import androidx.activity.compose.setContent\n")
 	builder.WriteString("import androidx.compose.foundation.layout.Arrangement\n")
 	builder.WriteString("import androidx.compose.foundation.layout.Box\n")
@@ -139,16 +145,23 @@ func androidMainActivity(name string, bundle irBundle, config androidTargetConfi
 	builder.WriteString("import androidx.compose.material3.Surface\n")
 	builder.WriteString("import androidx.compose.material3.Text\n")
 	builder.WriteString("import androidx.compose.runtime.Composable\n")
+	builder.WriteString("import androidx.compose.runtime.mutableStateListOf\n")
 	builder.WriteString("import androidx.compose.runtime.mutableStateMapOf\n")
 	builder.WriteString("import androidx.compose.ui.Modifier\n")
 	builder.WriteString("import androidx.compose.ui.unit.dp\n\n")
 	builder.WriteString("class MainActivity : ComponentActivity() {\n")
-	builder.WriteString("    private val state = mutableStateMapOf<String, Any?>()\n\n")
+	builder.WriteString("    private val state = mutableStateMapOf<String, Any?>()\n")
+	builder.WriteString("    private val routeBackStack = mutableStateListOf<Any?>()\n")
+	builder.WriteString("    private var applyingSystemBack = false\n\n")
 	builder.WriteString("    override fun onCreate(savedInstanceState: Bundle?) {\n")
 	builder.WriteString("        super.onCreate(savedInstanceState)\n")
 	builder.WriteString("        initializeState()\n")
+	builder.WriteString("        initializeNavigationStack()\n")
 	builder.WriteString("        setContent {\n")
 	builder.WriteString("            MaterialTheme {\n")
+	builder.WriteString("                BackHandler(enabled = canNavigateBack()) {\n")
+	builder.WriteString("                    handleSystemBack()\n")
+	builder.WriteString("                }\n")
 	builder.WriteString("                Surface(modifier = Modifier.fillMaxSize()) {\n")
 	builder.WriteString("                    RenderApp()\n")
 	builder.WriteString("                }\n")
@@ -354,11 +367,76 @@ func androidComposeHelpers() string {
         val expression: String
     )
 
+    private fun initializeNavigationStack() {
+        if (!hasRouteState() || routeBackStack.isNotEmpty()) return
+        routeBackStack.add(cloneRoute(state["route"]))
+    }
+
     private fun dispatch(eventName: String, args: List<Any?>) {
+        val beforeRoute = cloneRoute(state["route"])
         for (transition in transitions()) {
             if (transition.eventName != eventName) continue
             val payload = transition.params.mapIndexed { index, name -> name to args.getOrNull(index) }.toMap()
             state[transition.stateName] = evaluate(transition.expression, payload)
+        }
+        reconcileRouteBackStack(beforeRoute, state["route"])
+    }
+
+    private fun hasRouteState(): Boolean = state.containsKey("route")
+
+    private fun hasTransition(eventName: String): Boolean {
+        return transitions().any { it.eventName == eventName }
+    }
+
+    private fun canNavigateBack(): Boolean = routeBackStack.size > 1
+
+    private fun handleSystemBack() {
+        if (!canNavigateBack()) return
+        val targetRoute = cloneRoute(routeBackStack[routeBackStack.lastIndex - 1])
+        val beforeRoute = cloneRoute(state["route"])
+        applyingSystemBack = true
+        try {
+            if (hasTransition("@navigate")) {
+                dispatch("@navigate", listOf(record("kind" to "back")))
+            } else {
+                dispatch("@route_changed", listOf(targetRoute))
+            }
+        } finally {
+            applyingSystemBack = false
+        }
+        reconcileAfterSystemBack(beforeRoute, state["route"], targetRoute)
+    }
+
+    private fun reconcileAfterSystemBack(beforeRoute: Any?, afterRoute: Any?, targetRoute: Any?) {
+        if (routeKey(beforeRoute) == routeKey(afterRoute)) return
+        if (routeKey(afterRoute) == routeKey(targetRoute)) {
+            routeBackStack.removeAt(routeBackStack.lastIndex)
+            return
+        }
+        routeBackStack.removeAt(routeBackStack.lastIndex)
+        if (routeKey(routeBackStack.lastOrNull()) != routeKey(afterRoute)) {
+            routeBackStack.add(cloneRoute(afterRoute))
+        }
+    }
+
+    private fun reconcileRouteBackStack(beforeRoute: Any?, afterRoute: Any?) {
+        if (!hasRouteState()) return
+        if (routeBackStack.isEmpty()) {
+            routeBackStack.add(cloneRoute(afterRoute))
+            return
+        }
+        if (routeKey(beforeRoute) == routeKey(afterRoute) || applyingSystemBack) return
+        if (routeKey(routeBackStack.lastOrNull()) != routeKey(afterRoute)) {
+            routeBackStack.add(cloneRoute(afterRoute))
+        }
+    }
+
+    private fun routeKey(value: Any?): String = pathOf(value)
+
+    private fun cloneRoute(value: Any?): Any? {
+        return when (value) {
+            is Map<*, *> -> value.entries.associate { it.key.toString() to it.value }
+            else -> value
         }
     }
 

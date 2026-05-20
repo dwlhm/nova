@@ -14,7 +14,7 @@
   <surface class <- "multipage-shell">
     <row class <- "multipage-nav">
       <button label <- "Open home page" on_press -> @route_changed({ path <- "/"; })>
-        <text value <- "Home" /|
+        <text value <- "Home A" /|
       /|
       <button label <- "Open settings page" on_press -> @route_changed({ path <- "/settings"; })>
         <text value <- "Settings" /|

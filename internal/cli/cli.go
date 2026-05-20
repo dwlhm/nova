@@ -22,16 +22,35 @@ import (
 
 func Run(args []string, cwd string, stdout io.Writer, stderr io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(stderr, "usage: nova build --target web|android")
+		fmt.Fprintln(stderr, "usage: nova build|dev --target web|android")
 		return 2
 	}
 	switch args[0] {
 	case "build":
 		return runBuild(args[1:], cwd, stdout, stderr)
+	case "dev":
+		return runDev(args[1:], cwd, stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "unknown command %s\n", args[0])
 		return 2
 	}
+}
+
+type buildOptions struct {
+	TargetID     string
+	OutRoot      string
+	BundleTarget bool
+	Offline      bool
+	GradlePath   string
+	GradleTask   string
+}
+
+type buildResult struct {
+	Project      project.Manifest
+	TargetID     string
+	OutputRoot   string
+	ArtifactPath string
+	Bundle       *bundler.Result
 }
 
 func runBuild(args []string, cwd string, stdout io.Writer, stderr io.Writer) int {
@@ -47,10 +66,33 @@ func runBuild(args []string, cwd string, stdout io.Writer, stderr io.Writer) int
 		return 2
 	}
 
-	targetManifest, ok := build.TargetManifestFor(*targetID)
-	if !ok {
-		fmt.Fprintf(stderr, "NVA-TARGET-019: unsupported build target %s\n", *targetID)
+	if _, ok := buildProject(context.Background(), cwd, buildOptions{
+		TargetID:     *targetID,
+		OutRoot:      *outRoot,
+		BundleTarget: *bundleTarget,
+		Offline:      *offline,
+		GradlePath:   *gradlePath,
+		GradleTask:   *gradleTask,
+	}, stdout, stderr); !ok {
 		return 1
+	}
+	return 0
+}
+
+func buildProject(ctx context.Context, cwd string, options buildOptions, stdout io.Writer, stderr io.Writer) (buildResult, bool) {
+	targetID := options.TargetID
+	if targetID == "" {
+		targetID = "web"
+	}
+	outRoot := options.OutRoot
+	if outRoot == "" {
+		outRoot = "."
+	}
+
+	targetManifest, ok := build.TargetManifestFor(targetID)
+	if !ok {
+		fmt.Fprintf(stderr, "NVA-TARGET-019: unsupported build target %s\n", targetID)
+		return buildResult{}, false
 	}
 
 	manifest, diagnostics, ok := loadManifest(cwd)
@@ -58,7 +100,7 @@ func runBuild(args []string, cwd string, stdout io.Writer, stderr io.Writer) int
 		fmt.Fprintln(stderr, diagnostic)
 	}
 	if !ok {
-		return 1
+		return buildResult{}, false
 	}
 
 	sources, sourceDiagnostics, ok := loadSources(cwd, manifest.Project.Entry)
@@ -66,7 +108,7 @@ func runBuild(args []string, cwd string, stdout io.Writer, stderr io.Writer) int
 		fmt.Fprintln(stderr, diagnostic)
 	}
 	if !ok {
-		return 1
+		return buildResult{}, false
 	}
 
 	layoutDiagnostics := project.ValidateLayout(manifest, projectFiles(sources))
@@ -74,7 +116,7 @@ func runBuild(args []string, cwd string, stdout io.Writer, stderr io.Writer) int
 		for _, diagnostic := range layoutDiagnostics {
 			fmt.Fprintf(stderr, "%s: %s\n", diagnostic.Code, diagnostic.Message)
 		}
-		return 1
+		return buildResult{}, false
 	}
 
 	for _, source := range sources {
@@ -83,21 +125,21 @@ func runBuild(args []string, cwd string, stdout io.Writer, stderr io.Writer) int
 			for _, diagnostic := range semanticDiagnostics {
 				fmt.Fprintf(stderr, "NVA-SEMANTIC-001: %s\n", diagnostic.Message)
 			}
-			return 1
+			return buildResult{}, false
 		}
 	}
 
-	styleAssets, styleDiagnostics, ok := loadStyleAssets(cwd, manifest, *targetID)
+	styleAssets, styleDiagnostics, ok := loadStyleAssets(cwd, manifest, targetID)
 	for _, diagnostic := range styleDiagnostics {
 		fmt.Fprintln(stderr, diagnostic)
 	}
 	if !ok {
-		return 1
+		return buildResult{}, false
 	}
 
 	resolution := build.Resolve(build.ResolutionInput{
 		Project:        manifest,
-		Target:         *targetID,
+		Target:         targetID,
 		Sources:        sources,
 		TargetManifest: targetManifest,
 	})
@@ -105,7 +147,7 @@ func runBuild(args []string, cwd string, stdout io.Writer, stderr io.Writer) int
 		for _, diagnostic := range resolution.Diagnostics {
 			fmt.Fprintf(stderr, "%s: %s\n", diagnostic.Code, diagnostic.Message)
 		}
-		return 1
+		return buildResult{}, false
 	}
 
 	files, artifactDiagnostics := artifact.Generate(artifact.GenerateInput{
@@ -119,38 +161,46 @@ func runBuild(args []string, cwd string, stdout io.Writer, stderr io.Writer) int
 		for _, diagnostic := range artifactDiagnostics {
 			fmt.Fprintf(stderr, "%s: %s\n", diagnostic.Code, diagnostic.Message)
 		}
-		return 1
+		return buildResult{}, false
 	}
 
-	outputRoot := filepath.Join(cwd, filepath.FromSlash(*outRoot))
-	if err := cleanTargetOutput(outputRoot, *targetID); err != nil {
+	outputRoot := filepath.Join(cwd, filepath.FromSlash(outRoot))
+	if err := cleanTargetOutput(outputRoot, targetID); err != nil {
 		fmt.Fprintf(stderr, "NVA-TOOL-001: %s\n", err.Error())
-		return 1
+		return buildResult{}, false
 	}
 	if err := writeArtifactFiles(outputRoot, files); err != nil {
 		fmt.Fprintf(stderr, "NVA-TOOL-001: %s\n", err.Error())
-		return 1
+		return buildResult{}, false
 	}
 
-	fmt.Fprintf(stdout, "built %s artifact in %s\n", *targetID, filepath.ToSlash(filepath.Join(*outRoot, "build", *targetID)))
-	if *bundleTarget {
-		result, err := bundler.Bundle(context.Background(), bundler.Input{
+	result := buildResult{
+		Project:      manifest,
+		TargetID:     targetID,
+		OutputRoot:   outputRoot,
+		ArtifactPath: filepath.Join(outputRoot, "build", targetID),
+	}
+
+	fmt.Fprintf(stdout, "built %s artifact in %s\n", targetID, filepath.ToSlash(filepath.Join(outRoot, "build", targetID)))
+	if options.BundleTarget {
+		bundleResult, err := bundler.Bundle(ctx, bundler.Input{
 			Root:       outputRoot,
-			Target:     *targetID,
-			GradlePath: *gradlePath,
-			GradleTask: *gradleTask,
-			Offline:    *offline,
+			Target:     targetID,
+			GradlePath: options.GradlePath,
+			GradleTask: options.GradleTask,
+			Offline:    options.Offline,
 			Stdout:     stdout,
 			Stderr:     stderr,
 		})
 		if err != nil {
 			fmt.Fprintf(stderr, "NVA-BUNDLE-001: %s\n", err.Error())
-			return 1
+			return buildResult{}, false
 		}
-		fmt.Fprintf(stdout, "bundled %s output at %s\n", *targetID, bundler.RelativePath(outputRoot, result.OutputPath))
-		fmt.Fprintf(stdout, "bundle manifest written to %s\n", bundler.RelativePath(outputRoot, result.ManifestPath))
+		result.Bundle = &bundleResult
+		fmt.Fprintf(stdout, "bundled %s output at %s\n", targetID, bundler.RelativePath(outputRoot, bundleResult.OutputPath))
+		fmt.Fprintf(stdout, "bundle manifest written to %s\n", bundler.RelativePath(outputRoot, bundleResult.ManifestPath))
 	}
-	return 0
+	return result, true
 }
 
 func cleanTargetOutput(root string, targetID string) error {
