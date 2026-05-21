@@ -18,6 +18,7 @@ import (
 	"github.com/dwlhm/nova/internal/conformance"
 	novaformat "github.com/dwlhm/nova/internal/format"
 	"github.com/dwlhm/nova/internal/lexer"
+	"github.com/dwlhm/nova/internal/lsp"
 	"github.com/dwlhm/nova/internal/parser"
 	"github.com/dwlhm/nova/internal/project"
 	"github.com/dwlhm/nova/internal/validator"
@@ -25,7 +26,7 @@ import (
 
 func Run(args []string, cwd string, stdout io.Writer, stderr io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(stderr, "usage: nova init|check|build|dev|test|inspect|fmt")
+		fmt.Fprintln(stderr, "usage: nova init|check|build|dev|test|inspect|fmt|lsp")
 		return 2
 	}
 	switch args[0] {
@@ -43,6 +44,8 @@ func Run(args []string, cwd string, stdout io.Writer, stderr io.Writer) int {
 		return runInspect(args[1:], cwd, stdout, stderr)
 	case "fmt":
 		return runFmt(args[1:], cwd, stdout, stderr)
+	case "lsp":
+		return runLSP(args[1:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "unknown command %s\n", args[0])
 		return 2
@@ -525,6 +528,23 @@ func runFmt(args []string, cwd string, stdout io.Writer, stderr io.Writer) int {
 		return 0
 	}
 	fmt.Fprintf(stdout, "formatted %s\n", strings.Join(changed, ", "))
+	return 0
+}
+
+func runLSP(args []string, stdout io.Writer, stderr io.Writer) int {
+	flags := flag.NewFlagSet("lsp", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	if err := flags.Parse(args); err != nil {
+		return 2
+	}
+	if flags.NArg() != 0 {
+		fmt.Fprintln(stderr, "NVA-LSP-001: lsp does not accept positional arguments")
+		return 2
+	}
+	if err := lsp.Run(context.Background(), os.Stdin, stdout); err != nil {
+		fmt.Fprintf(stderr, "NVA-LSP-001: %s\n", err.Error())
+		return 1
+	}
 	return 0
 }
 

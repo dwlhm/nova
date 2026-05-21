@@ -193,6 +193,22 @@ func TestTokenizeExampleFileHasNoIllegalTokens(t *testing.T) {
 	}
 }
 
+func TestTokenizeTracksSourceSpans(t *testing.T) {
+	tokens := Tokenize("one\r\n  @two")
+	if len(tokens) != 3 {
+		t.Fatalf("tokens = %d, want 3", len(tokens))
+	}
+	if tokens[0].Offset != 0 || tokens[0].Line != 1 || tokens[0].Column != 1 || tokens[0].Length != 3 {
+		t.Fatalf("first token span = %+v, want offset 0 line 1 column 1 length 3", tokens[0])
+	}
+	if tokens[1].Offset != 7 || tokens[1].Line != 2 || tokens[1].Column != 3 || tokens[1].Length != 4 {
+		t.Fatalf("second token span = %+v, want offset 7 line 2 column 3 length 4", tokens[1])
+	}
+	if tokens[2].Offset != 11 || tokens[2].Line != 2 || tokens[2].Column != 7 || tokens[2].Length != 0 {
+		t.Fatalf("EOF token span = %+v, want offset 11 line 2 column 7 length 0", tokens[2])
+	}
+}
+
 func assertTokens(t *testing.T, input string, tests []struct {
 	typ TokenType
 	lit string

@@ -1,0 +1,60 @@
+{
+  "name": "nova-vscode",
+  "displayName": "Nova",
+  "description": "Nova language support for VS Code and Cursor.",
+  "version": "0.1.0",
+  "publisher": "dwlhm",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "activationEvents": [
+    "onLanguage:nova"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "nova",
+        "aliases": [
+          "Nova",
+          "nova"
+        ],
+        "extensions": [
+          ".nova"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "nova",
+        "scopeName": "source.nova",
+        "path": "./syntaxes/nova.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "title": "Nova",
+      "properties": {
+        "nova.serverPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the Nova executable. Leave empty to use the workspace checkout or nova from PATH."
+        },
+        "nova.serverArgs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "lsp"
+          ],
+          "description": "Arguments passed to nova.serverPath."
+        }
+      }
+    }
+  }
+}

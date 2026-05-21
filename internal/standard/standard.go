@@ -11,6 +11,27 @@ import (
 
 type Diagnostic = diagnostic.Diagnostic
 
+type RendererPrimitive struct {
+	Package     string
+	Name        string
+	Description string
+	Props       []PrimitiveField
+	Events      []PrimitiveEvent
+}
+
+type PrimitiveField struct {
+	Name        string
+	Type        string
+	Optional    bool
+	Description string
+}
+
+type PrimitiveEvent struct {
+	Name        string
+	Payload     string
+	Description string
+}
+
 func OfficialPackages() []packages.Manifest {
 	return []packages.Manifest{
 		purePackage("@nova/core", map[string]string{
@@ -52,12 +73,187 @@ func OfficialPackages() []packages.Manifest {
 	}
 }
 
+func RendererPrimitives() []RendererPrimitive {
+	return []RendererPrimitive{
+		{
+			Package:     "@nova/ui",
+			Name:        "text",
+			Description: "Displays text content.",
+			Props: []PrimitiveField{
+				{Name: "value", Type: "string", Description: "Text content to render."},
+				commonClassProp(),
+				commonKeyProp(),
+			},
+		},
+		{
+			Package:     "@nova/ui",
+			Name:        "button",
+			Description: "Interactive press target that routes platform press events into scheduler events.",
+			Props: []PrimitiveField{
+				{Name: "label", Type: "string", Optional: true, Description: "Accessible label when text children are not enough."},
+				{Name: "disabled", Type: "boolean", Optional: true, Description: "Disables press interaction."},
+				commonClassProp(),
+				commonKeyProp(),
+			},
+			Events: []PrimitiveEvent{
+				{Name: "on_press", Payload: "void", Description: "Emitted when the button is pressed."},
+			},
+		},
+		{
+			Package:     "@nova/ui",
+			Name:        "image",
+			Description: "Displays an image asset or URL.",
+			Props: []PrimitiveField{
+				{Name: "src", Type: "string", Description: "Image source."},
+				{Name: "alt", Type: "string", Optional: true, Description: "Accessible alternative text."},
+				commonClassProp(),
+				commonKeyProp(),
+			},
+		},
+		{
+			Package:     "@nova/ui",
+			Name:        "list",
+			Description: "Projects repeated children from an items binding.",
+			Props: []PrimitiveField{
+				{Name: "items", Type: "unknown[]", Description: "Array value projected into item scope."},
+				commonClassProp(),
+				commonKeyProp(),
+			},
+		},
+		layoutPrimitive("surface", "Layout surface container."),
+		layoutPrimitive("row", "Horizontal layout container."),
+		layoutPrimitive("column", "Vertical layout container."),
+		layoutPrimitive("stack", "Layered layout container."),
+		layoutPrimitive("scroll", "Scrollable layout container."),
+		{
+			Package:     "@nova/navigation",
+			Name:        "page",
+			Description: "Route-projected fragment shown when path matches route state.",
+			Props: []PrimitiveField{
+				{Name: "path", Type: "string", Description: "Route path for this page fragment."},
+				commonClassProp(),
+				commonKeyProp(),
+			},
+		},
+		{
+			Package:     "@nova/forms",
+			Name:        "text_input",
+			Description: "Text entry primitive.",
+			Props: []PrimitiveField{
+				{Name: "value", Type: "string", Optional: true, Description: "Current text value."},
+				{Name: "placeholder", Type: "string", Optional: true, Description: "Placeholder text."},
+				{Name: "disabled", Type: "boolean", Optional: true, Description: "Disables editing."},
+				commonClassProp(),
+				commonKeyProp(),
+			},
+			Events: []PrimitiveEvent{
+				{Name: "on_change", Payload: "string", Description: "Emitted with the new text value."},
+				{Name: "on_submit", Payload: "string", Description: "Emitted when text entry is submitted."},
+			},
+		},
+		{
+			Package:     "@nova/forms",
+			Name:        "number_input",
+			Description: "Numeric entry primitive.",
+			Props: []PrimitiveField{
+				{Name: "value", Type: "number", Optional: true, Description: "Current numeric value."},
+				{Name: "min", Type: "number", Optional: true, Description: "Minimum allowed value."},
+				{Name: "max", Type: "number", Optional: true, Description: "Maximum allowed value."},
+				{Name: "disabled", Type: "boolean", Optional: true, Description: "Disables editing."},
+				commonClassProp(),
+				commonKeyProp(),
+			},
+			Events: []PrimitiveEvent{
+				{Name: "on_change", Payload: "number", Description: "Emitted with the new numeric value."},
+			},
+		},
+		{
+			Package:     "@nova/forms",
+			Name:        "toggle",
+			Description: "Boolean toggle primitive.",
+			Props: []PrimitiveField{
+				{Name: "checked", Type: "boolean", Optional: true, Description: "Current checked state."},
+				{Name: "disabled", Type: "boolean", Optional: true, Description: "Disables interaction."},
+				commonClassProp(),
+				commonKeyProp(),
+			},
+			Events: []PrimitiveEvent{
+				{Name: "on_change", Payload: "boolean", Description: "Emitted with the next checked state."},
+			},
+		},
+		{
+			Package:     "@nova/forms",
+			Name:        "slider",
+			Description: "Numeric slider primitive.",
+			Props: []PrimitiveField{
+				{Name: "value", Type: "number", Optional: true, Description: "Current numeric value."},
+				{Name: "min", Type: "number", Optional: true, Description: "Minimum value."},
+				{Name: "max", Type: "number", Optional: true, Description: "Maximum value."},
+				{Name: "step", Type: "number", Optional: true, Description: "Increment step."},
+				commonClassProp(),
+				commonKeyProp(),
+			},
+			Events: []PrimitiveEvent{
+				{Name: "on_change", Payload: "number", Description: "Emitted with the new slider value."},
+			},
+		},
+		{
+			Package:     "@nova/forms",
+			Name:        "select",
+			Description: "Selection primitive.",
+			Props: []PrimitiveField{
+				{Name: "value", Type: "unknown", Optional: true, Description: "Current selected value."},
+				{Name: "options", Type: "unknown[]", Description: "Available options."},
+				{Name: "disabled", Type: "boolean", Optional: true, Description: "Disables interaction."},
+				commonClassProp(),
+				commonKeyProp(),
+			},
+			Events: []PrimitiveEvent{
+				{Name: "on_change", Payload: "unknown", Description: "Emitted with the selected value."},
+			},
+		},
+		{
+			Package:     "@nova/forms",
+			Name:        "form",
+			Description: "Form grouping primitive.",
+			Props: []PrimitiveField{
+				commonClassProp(),
+				commonKeyProp(),
+			},
+			Events: []PrimitiveEvent{
+				{Name: "on_submit", Payload: "void", Description: "Emitted when the form is submitted."},
+				{Name: "on_validate", Payload: "unknown", Description: "Emitted when validation is requested."},
+			},
+		},
+	}
+}
+
 func ValidateAccessibility(nodes []view.Node) []Diagnostic {
 	diagnostics := make([]Diagnostic, 0)
 	for _, node := range nodes {
 		diagnostics = append(diagnostics, validateNodeAccessibility(node)...)
 	}
 	return diagnostics
+}
+
+func layoutPrimitive(name string, description string) RendererPrimitive {
+	return RendererPrimitive{
+		Package:     "@nova/ui",
+		Name:        name,
+		Description: description,
+		Props: []PrimitiveField{
+			commonClassProp(),
+			commonKeyProp(),
+		},
+	}
+}
+
+func commonClassProp() PrimitiveField {
+	return PrimitiveField{Name: "class", Type: "string", Optional: true, Description: "Style class for renderer target styling."}
+}
+
+func commonKeyProp() PrimitiveField {
+	return PrimitiveField{Name: "key", Type: "unknown", Optional: true, Description: "Stable identity for projected or repeated nodes."}
 }
 
 func validateNodeAccessibility(node view.Node) []Diagnostic {

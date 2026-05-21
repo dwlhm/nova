@@ -1,0 +1,100 @@
+{
+  "scopeName": "source.nova",
+  "name": "Nova",
+  "patterns": [
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#signals"
+    },
+    {
+      "include": "#tags"
+    },
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#operators"
+    },
+    {
+      "include": "#numbers"
+    }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.nova",
+          "match": "//.*$"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.nova",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.nova",
+              "match": "\\\\."
+            }
+          ]
+        }
+      ]
+    },
+    "signals": {
+      "patterns": [
+        {
+          "name": "entity.name.function.event.nova",
+          "match": "@[A-Za-z_][A-Za-z0-9_]*"
+        }
+      ]
+    },
+    "tags": {
+      "patterns": [
+        {
+          "name": "keyword.control.tag.nova",
+          "match": "</?\\b(?:import|contract|lifecycle|template|func)\\b|/\\|"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.nova",
+          "match": "\\b(?:from|as|use|is|not|type|state|event|capability|external|operation|input|output|props|emits|returns|target|mount|dispose|before|after|error)\\b"
+        },
+        {
+          "name": "storage.type.nova",
+          "match": "\\b(?:string|number|boolean|unknown|void)\\b"
+        },
+        {
+          "name": "constant.language.nova",
+          "match": "\\b(?:true|false|null)\\b"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.nova",
+          "match": "<-|->|\\|>|\\?\\||:\\||==|!=|<=|>=|&&|\\|\\||::|\\.\\.\\.|[+\\-*/!?:.,;|]"
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.nova",
+          "match": "-?\\b\\d+(?:\\.\\d+)?\\b"
+        }
+      ]
+    }
+  }
+}

@@ -48,9 +48,11 @@ var tagKeywords = map[string]TokenType{
 }
 
 type scanner struct {
-	input string
-	pos   int
-	prev  TokenType
+	input  string
+	pos    int
+	line   int
+	column int
+	prev   TokenType
 }
 
 // Tokenize converts Nova source into a flat token stream.
@@ -58,7 +60,7 @@ type scanner struct {
 // It is intentionally side-effect free: all scanner state is internal to this
 // call, and callers receive a new token slice for the provided input.
 func Tokenize(input string) []Token {
-	s := scanner{input: input, prev: EOF}
+	s := scanner{input: input, line: 1, column: 1, prev: EOF}
 	tokens := make([]Token, 0)
 
 	for {
@@ -74,7 +76,7 @@ func Tokenize(input string) []Token {
 func nextToken(s scanner) (Token, scanner) {
 	s = skipWhitespace(s)
 	if s.pos >= len(s.input) {
-		return Token{Type: EOF, Literal: ""}, s
+		return tokenAt(s, EOF, "", 0), s
 	}
 
 	if tag, ok := readTagKeyword(s); ok {
@@ -114,7 +116,7 @@ func skipWhitespace(s scanner) scanner {
 	for s.pos < len(s.input) {
 		switch s.input[s.pos] {
 		case ' ', '\t', '\n', '\r':
-			s.pos++
+			s = consumeByte(s)
 		default:
 			return s
 		}
@@ -154,7 +156,7 @@ func readCompoundOperator(s scanner) (Token, bool) {
 
 	for _, op := range operators {
 		if strings.HasPrefix(s.input[s.pos:], op.lit) {
-			return Token{Type: op.typ, Literal: op.lit}, true
+			return tokenAt(s, op.typ, op.lit, len(op.lit)), true
 		}
 	}
 	return Token{}, false
@@ -167,11 +169,7 @@ func readComment(s scanner) (Token, scanner) {
 		pos++
 	}
 
-	return Token{Type: COMMENT, Literal: strings.TrimSpace(s.input[start:pos])}, scanner{
-		input: s.input,
-		pos:   pos,
-		prev:  COMMENT,
-	}
+	return advanceN(s, COMMENT, strings.TrimSpace(s.input[start:pos]), pos-s.pos)
 }
 
 func readString(s scanner) (Token, scanner) {
@@ -183,20 +181,12 @@ func readString(s scanner) (Token, scanner) {
 			continue
 		}
 		if s.input[pos] == '"' {
-			return Token{Type: STRING, Literal: s.input[start:pos]}, scanner{
-				input: s.input,
-				pos:   pos + 1,
-				prev:  STRING,
-			}
+			return advanceN(s, STRING, s.input[start:pos], pos-s.pos+1)
 		}
 		pos++
 	}
 
-	return Token{Type: ILLEGAL, Literal: s.input[start-1:]}, scanner{
-		input: s.input,
-		pos:   len(s.input),
-		prev:  ILLEGAL,
-	}
+	return advanceN(s, ILLEGAL, s.input[start-1:], len(s.input)-s.pos)
 }
 
 func readSignal(s scanner) (Token, scanner) {
@@ -210,11 +200,7 @@ func readSignal(s scanner) (Token, scanner) {
 		pos++
 	}
 
-	return Token{Type: SIGNAL, Literal: s.input[start:pos]}, scanner{
-		input: s.input,
-		pos:   pos,
-		prev:  SIGNAL,
-	}
+	return advanceN(s, SIGNAL, s.input[start:pos], pos-s.pos)
 }
 
 func readIdentifier(s scanner) (Token, scanner) {
@@ -230,11 +216,7 @@ func readIdentifier(s scanner) (Token, scanner) {
 		typ = IDENT
 	}
 
-	return Token{Type: typ, Literal: literal}, scanner{
-		input: s.input,
-		pos:   pos,
-		prev:  typ,
-	}
+	return advanceN(s, typ, literal, pos-s.pos)
 }
 
 func readNumber(s scanner) (Token, scanner) {
@@ -254,19 +236,57 @@ func readNumber(s scanner) (Token, scanner) {
 		}
 	}
 
-	return Token{Type: NUMBER, Literal: s.input[start:pos]}, scanner{
-		input: s.input,
-		pos:   pos,
-		prev:  NUMBER,
-	}
+	return advanceN(s, NUMBER, s.input[start:pos], pos-s.pos)
 }
 
 func advance(s scanner, typ TokenType, literal string) (Token, scanner) {
-	return Token{Type: typ, Literal: literal}, scanner{
-		input: s.input,
-		pos:   s.pos + len(literal),
-		prev:  typ,
+	return advanceN(s, typ, literal, len(literal))
+}
+
+func advanceN(s scanner, typ TokenType, literal string, length int) (Token, scanner) {
+	token := tokenAt(s, typ, literal, length)
+	end := s.pos + length
+	for s.pos < end && s.pos < len(s.input) {
+		s = consumeByte(s)
 	}
+	s.prev = typ
+	return token, s
+}
+
+func tokenAt(s scanner, typ TokenType, literal string, length int) Token {
+	return Token{
+		Type:    typ,
+		Literal: literal,
+		Offset:  s.pos,
+		Line:    s.line,
+		Column:  s.column,
+		Length:  length,
+	}
+}
+
+func consumeByte(s scanner) scanner {
+	if s.pos >= len(s.input) {
+		return s
+	}
+	ch := s.input[s.pos]
+	if ch == '\r' {
+		if s.pos+1 < len(s.input) && s.input[s.pos+1] == '\n' {
+			s.pos += 2
+		} else {
+			s.pos++
+		}
+		s.line++
+		s.column = 1
+		return s
+	}
+	s.pos++
+	if ch == '\n' {
+		s.line++
+		s.column = 1
+	} else {
+		s.column++
+	}
+	return s
 }
 
 func singleCharToken(ch byte) TokenType {

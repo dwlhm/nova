@@ -24,6 +24,12 @@ tests/conformance/        fixture conformance resmi
 docs/adr/                 ADR desain Nova
 ```
 
+## Dokumentasi Proyek
+
+- [docs/architecture.md](docs/architecture.md) menjelaskan layer, ownership package, dan aturan dependency.
+- [docs/code-style.md](docs/code-style.md) menjelaskan gaya Go, `.nova`, diagnostic, test, dan generated output.
+- [CONTRIBUTING.md](CONTRIBUTING.md) merangkum alur kontribusi dan command verifikasi lokal.
+
 ## Command MVP
 
 ```bash
