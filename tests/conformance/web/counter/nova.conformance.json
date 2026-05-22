@@ -11,7 +11,8 @@
     "view": {
       "bindings": 1,
       "eventRoutes": 1,
-      "pages": 0
+      "pages": 0,
+      "routePatterns": []
     }
   }
 }

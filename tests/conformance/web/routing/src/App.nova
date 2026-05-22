@@ -1,0 +1,19 @@
+<contract state Router>
+  route: unknown <- { path <- "/"; };
+/|
+<template target <- web>
+  <surface>
+    <page path <- "/users/settings">
+      <text value <- "Static settings" /|
+    /|
+    <page path <- "/users/:id">
+      <text value <- "User detail" /|
+    /|
+    <page path <- "/docs/*">
+      <text value <- "Docs" /|
+    /|
+    <page path <- "*">
+      <text value <- "Not found" /|
+    /|
+  /|
+/|

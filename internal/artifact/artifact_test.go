@@ -257,6 +257,72 @@ func TestGenerateWebArtifactSupportsMultiPageRouteProjection(t *testing.T) {
 	assertArtifactFile(t, files, "build/web/app.bundle.js", `"initial": "({ path: \"/\" })"`)
 }
 
+func TestGenerateWebArtifactSupportsProductionRouteMatching(t *testing.T) {
+	source := parseNova(t, `<contract type Route>
+  path: string;
+  params: unknown;
+  query: unknown;
+  fragment: string;
+/|
+<contract state Router>
+  route: Route <- { path <- "/"; } {
+    @route_changed(next: Route) -> next;
+  };
+/|
+<template target <- web>
+  <surface>
+    <page path <- "/users/settings">
+      <text value <- "Static settings" /|
+    /|
+    <page path <- "/users/:id">
+      <text value <- "User detail" /|
+    /|
+    <page path <- "/docs/*">
+      <text value <- "Docs" /|
+    /|
+    <page path <- "*">
+      <text value <- "Not found" /|
+    /|
+  /|
+/|`)
+	manifest := project.Manifest{
+		Project: project.Project{Name: "demo", Version: "0.1.0", Entry: "src/App.nova"},
+		Targets: map[string]project.Target{"android": testAndroidTarget("dev.example.routing")},
+	}
+	targetManifest := build.WebTargetManifest()
+	plan := build.Resolve(build.ResolutionInput{
+		Project:        manifest,
+		Target:         "web",
+		Sources:        []build.SourceFile{{Path: "src/App.nova", File: source}},
+		TargetManifest: targetManifest,
+	})
+	if len(plan.Diagnostics) != 0 {
+		t.Fatalf("unexpected build diagnostics: %+v", plan.Diagnostics)
+	}
+
+	files, diagnostics := Generate(GenerateInput{
+		Project:        manifest,
+		Plan:           plan.Plan,
+		Sources:        []build.SourceFile{{Path: "src/App.nova", File: source}},
+		TargetManifest: targetManifest,
+	})
+	if len(diagnostics) != 0 {
+		t.Fatalf("unexpected diagnostics: %+v", diagnostics)
+	}
+
+	assertArtifactFile(t, files, "build/web/app.nova-ir.json", `"pattern": "/users/:id"`)
+	assertArtifactFile(t, files, "build/web/app.nova-ir.json", `"id"`)
+	assertArtifactFile(t, files, "build/web/app.nova-ir.json", `"fallback": true`)
+	assertArtifactFile(t, files, "build/web/assets/nova-runtime.js", "function selectedPageNodes")
+	assertArtifactFile(t, files, "build/web/assets/nova-runtime.js", "function routeMatch(pattern, path)")
+	assertArtifactFile(t, files, "build/web/assets/nova-runtime.js", "function routeValueForShape(route, shape, runtime)")
+	assertArtifactFile(t, files, "build/web/assets/nova-runtime.js", "next.params = match.params")
+	assertArtifactFile(t, files, "build/web/assets/nova-runtime.js", "routeMatch(pattern, activeRoutePath(runtime))")
+	assertArtifactFile(t, files, "build/web/assets/nova-runtime.js", "const parsed = new URL(text)")
+	assertArtifactFile(t, files, "build/web/assets/nova-runtime.js", "new URLSearchParams(search || \"\")")
+	assertArtifactFile(t, files, "build/web/assets/nova-runtime.js", "function safeDecodeURIComponent(value)")
+}
+
 func TestGenerateAndroidArtifactSupportsMultiPageRouteProjection(t *testing.T) {
 	source := parseNova(t, `<contract type Route>
   path: string;
@@ -314,6 +380,69 @@ func TestGenerateAndroidArtifactSupportsMultiPageRouteProjection(t *testing.T) {
 	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "activeRoutePath()")
 	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "\"Page \" + textValue(pathOf(state[\"route\"]))")
 	assertArtifactFile(t, files, "build/android/generated/NovaRoutes.kt", "const val settings = \"/settings\"")
+}
+
+func TestGenerateAndroidArtifactSupportsProductionRouteMatching(t *testing.T) {
+	source := parseNova(t, `<contract type Route>
+  path: string;
+  params: unknown;
+/|
+<contract state Router>
+  route: Route <- { path <- "/"; } {
+    @route_changed(next: Route) -> next;
+  };
+/|
+<template target <- android>
+  <surface>
+    <page path <- "/users/settings">
+      <text value <- "Static settings" /|
+    /|
+    <page path <- "/users/:id">
+      <text value <- "User detail" /|
+    /|
+    <page path <- "/docs/*">
+      <text value <- "Docs" /|
+    /|
+    <page path <- "*">
+      <text value <- "Not found" /|
+    /|
+  /|
+/|`)
+	manifest := project.Manifest{
+		Project: project.Project{Name: "demo", Version: "0.1.0", Entry: "src/App.nova"},
+		Targets: map[string]project.Target{"android": testAndroidTarget("dev.example.routing")},
+	}
+	targetManifest := build.AndroidTargetManifest()
+	plan := build.Resolve(build.ResolutionInput{
+		Project:        manifest,
+		Target:         "android",
+		Sources:        []build.SourceFile{{Path: "src/App.nova", File: source}},
+		TargetManifest: targetManifest,
+	})
+	if len(plan.Diagnostics) != 0 {
+		t.Fatalf("unexpected build diagnostics: %+v", plan.Diagnostics)
+	}
+
+	files, diagnostics := Generate(GenerateInput{
+		Project:        manifest,
+		Plan:           plan.Plan,
+		Sources:        []build.SourceFile{{Path: "src/App.nova", File: source}},
+		TargetManifest: targetManifest,
+	})
+	if len(diagnostics) != 0 {
+		t.Fatalf("unexpected diagnostics: %+v", diagnostics)
+	}
+
+	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "routeMatches(textValue(")
+	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "private fun routePatterns(): List<String>")
+	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "private fun routeParams(pattern: String, value: String)")
+	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "next[\"params\"] = best.params")
+	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "state[\"route\"] = routeValueForShape(state[\"route\"])")
+	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "val uri = URI(text)")
+	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "private fun safeDecodePathSegment(value: String): String")
+	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "private fun encodeComponent(value: String): String")
+	assertArtifactFile(t, files, "build/android/generated/NovaRoutes.kt", "const val users_id = \"/users/:id\"")
+	assertArtifactFile(t, files, "build/android/generated/NovaRoutes.kt", "const val fallback = \"*\"")
 }
 
 func TestExpressionToJSCompilesRecordLiterals(t *testing.T) {

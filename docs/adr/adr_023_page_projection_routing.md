@@ -24,7 +24,7 @@ Nova memakai view primitive `page` sebagai projection renderer-neutral:
 ```
 
 `page` bukan top-level language construct. Ia adalah node ViewIR biasa dengan semantic khusus:
-renderer menampilkan children page ketika `path` sama dengan route aktif.
+renderer menampilkan children page ketika `path` cocok dengan route aktif.
 
 Route aktif dibaca dari state serializable:
 
@@ -55,6 +55,15 @@ MVP memilih nama state `route` sebagai convention. Transition tetap event schedu
 ViewIR metadata menambahkan `Pages` agar tooling, conformance, dan target adapter dapat membaca
 page projection tanpa menjalankan source Nova.
 
+Artifact metadata juga menambahkan route table target-neutral:
+
+```txt
+routes: [{ pattern, nodePath, params, score, fallback }]
+```
+
+Route table ini diturunkan dari `ViewIR.Metadata.Pages` dan dipakai tooling/runtime sebagai kontrak
+deterministik, bukan sebagai native router object.
+
 Target adapter awal:
 
 ```txt
@@ -73,6 +82,16 @@ android  -> Compose projection dari route state hasil scheduler transition
    dispatch event route, transition model memperbarui state, lalu renderer memproyeksikan page aktif.
 7. Browser History API dan Android back stack tetap adapter reconciliation dari ADR-018, bukan
    bagian wajib page projection MVP.
+8. `page.path` boleh berupa exact path (`/settings`), dynamic segment (`/users/:id` atau
+   `/users/{id}`), prefix wildcard (`/docs/*`), atau fallback (`*` dan `/*`).
+9. Adapter memilih page paling spesifik di level sibling yang sama. Exact/static segment mengalahkan
+   dynamic segment, dynamic mengalahkan prefix wildcard, dan fallback menjadi pilihan terakhir.
+   Beberapa page dengan skor sama boleh diproyeksikan bersama.
+10. Route matching menormalisasi leading slash, trailing slash, duplicate slash, segment `.` dan
+    `..`, query string, fragment, serta percent-encoded path segment.
+11. Ketika route state berbentuk record/object, adapter boleh menambahkan `params` hasil dynamic
+    match, serta mempertahankan `query` dan `fragment`. Ketika route state berbentuk string, adapter
+    mengembalikan string path agar shape state tetap stabil.
 
 ## Consequences
 
@@ -90,6 +109,6 @@ Trade-off:
 
 ```txt
 nama state route masih convention
-nested route dan fallback 404 belum distandarkan
-URL/back-stack reconciliation masih target adapter lanjutan
+typed query params, modal route, dan native transition masih butuh contract tambahan
+URL/back-stack reconciliation tetap target-specific meski memakai route model yang sama
 ```

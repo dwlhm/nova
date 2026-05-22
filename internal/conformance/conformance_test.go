@@ -89,7 +89,8 @@ renderer = "@nova/web"
     "view": {
       "bindings": 1,
       "eventRoutes": 1,
-      "pages": 0
+      "pages": 0,
+      "routePatterns": []
     }
   }
 }
@@ -124,7 +125,8 @@ renderer = "@nova/web"
     "view": {
       "bindings": 9,
       "eventRoutes": 0,
-      "pages": 0
+      "pages": 0,
+      "routePatterns": []
     }
   }
 }
@@ -135,6 +137,52 @@ renderer = "@nova/web"
 		t.Fatalf("fixture should fail when expected view metadata mismatches")
 	}
 	assertConformanceDiagnostic(t, result.Diagnostics, "NVA-CONFORMANCE-012")
+}
+
+func TestRunFixtureDirComparesExpectedRoutePatterns(t *testing.T) {
+	root := t.TempDir()
+	writeFixtureFile(t, root, "nova.toml", `[project]
+name = "routing"
+version = "0.1.0"
+entry = "src/App.nova"
+
+[targets.web]
+renderer = "@nova/web"
+`)
+	writeFixtureFile(t, root, "src/App.nova", `<contract state Router>
+  route: unknown <- { path <- "/"; };
+/|
+<template target <- web>
+  <surface>
+    <page path <- "/users/:id">
+      <text value <- "User" /|
+    /|
+    <page path <- "/docs/*">
+      <text value <- "Docs" /|
+    /|
+    <page path <- "*">
+      <text value <- "Missing" /|
+    /|
+  /|
+/|`)
+	writeFixtureFile(t, root, "nova.conformance.json", `{
+  "target": "web",
+  "expected": {
+    "diagnosticCodes": [],
+    "view": {
+      "bindings": 0,
+      "eventRoutes": 0,
+      "pages": 3,
+      "routePatterns": ["/users/:id", "/docs/*", "*"]
+    }
+  }
+}
+`)
+
+	result := RunFixtureDir(root)
+	if !result.Passed() {
+		t.Fatalf("fixture diagnostics = %+v", result.Diagnostics)
+	}
 }
 
 func writeFixtureFile(t *testing.T, root string, path string, content string) {

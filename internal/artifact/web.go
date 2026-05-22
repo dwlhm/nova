@@ -210,6 +210,7 @@ window.NovaRuntime = (() => {
       if (!transition) continue;
       runtime.state[cell.name] = evaluate(transition.expression, runtime.state, payload);
     }
+    reconcileRouteState(runtime);
     render(runtime);
     reconcileNavigation(runtime, beforeRoute, options || {});
   }
@@ -220,7 +221,36 @@ window.NovaRuntime = (() => {
   }
 
   function renderNodes(nodes, runtime) {
-    return (nodes || []).map((node) => renderNode(node, runtime)).filter(Boolean);
+    const list = nodes || [];
+    const selectedPages = selectedPageNodes(list, runtime);
+    return list.map((node, index) => {
+      if (nodeKind(node) === "page" && !selectedPages.has(index)) return null;
+      return renderNode(node, runtime);
+    }).filter(Boolean);
+  }
+
+  function selectedPageNodes(nodes, runtime) {
+    const selected = new Set();
+    let bestScore = null;
+    (nodes || []).forEach((node, index) => {
+      if (nodeKind(node) !== "page") return;
+      const props = pick(node, "props", "Props", {}) || {};
+      const pattern = pagePattern(props, runtime);
+      const match = routeMatch(pattern, activeRoutePath(runtime));
+      if (!match.matched) return;
+      if (bestScore === null || match.score > bestScore) {
+        selected.clear();
+        selected.add(index);
+        bestScore = match.score;
+        return;
+      }
+      if (match.score === bestScore) selected.add(index);
+    });
+    return selected;
+  }
+
+  function nodeKind(node) {
+    return pick(node, "kind", "Kind", "div");
   }
 
   function renderNode(node, runtime) {
@@ -246,11 +276,15 @@ window.NovaRuntime = (() => {
   }
 
   function renderPage(props, children, runtime) {
-    const expected = normalizePath(evaluate(bindingExpression(props.path, runtime.app), runtime.state, {}));
-    if (expected !== activeRoutePath(runtime)) return null;
+    const pattern = pagePattern(props, runtime);
+    if (!routeMatch(pattern, activeRoutePath(runtime)).matched) return null;
     const fragment = document.createDocumentFragment();
     fragment.append(...renderNodes(children, runtime));
     return fragment;
+  }
+
+  function pagePattern(props, runtime) {
+    return normalizeRoutePattern(evaluate(bindingExpression(props.path, runtime.app), runtime.state, {}));
   }
 
   function activeRoutePath(runtime) {
@@ -266,6 +300,11 @@ window.NovaRuntime = (() => {
 
   function hasRouteState(runtime) {
     return !!routeStateCell(runtime.app);
+  }
+
+  function reconcileRouteState(runtime) {
+    if (!hasRouteState(runtime)) return;
+    runtime.state.route = routeValueForShape(routeObject(runtime.state.route), runtime.state.route, runtime);
   }
 
   function routeKey(runtime) {
@@ -285,14 +324,15 @@ window.NovaRuntime = (() => {
     if (!canUseHistory(runtime)) return;
     const platformRoute = routeObjectFromLocation(window.location);
     if (isExplicitPlatformRoute(window.location)) {
-      runtime.state.route = routeValueForShape(platformRoute, runtime.state.route);
+      runtime.state.route = routeValueForShape(platformRoute, runtime.state.route, runtime);
     }
+    reconcileRouteState(runtime);
     writeHistoryState(runtime, "replace");
     window.addEventListener("popstate", (event) => {
       const route = event && event.state && event.state.novaRoute
         ? routeObject(event.state.novaRoute)
         : routeObjectFromLocation(window.location);
-      dispatch(runtime, ROUTE_CHANGED_EVENT, [routeValueForShape(route, runtime.state.route)], { source: "platform" });
+      dispatch(runtime, ROUTE_CHANGED_EVENT, [routeValueForShape(route, runtime.state.route, runtime)], { source: "platform" });
     });
   }
 
@@ -340,7 +380,7 @@ window.NovaRuntime = (() => {
     };
   }
 
-  function routeValueForShape(route, shape) {
+  function routeValueForShape(route, shape, runtime) {
     if (typeof shape === "string") return route.path;
     const next = shape && typeof shape === "object" && !Array.isArray(shape) ? { ...shape } : {};
     next.path = route.path;
@@ -348,20 +388,46 @@ window.NovaRuntime = (() => {
     else delete next.query;
     if (route.fragment) next.fragment = route.fragment;
     else delete next.fragment;
+    const match = runtime ? bestRouteMatch(collectPagePatterns(runtime), route.path) : { params: {} };
+    if (match && match.params && Object.keys(match.params).length) next.params = match.params;
+    else delete next.params;
     return next;
   }
 
   function routeObject(value) {
-    if (typeof value === "string") return { path: normalizePath(value), query: {}, fragment: "" };
+    if (typeof value === "string") return routeObjectFromString(value);
     if (value && typeof value === "object" && !Array.isArray(value)) {
+      const parsed = routeObjectFromString(value.path || "/");
       return {
         ...value,
-        path: normalizePath(value.path || "/"),
-        query: value.query && typeof value.query === "object" ? value.query : {},
-        fragment: value.fragment ? String(value.fragment).replace(/^#/, "") : ""
+        path: parsed.path,
+        query: value.query && typeof value.query === "object" ? value.query : parsed.query,
+        fragment: value.fragment ? String(value.fragment).replace(/^#/, "") : parsed.fragment,
+        params: value.params && typeof value.params === "object" ? value.params : {}
       };
     }
     return { path: "/", query: {}, fragment: "" };
+  }
+
+  function routeObjectFromString(value) {
+    const text = String(value || "/").trim() || "/";
+    try {
+      if (/^[a-z][a-z0-9+.-]*:\/\//i.test(text)) {
+        const parsed = new URL(text);
+        return {
+          path: normalizePath(parsed.pathname || "/"),
+          query: queryFromSearch(parsed.search || ""),
+          fragment: parsed.hash ? safeDecodeURIComponent(parsed.hash.slice(1)) : ""
+        };
+      }
+    } catch (_) {}
+    const hashIndex = text.indexOf("#");
+    const beforeHash = hashIndex >= 0 ? text.slice(0, hashIndex) : text;
+    const fragment = hashIndex >= 0 ? safeDecodeURIComponent(text.slice(hashIndex + 1)) : "";
+    const queryIndex = beforeHash.indexOf("?");
+    const rawPath = queryIndex >= 0 ? beforeHash.slice(0, queryIndex) : beforeHash;
+    const rawQuery = queryIndex >= 0 ? beforeHash.slice(queryIndex) : "";
+    return { path: normalizePath(rawPath || "/"), query: queryFromSearch(rawQuery), fragment };
   }
 
   function queryFromSearch(search) {
@@ -391,12 +457,115 @@ window.NovaRuntime = (() => {
 
   function routeURL(route) {
     const fragment = route.fragment ? "#" + encodeURIComponent(String(route.fragment).replace(/^#/, "")) : "";
-    return normalizePath(route.path) + searchFromQuery(route.query) + fragment;
+    return encodeRoutePath(normalizePath(route.path)) + searchFromQuery(route.query) + fragment;
   }
 
   function normalizePath(value) {
-    const path = String(value || "/");
-    return path.startsWith("/") ? path : "/" + path;
+    let path = String(value || "/").trim();
+    const hash = path.indexOf("#");
+    if (hash >= 0) path = path.slice(0, hash);
+    const query = path.indexOf("?");
+    if (query >= 0) path = path.slice(0, query);
+    if (!path.startsWith("/")) path = "/" + path;
+    const segments = [];
+    for (const raw of path.split("/")) {
+      if (!raw || raw === ".") continue;
+      if (raw === "..") {
+        segments.pop();
+        continue;
+      }
+      segments.push(safeDecodeURIComponent(raw));
+    }
+    return segments.length ? "/" + segments.join("/") : "/";
+  }
+
+  function normalizeRoutePattern(value) {
+    const pattern = String(value || "/").trim();
+    if (pattern === "*" || pattern === "/*") return "*";
+    if (pattern.endsWith("/*")) return normalizePath(pattern.slice(0, -2)) + "/*";
+    return normalizePath(pattern);
+  }
+
+  function collectPagePatterns(runtime) {
+    const patterns = [];
+    collectPagePatternsFromNodes(pick(runtime.app.viewIR, "nodes", "Nodes", []), runtime, patterns);
+    return patterns;
+  }
+
+  function collectPagePatternsFromNodes(nodes, runtime, patterns) {
+    for (const node of nodes || []) {
+      const props = pick(node, "props", "Props", {}) || {};
+      if (nodeKind(node) === "page") patterns.push(pagePattern(props, runtime));
+      collectPagePatternsFromNodes(pick(node, "children", "Children", []) || [], runtime, patterns);
+    }
+  }
+
+  function bestRouteMatch(patterns, path) {
+    let best = null;
+    for (const pattern of patterns || []) {
+      const match = routeMatch(pattern, path);
+      if (!match.matched) continue;
+      if (!best || match.score > best.score) best = match;
+    }
+    return best || { matched: false, params: {}, score: -1 };
+  }
+
+  function routeMatch(pattern, path) {
+    const normalizedPattern = normalizeRoutePattern(pattern);
+    const normalizedPath = normalizePath(path);
+    const params = {};
+    if (normalizedPattern === "*") {
+      return { matched: true, pattern: normalizedPattern, path: normalizedPath, params, score: 0, fallback: true };
+    }
+    const patternSegments = routeSegments(normalizedPattern);
+    const pathSegments = routeSegments(normalizedPath);
+    let score = 0;
+    for (let i = 0; i < patternSegments.length; i++) {
+      const segment = patternSegments[i];
+      if (segment === "*") {
+        return i === patternSegments.length - 1
+          ? { matched: true, pattern: normalizedPattern, path: normalizedPath, params, score: score + 10, fallback: false }
+          : { matched: false, pattern: normalizedPattern, path: normalizedPath, params, score: -1, fallback: false };
+      }
+      if (i >= pathSegments.length) return { matched: false, pattern: normalizedPattern, path: normalizedPath, params, score: -1, fallback: false };
+      const name = dynamicSegmentName(segment);
+      if (name) {
+        params[name] = pathSegments[i];
+        score += 50;
+        continue;
+      }
+      if (segment !== pathSegments[i]) return { matched: false, pattern: normalizedPattern, path: normalizedPath, params, score: -1, fallback: false };
+      score += 100;
+    }
+    if (patternSegments.length !== pathSegments.length) {
+      return { matched: false, pattern: normalizedPattern, path: normalizedPath, params, score: -1, fallback: false };
+    }
+    return { matched: true, pattern: normalizedPattern, path: normalizedPath, params, score: score + 1000, fallback: false };
+  }
+
+  function routeSegments(value) {
+    const path = normalizePath(value);
+    return path === "/" ? [] : path.slice(1).split("/");
+  }
+
+  function dynamicSegmentName(segment) {
+    if (segment.startsWith(":") && segment.length > 1) return segment.slice(1);
+    if (segment.startsWith("{") && segment.endsWith("}") && segment.length > 2) return segment.slice(1, -1);
+    return "";
+  }
+
+  function encodeRoutePath(path) {
+    const normalized = normalizePath(path);
+    if (normalized === "/") return "/";
+    return "/" + normalized.slice(1).split("/").map(encodeURIComponent).join("/");
+  }
+
+  function safeDecodeURIComponent(value) {
+    try {
+      return decodeURIComponent(value);
+    } catch (_) {
+      return value;
+    }
   }
 
   function tagFor(kind) {

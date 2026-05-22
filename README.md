@@ -117,6 +117,11 @@ examples/multipage/src/App.nova
 Example ini memakai state `route: Route`, event `@route_changed`, dan node `<page path <- "...">`
 untuk memilih page aktif tanpa dirty operation di template.
 
+`page.path` mendukung exact path (`/settings`), dynamic segment (`/users/:id` atau
+`/users/{id}`), prefix wildcard (`/docs/*`), dan fallback (`*`). Runtime web dan Android
+menormalisasi query/hash/trailing slash untuk matching, memilih page sibling paling spesifik,
+dan mengisi `route.params` ketika state route berbentuk record/object.
+
 ```bash
 cd examples/multipage
 go run ../../cmd/nova build --target web

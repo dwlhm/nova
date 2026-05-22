@@ -14,6 +14,7 @@ import (
 	"github.com/dwlhm/nova/internal/lexer"
 	"github.com/dwlhm/nova/internal/parser"
 	"github.com/dwlhm/nova/internal/project"
+	"github.com/dwlhm/nova/internal/routing"
 	"github.com/dwlhm/nova/internal/security"
 	"github.com/dwlhm/nova/internal/validator"
 	"github.com/dwlhm/nova/internal/view"
@@ -40,9 +41,10 @@ type ExpectedArtifactMetadata struct {
 }
 
 type ExpectedViewMetadata struct {
-	Bindings    int `json:"bindings"`
-	EventRoutes int `json:"eventRoutes"`
-	Pages       int `json:"pages"`
+	Bindings      int      `json:"bindings"`
+	EventRoutes   int      `json:"eventRoutes"`
+	Pages         int      `json:"pages"`
+	RoutePatterns []string `json:"routePatterns"`
 }
 
 type FixtureResult struct {
@@ -267,10 +269,46 @@ func fixtureViewMetadata(plan build.BuildPlan, sources []build.SourceFile) (Expe
 		return ExpectedViewMetadata{}, out
 	}
 	return ExpectedViewMetadata{
-		Bindings:    len(ir.Metadata.Bindings),
-		EventRoutes: len(ir.Metadata.EventRoutes),
-		Pages:       len(ir.Metadata.Pages),
+		Bindings:      len(ir.Metadata.Bindings),
+		EventRoutes:   len(ir.Metadata.EventRoutes),
+		Pages:         len(ir.Metadata.Pages),
+		RoutePatterns: fixtureRoutePatterns(ir.Metadata.Pages),
 	}, nil
+}
+
+func fixtureRoutePatterns(pages []view.PageRef) []string {
+	patterns := make([]string, 0, len(pages))
+	for _, page := range pages {
+		pattern, ok := fixtureBindingString(page.Path)
+		if !ok {
+			continue
+		}
+		patterns = append(patterns, routing.DescribePattern(pattern).Pattern)
+	}
+	return patterns
+}
+
+func fixtureBindingString(binding view.Binding) (string, bool) {
+	tokens := trimFixtureTokens(binding.Tokens)
+	if len(tokens) == 1 && tokens[0].Type == lexer.STRING {
+		return tokens[0].Literal, true
+	}
+	if binding.Text != "" {
+		return binding.Text, true
+	}
+	return "", false
+}
+
+func trimFixtureTokens(tokens []lexer.Token) []lexer.Token {
+	start := 0
+	for start < len(tokens) && (tokens[start].Type == lexer.EOF || tokens[start].Type == lexer.COMMENT || tokens[start].Type == lexer.SEMICOLON) {
+		start++
+	}
+	end := len(tokens)
+	for end > start && (tokens[end-1].Type == lexer.EOF || tokens[end-1].Type == lexer.COMMENT || tokens[end-1].Type == lexer.SEMICOLON) {
+		end--
+	}
+	return tokens[start:end]
 }
 
 func compareExpectedArtifact(expected *ExpectedArtifactMetadata, actual ExpectedArtifactMetadata) []Diagnostic {
@@ -281,10 +319,16 @@ func compareExpectedArtifact(expected *ExpectedArtifactMetadata, actual Expected
 }
 
 func compareExpectedView(expected *ExpectedViewMetadata, actual ExpectedViewMetadata) []Diagnostic {
-	if expected == nil || *expected == actual {
+	if expected == nil {
 		return nil
 	}
-	return []Diagnostic{fixtureDiagnostic("NVA-CONFORMANCE-012", fmt.Sprintf("view metadata mismatch: expected %+v, actual %+v", *expected, actual))}
+	if expected.Bindings != actual.Bindings || expected.EventRoutes != actual.EventRoutes || expected.Pages != actual.Pages {
+		return []Diagnostic{fixtureDiagnostic("NVA-CONFORMANCE-012", fmt.Sprintf("view metadata mismatch: expected %+v, actual %+v", *expected, actual))}
+	}
+	if expected.RoutePatterns != nil && !reflect.DeepEqual(expected.RoutePatterns, actual.RoutePatterns) {
+		return []Diagnostic{fixtureDiagnostic("NVA-CONFORMANCE-013", fmt.Sprintf("route patterns mismatch: expected %v, actual %v", expected.RoutePatterns, actual.RoutePatterns))}
+	}
+	return nil
 }
 
 func discoverFixtureDirs(root string) ([]string, error) {

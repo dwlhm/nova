@@ -8,6 +8,7 @@ import (
 	"github.com/dwlhm/nova/internal/diagnostic"
 	"github.com/dwlhm/nova/internal/lexer"
 	"github.com/dwlhm/nova/internal/project"
+	"github.com/dwlhm/nova/internal/routing"
 	"github.com/dwlhm/nova/internal/view"
 )
 
@@ -127,7 +128,8 @@ func androidStyles(config androidTargetConfig) string {
 }
 
 func androidMainActivity(name string, bundle irBundle, config androidTargetConfig) string {
-	renderer := androidComposeRenderer{stateNames: androidStateNames(bundle.Model)}
+	routePatterns := androidPagePaths(bundle)
+	renderer := androidComposeRenderer{stateNames: androidStateNames(bundle.Model), routePatterns: routePatterns}
 	var builder strings.Builder
 	builder.WriteString("package " + config.Namespace + "\n\n")
 	builder.WriteString("import android.os.Bundle\n")
@@ -148,7 +150,10 @@ func androidMainActivity(name string, bundle irBundle, config androidTargetConfi
 	builder.WriteString("import androidx.compose.runtime.mutableStateListOf\n")
 	builder.WriteString("import androidx.compose.runtime.mutableStateMapOf\n")
 	builder.WriteString("import androidx.compose.ui.Modifier\n")
-	builder.WriteString("import androidx.compose.ui.unit.dp\n\n")
+	builder.WriteString("import androidx.compose.ui.unit.dp\n")
+	builder.WriteString("import java.net.URI\n")
+	builder.WriteString("import java.net.URLDecoder\n")
+	builder.WriteString("import java.net.URLEncoder\n\n")
 	builder.WriteString("class MainActivity : ComponentActivity() {\n")
 	builder.WriteString("    private val state = mutableStateMapOf<String, Any?>()\n")
 	builder.WriteString("    private val routeBackStack = mutableStateListOf<Any?>()\n")
@@ -184,13 +189,15 @@ func androidMainActivity(name string, bundle irBundle, config androidTargetConfi
 	builder.WriteString("        }\n")
 	builder.WriteString("    }\n\n")
 	builder.WriteString(androidTransitionTable(bundle.Model))
+	builder.WriteString(androidRoutePatternTable(routePatterns))
 	builder.WriteString(androidComposeHelpers())
 	builder.WriteString("}\n")
 	return builder.String()
 }
 
 type androidComposeRenderer struct {
-	stateNames map[string]bool
+	stateNames    map[string]bool
+	routePatterns []string
 }
 
 func (renderer androidComposeRenderer) renderNodes(nodes []view.Node, indent string) string {
@@ -224,7 +231,7 @@ func (renderer androidComposeRenderer) renderPage(node view.Node, indent string)
 		return ""
 	}
 	var builder strings.Builder
-	builder.WriteString(indent + "if (normalizePath(textValue(" + path + ")) == activeRoutePath()) {\n")
+	builder.WriteString(indent + "if (routeMatches(textValue(" + path + "), activeRoutePath())) {\n")
 	builder.WriteString(renderer.renderNodes(node.Children, indent+"    "))
 	builder.WriteString(indent + "}\n")
 	return builder.String()
@@ -313,8 +320,12 @@ func androidPagePaths(bundle irBundle) []string {
 	seen := make(map[string]bool)
 	paths := make([]string, 0, len(bundle.ViewIR.Metadata.Pages))
 	for _, page := range bundle.ViewIR.Metadata.Pages {
-		path, ok := androidBindingString(page.Path)
-		if !ok || seen[path] {
+		path, ok := staticBindingString(page.Path)
+		if !ok {
+			continue
+		}
+		path = routing.DescribePattern(path).Pattern
+		if seen[path] {
 			continue
 		}
 		seen[path] = true
@@ -323,7 +334,7 @@ func androidPagePaths(bundle irBundle) []string {
 	return paths
 }
 
-func androidBindingString(binding view.Binding) (string, bool) {
+func staticBindingString(binding view.Binding) (string, bool) {
 	tokens := trimExpressionTokens(binding.Tokens)
 	if len(tokens) == 1 && tokens[0].Type == lexer.STRING {
 		return tokens[0].Literal, true
@@ -359,6 +370,18 @@ func androidTransitionTable(model appModel) string {
 	return builder.String()
 }
 
+func androidRoutePatternTable(patterns []string) string {
+	var builder strings.Builder
+	builder.WriteString("    private fun routePatterns(): List<String> = listOf(\n")
+	for _, pattern := range patterns {
+		builder.WriteString("        ")
+		builder.WriteString(quoteKotlin(pattern))
+		builder.WriteString(",\n")
+	}
+	builder.WriteString("    )\n\n")
+	return builder.String()
+}
+
 func androidComposeHelpers() string {
 	return `    private data class NovaTransition(
         val stateName: String,
@@ -369,6 +392,7 @@ func androidComposeHelpers() string {
 
     private fun initializeNavigationStack() {
         if (!hasRouteState() || routeBackStack.isNotEmpty()) return
+        state["route"] = routeValueForShape(state["route"])
         routeBackStack.add(cloneRoute(state["route"]))
     }
 
@@ -378,6 +402,9 @@ func androidComposeHelpers() string {
             if (transition.eventName != eventName) continue
             val payload = transition.params.mapIndexed { index, name -> name to args.getOrNull(index) }.toMap()
             state[transition.stateName] = evaluate(transition.expression, payload)
+        }
+        if (hasRouteState()) {
+            state["route"] = routeValueForShape(state["route"])
         }
         reconcileRouteBackStack(beforeRoute, state["route"])
     }
@@ -431,13 +458,44 @@ func androidComposeHelpers() string {
         }
     }
 
-    private fun routeKey(value: Any?): String = pathOf(value)
+    private data class RouteMatch(
+        val matched: Boolean,
+        val pattern: String,
+        val params: Map<String, String>,
+        val score: Int,
+        val fallback: Boolean
+    )
+
+    private fun routeKey(value: Any?): String {
+        val route = routeObject(value)
+        val query = queryString(route["query"])
+        val fragment = route["fragment"]?.toString()?.trimStart('#').orEmpty()
+        return route["path"].toString() + query + if (fragment.isBlank()) "" else "#$fragment"
+    }
 
     private fun cloneRoute(value: Any?): Any? {
         return when (value) {
             is Map<*, *> -> value.entries.associate { it.key.toString() to it.value }
             else -> value
         }
+    }
+
+    private fun routeValueForShape(value: Any?): Any? {
+        val route = routeObject(value)
+        if (value is String) return route["path"]
+        val next = if (value is Map<*, *>) {
+            value.entries.associate { it.key.toString() to it.value }.toMutableMap()
+        } else {
+            mutableMapOf<String, Any?>()
+        }
+        next["path"] = route["path"]
+        val query = route["query"]
+        if (query is Map<*, *> && query.isNotEmpty()) next["query"] = query else next.remove("query")
+        val fragment = route["fragment"]?.toString().orEmpty()
+        if (fragment.isNotBlank()) next["fragment"] = fragment else next.remove("fragment")
+        val best = bestRouteMatch(routePatterns(), route["path"].toString())
+        if (best.params.isNotEmpty()) next["params"] = best.params else next.remove("params")
+        return next
     }
 
     private fun evaluate(expression: String, payload: Map<String, Any?>): Any? {
@@ -492,16 +550,154 @@ func androidComposeHelpers() string {
     private fun activeRoutePath(): String = pathOf(state["route"])
 
     private fun pathOf(value: Any?): String {
-        return when (value) {
-            is String -> normalizePath(value)
-            is Map<*, *> -> normalizePath(value["path"]?.toString() ?: "/")
-            else -> "/"
+        return routeObject(value)["path"]?.toString() ?: "/"
+    }
+
+    private fun routeObject(value: Any?): Map<String, Any?> {
+        if (value is Map<*, *>) {
+            val parsed = routeObjectFromString(value["path"]?.toString() ?: "/")
+            val query = value["query"] ?: parsed["query"]
+            val fragment = value["fragment"] ?: parsed["fragment"]
+            return mapOf("path" to parsed["path"], "query" to query, "fragment" to fragment)
         }
+        return routeObjectFromString(value?.toString() ?: "/")
+    }
+
+    private fun routeObjectFromString(value: String): Map<String, Any?> {
+        val text = value.trim().ifBlank { "/" }
+        try {
+            val uri = URI(text)
+            if (uri.isAbsolute) {
+                return mapOf(
+                    "path" to normalizePath(uri.rawPath ?: "/"),
+                    "query" to queryMap(uri.rawQuery.orEmpty()),
+                    "fragment" to safeDecodeComponent(uri.rawFragment.orEmpty())
+                )
+            }
+        } catch (ignored: Exception) {
+        }
+        val hashIndex = text.indexOf('#')
+        val beforeHash = if (hashIndex >= 0) text.substring(0, hashIndex) else text
+        val fragment = if (hashIndex >= 0) safeDecodeComponent(text.substring(hashIndex + 1)) else ""
+        val queryIndex = beforeHash.indexOf('?')
+        val rawPath = if (queryIndex >= 0) beforeHash.substring(0, queryIndex) else beforeHash
+        val rawQuery = if (queryIndex >= 0) beforeHash.substring(queryIndex + 1) else ""
+        return mapOf("path" to normalizePath(rawPath), "query" to queryMap(rawQuery), "fragment" to fragment)
     }
 
     private fun normalizePath(value: String): String {
-        val cleaned = value.ifBlank { "/" }
-        return if (cleaned.startsWith("/")) cleaned else "/$cleaned"
+        var cleaned = value.trim().ifBlank { "/" }
+        cleaned = cleaned.substringBefore('#').substringBefore('?')
+        if (!cleaned.startsWith("/")) cleaned = "/$cleaned"
+        val segments = mutableListOf<String>()
+        cleaned.split("/").forEach { rawSegment ->
+            val segment = safeDecodePathSegment(rawSegment)
+            when {
+                segment.isBlank() || segment == "." -> Unit
+                segment == ".." -> {
+                    if (segments.isNotEmpty()) segments.removeAt(segments.lastIndex)
+                }
+                else -> segments.add(segment)
+            }
+        }
+        return if (segments.isEmpty()) "/" else "/" + segments.joinToString("/")
+    }
+
+    private fun routeMatches(pattern: String, value: String): Boolean = routeMatch(pattern, value).matched
+
+    private fun bestRouteMatch(patterns: List<String>, value: String): RouteMatch {
+        var best = RouteMatch(false, "", emptyMap(), -1, false)
+        for (pattern in patterns) {
+            val match = routeMatch(pattern, value)
+            if (match.matched && (!best.matched || match.score > best.score)) {
+                best = match
+            }
+        }
+        return best
+    }
+
+    private fun routeMatch(pattern: String, value: String): RouteMatch {
+        val normalizedPattern = normalizePattern(pattern)
+        val normalizedPath = normalizePath(value)
+        if (normalizedPattern == "*") return RouteMatch(true, normalizedPattern, emptyMap(), 0, true)
+        val patternSegments = routeSegments(normalizedPattern)
+        val pathSegments = routeSegments(normalizedPath)
+        val params = mutableMapOf<String, String>()
+        var score = 0
+        for (index in patternSegments.indices) {
+            val segment = patternSegments[index]
+            if (segment == "*") {
+                return if (index == patternSegments.lastIndex) {
+                    RouteMatch(true, normalizedPattern, params, score + 10, false)
+                } else {
+                    RouteMatch(false, normalizedPattern, emptyMap(), -1, false)
+                }
+            }
+            if (index >= pathSegments.size) return RouteMatch(false, normalizedPattern, emptyMap(), -1, false)
+            val name = dynamicSegmentName(segment)
+            if (name != null) {
+                params[name] = pathSegments[index]
+                score += 50
+                continue
+            }
+            if (segment != pathSegments[index]) return RouteMatch(false, normalizedPattern, emptyMap(), -1, false)
+            score += 100
+        }
+        if (patternSegments.size != pathSegments.size) return RouteMatch(false, normalizedPattern, emptyMap(), -1, false)
+        return RouteMatch(true, normalizedPattern, params, score + 1000, false)
+    }
+
+    private fun routeParams(pattern: String, value: String): Map<String, String> = routeMatch(pattern, value).params
+
+    private fun normalizePattern(pattern: String): String {
+        val trimmed = pattern.trim()
+        if (trimmed == "*" || trimmed == "/*") return "*"
+        if (trimmed.endsWith("/*")) return normalizePath(trimmed.removeSuffix("/*")) + "/*"
+        return normalizePath(trimmed)
+    }
+
+    private fun routeSegments(value: String): List<String> {
+        val normalized = normalizePath(value)
+        return if (normalized == "/") emptyList() else normalized.trim('/').split("/")
+    }
+
+    private fun dynamicSegmentName(segment: String): String? {
+        if (segment.startsWith(":") && segment.length > 1) return segment.substring(1)
+        if (segment.startsWith("{") && segment.endsWith("}") && segment.length > 2) return segment.substring(1, segment.length - 1)
+        return null
+    }
+
+    private fun queryMap(query: String): Map<String, String> {
+        if (query.isBlank()) return emptyMap()
+        return query.split("&").mapNotNull { part ->
+            if (part.isBlank()) return@mapNotNull null
+            val pieces = part.split("=", limit = 2)
+            safeDecodeComponent(pieces[0]) to safeDecodeComponent(pieces.getOrElse(1) { "" })
+        }.toMap()
+    }
+
+    private fun queryString(value: Any?): String {
+        if (value !is Map<*, *> || value.isEmpty()) return ""
+        return value.entries
+            .map { it.key.toString() to it.value?.toString().orEmpty() }
+            .sortedBy { it.first }
+            .joinToString("&", prefix = "?") { "${encodeComponent(it.first)}=${encodeComponent(it.second)}" }
+    }
+
+    private fun safeDecodePathSegment(value: String): String {
+        return safeDecodeComponent(value.replace("+", "%2B"))
+    }
+
+    private fun safeDecodeComponent(value: String): String {
+        return try {
+            URLDecoder.decode(value, "UTF-8")
+        } catch (ignored: Exception) {
+            value
+        }
+    }
+
+    private fun encodeComponent(value: String): String {
+        return URLEncoder.encode(value, "UTF-8").replace("+", "%20")
     }
 
     private fun record(vararg fields: Pair<String, Any?>): Map<String, Any?> = mapOf(*fields)
@@ -723,19 +919,28 @@ func androidButtonLabel(node view.Node, stateNames map[string]bool) string {
 }
 
 func androidRouteConstName(path string) string {
+	if strings.TrimSpace(path) == "*" || strings.TrimSpace(path) == "/*" {
+		return "fallback"
+	}
 	name := strings.Trim(strings.ToLower(path), "/")
 	if name == "" {
 		return "root"
 	}
 	var builder strings.Builder
+	lastUnderscore := false
 	for _, ch := range name {
 		switch {
 		case ch >= 'a' && ch <= 'z':
 			builder.WriteRune(ch)
+			lastUnderscore = false
 		case ch >= '0' && ch <= '9':
 			builder.WriteRune(ch)
+			lastUnderscore = false
 		default:
-			builder.WriteByte('_')
+			if !lastUnderscore {
+				builder.WriteByte('_')
+				lastUnderscore = true
+			}
 		}
 	}
 	out := strings.Trim(builder.String(), "_")

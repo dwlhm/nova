@@ -34,7 +34,8 @@ Language frontend and semantic core
   internal/lexer, internal/parser, internal/types, internal/validator
 
 Runtime contracts
-  internal/scheduler, internal/effect, internal/app, internal/persistence, internal/security
+  internal/scheduler, internal/effect, internal/app, internal/persistence, internal/security,
+  internal/routing
 
 Rendering and artifacts
   internal/view, internal/capability, internal/artifact
@@ -60,6 +61,7 @@ mengambil dependency ke CLI, bundler, atau filesystem host.
 | `internal/build` | Module graph, template selection, external implementation, permission planning. |
 | `internal/target` | Kontrak artifact target dan validasi metadata runtime. |
 | `internal/security` | Permission audit dan validasi event host/runtime. |
+| `internal/routing` | Matching route target-neutral untuk page projection, dynamic params, wildcard, dan fallback. |
 | `internal/view` | Projection template menjadi ViewIR dan dependency metadata. |
 | `internal/capability` | Manifest capability dari source/parser contract. |
 | `internal/artifact` | Generate file web/android dari build plan dan IR, tanpa menulis disk. |

@@ -11,6 +11,7 @@ import (
 	"github.com/dwlhm/nova/internal/diagnostic"
 	"github.com/dwlhm/nova/internal/parser"
 	"github.com/dwlhm/nova/internal/project"
+	"github.com/dwlhm/nova/internal/routing"
 	"github.com/dwlhm/nova/internal/security"
 	"github.com/dwlhm/nova/internal/target"
 	"github.com/dwlhm/nova/internal/view"
@@ -100,7 +101,16 @@ type irBundle struct {
 	CapabilityManifests []capability.Manifest      `json:"capabilityManifests"`
 	Model               appModel                   `json:"model"`
 	ViewIR              view.IR                    `json:"viewIR"`
+	Routes              []routeModel               `json:"routes"`
 	ExternalOperations  []externalOperationSummary `json:"externalOperations"`
+}
+
+type routeModel struct {
+	Pattern  string   `json:"pattern"`
+	NodePath []int    `json:"nodePath"`
+	Params   []string `json:"params"`
+	Score    int      `json:"score"`
+	Fallback bool     `json:"fallback"`
 }
 
 type externalOperationSummary struct {
@@ -140,8 +150,34 @@ func buildBundle(input GenerateInput) (irBundle, []Diagnostic) {
 		CapabilityManifests: capabilityManifests(input.Plan.Modules, sourceMap),
 		Model:               buildAppModel(input.Plan.Modules, sourceMap),
 		ViewIR:              viewIR,
+		Routes:              routeModels(viewIR),
 		ExternalOperations:  externalSummaries(input.Plan.ExternalOperations),
 	}, nil
+}
+
+func routeModels(ir view.IR) []routeModel {
+	routes := make([]routeModel, 0, len(ir.Metadata.Pages))
+	for _, page := range ir.Metadata.Pages {
+		pattern, ok := staticBindingString(page.Path)
+		if !ok {
+			continue
+		}
+		description := routing.DescribePattern(pattern)
+		routes = append(routes, routeModel{
+			Pattern:  description.Pattern,
+			NodePath: cloneIntPath(page.NodePath),
+			Params:   description.Params,
+			Score:    description.Score,
+			Fallback: description.Fallback,
+		})
+	}
+	return routes
+}
+
+func cloneIntPath(values []int) []int {
+	out := make([]int, len(values))
+	copy(out, values)
+	return out
 }
 
 func webFiles(input GenerateInput, bundle irBundle, metadata target.ArtifactMetadata) []File {

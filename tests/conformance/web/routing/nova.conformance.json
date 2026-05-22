@@ -1,0 +1,12 @@
+{
+  "target": "web",
+  "expected": {
+    "diagnosticCodes": [],
+    "view": {
+      "bindings": 0,
+      "eventRoutes": 0,
+      "pages": 4,
+      "routePatterns": ["/users/settings", "/users/:id", "/docs/*", "*"]
+    }
+  }
+}
