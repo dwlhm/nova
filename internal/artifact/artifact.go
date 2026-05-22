@@ -211,6 +211,7 @@ func androidFiles(input GenerateInput, bundle irBundle, metadata target.Artifact
 		{Path: "build/android/app/src/main/AndroidManifest.xml", Content: androidManifest(config)},
 		{Path: "build/android/app/src/main/res/values/styles.xml", Content: androidStyles(config)},
 		{Path: "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", Content: androidMainActivity(input.Project.Project.Name, bundle, config)},
+		{Path: "build/android/app/src/main/kotlin/nova/generated/NovaRuntime.kt", Content: androidRuntime(config)},
 		{Path: "build/android/generated/NovaApp.kt", Content: androidApp(input.Project.Project.Name, bundle.Target, config)},
 		{Path: "build/android/generated/NovaRoutes.kt", Content: androidRoutes(bundle, config)},
 		{Path: "build/android/generated/NovaExternalBindings.kt", Content: androidExternalBindings(input.Plan.ExternalOperations, config)},

@@ -166,6 +166,8 @@ func TestGenerateAndroidArtifactIncludesGradleAndGeneratedBindings(t *testing.T)
 	assertArtifactFile(t, files, "build/android/app/src/main/res/values/styles.xml", "Theme.Nova")
 	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "mutableStateMapOf")
 	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "dispatch(\"@increment\"")
+	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/NovaRuntime.kt", "internal data class NovaTransition")
+	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/NovaRuntime.kt", "internal fun evaluate(")
 	assertArtifactFile(t, files, "build/android/generated/NovaApp.kt", "class NovaApp")
 	assertArtifactFile(t, files, "build/android/generated/NovaExternalBindings.kt", "NovaExternalBindings")
 	assertArtifactFile(t, files, "build/android/nova-ir/app.nova-ir.json", "\"viewIR\"")
@@ -435,14 +437,74 @@ func TestGenerateAndroidArtifactSupportsProductionRouteMatching(t *testing.T) {
 
 	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "routeMatches(textValue(")
 	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "private fun routePatterns(): List<String>")
-	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "private fun routeParams(pattern: String, value: String)")
-	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "next[\"params\"] = best.params")
-	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "state[\"route\"] = routeValueForShape(state[\"route\"])")
-	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "val uri = URI(text)")
-	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "private fun safeDecodePathSegment(value: String): String")
-	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "private fun encodeComponent(value: String): String")
+	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "state[\"route\"] = routeValueForShape(state[\"route\"], routePatterns())")
+	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/NovaRuntime.kt", "internal fun routeParams(pattern: String, value: String)")
+	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/NovaRuntime.kt", "next[\"params\"] = best.params")
+	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/NovaRuntime.kt", "val uri = URI(text)")
+	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/NovaRuntime.kt", "private fun safeDecodePathSegment(value: String): String")
+	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/NovaRuntime.kt", "private fun encodeComponent(value: String): String")
 	assertArtifactFile(t, files, "build/android/generated/NovaRoutes.kt", "const val users_id = \"/users/:id\"")
 	assertArtifactFile(t, files, "build/android/generated/NovaRoutes.kt", "const val fallback = \"*\"")
+}
+
+func TestGenerateAndroidArtifactWrapsRowsForDenseNavigation(t *testing.T) {
+	source := parseNova(t, `<contract state Router>
+  route: string <- "/" {
+    @route_changed(next: string) -> next;
+  };
+/|
+<template target <- android>
+  <surface>
+    <row>
+      <button on_press -> @route_changed("/")>
+        <text value <- "Home" /|
+      /|
+      <button on_press -> @route_changed("/users/settings")>
+        <text value <- "User Settings" /|
+      /|
+      <button on_press -> @route_changed("/users/ada")>
+        <text value <- "Ada" /|
+      /|
+      <button on_press -> @route_changed("/docs/reference/routing")>
+        <text value <- "Docs" /|
+      /|
+      <button on_press -> @route_changed("/missing/route")>
+        <text value <- "Missing" /|
+      /|
+    /|
+  /|
+/|`)
+	manifest := project.Manifest{
+		Project: project.Project{Name: "demo", Version: "0.1.0", Entry: "src/App.nova"},
+		Targets: map[string]project.Target{"android": testAndroidTarget("dev.example.routing")},
+	}
+	targetManifest := build.AndroidTargetManifest()
+	plan := build.Resolve(build.ResolutionInput{
+		Project:        manifest,
+		Target:         "android",
+		Sources:        []build.SourceFile{{Path: "src/App.nova", File: source}},
+		TargetManifest: targetManifest,
+	})
+	if len(plan.Diagnostics) != 0 {
+		t.Fatalf("unexpected build diagnostics: %+v", plan.Diagnostics)
+	}
+
+	files, diagnostics := Generate(GenerateInput{
+		Project:        manifest,
+		Plan:           plan.Plan,
+		Sources:        []build.SourceFile{{Path: "src/App.nova", File: source}},
+		TargetManifest: targetManifest,
+	})
+	if len(diagnostics) != 0 {
+		t.Fatalf("unexpected diagnostics: %+v", diagnostics)
+	}
+
+	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "import androidx.compose.foundation.layout.FlowRow")
+	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "@OptIn(ExperimentalLayoutApi::class)")
+	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "FlowRow(")
+	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "verticalArrangement = Arrangement.spacedBy(8.dp)")
+	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "Text(text = \"Docs\")")
+	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "Text(text = \"Missing\")")
 }
 
 func TestExpressionToJSCompilesRecordLiterals(t *testing.T) {

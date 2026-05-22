@@ -1,5 +1,8 @@
 <contract type Route>
   path: string;
+  params?: unknown;
+  query?: unknown;
+  fragment?: string;
 /|
 
 <contract state Router>
@@ -14,13 +17,19 @@
   <surface class <- "multipage-shell">
     <row class <- "multipage-nav">
       <button label <- "Open home page" on_press -> @route_changed({ path <- "/"; })>
-        <text value <- "Home A" /|
+        <text value <- "Home" /|
       /|
-      <button label <- "Open settings page" on_press -> @route_changed({ path <- "/settings"; })>
-        <text value <- "Settings" /|
+      <button label <- "Open static user settings route" on_press -> @route_changed({ path <- "/users/settings"; })>
+        <text value <- "User Settings" /|
       /|
-      <button label <- "Open profile page" on_press -> @route_changed({ path <- "/profile"; })>
-        <text value <- "Profile" /|
+      <button label <- "Open dynamic user route" on_press -> @route_changed({ path <- "/users/ada"; query <- { tab <- "activity"; }; fragment <- "summary"; })>
+        <text value <- "Ada" /|
+      /|
+      <button label <- "Open wildcard docs route" on_press -> @route_changed({ path <- "/docs/reference/routing"; })>
+        <text value <- "Docs" /|
+      /|
+      <button label <- "Open missing route fallback" on_press -> @route_changed({ path <- "/missing/route"; })>
+        <text value <- "Missing" /|
       /|
     /|
 
@@ -28,23 +37,39 @@
       <column class <- "multipage-page">
         <text class <- "multipage-eyebrow" value <- "Page /" /|
         <text class <- "multipage-title" value <- "Workspace Home" /|
-        <text class <- "multipage-copy" value <- "This page is selected from route state without introducing a dirty view branch." /|
+        <text class <- "multipage-copy" value <- "Review recent workspace activity, pinned documents, and team updates from one starting point." /|
       /|
     /|
 
-    <page path <- "/settings">
+    <page path <- "/users/settings">
       <column class <- "multipage-page">
         <text class <- "multipage-eyebrow" value <- "Page " + route.path /|
-        <text class <- "multipage-title" value <- "Settings" /|
-        <text class <- "multipage-copy" value <- "Route changes stay as serializable Nova data and the web adapter projects the matching page." /|
+        <text class <- "multipage-title" value <- "User Settings" /|
+        <text class <- "multipage-copy" value <- "Manage account preferences, privacy controls, notification rules, and workspace access." /|
       /|
     /|
 
-    <page path <- "/profile">
+    <page path <- "/users/:id">
       <column class <- "multipage-page">
         <text class <- "multipage-eyebrow" value <- "Page " + route.path /|
-        <text class <- "multipage-title" value <- "Profile" /|
-        <text class <- "multipage-copy" value <- "Each page remains plain template data; only the active route path decides which fragment is visible." /|
+        <text class <- "multipage-title" value <- "User Detail" /|
+        <text class <- "multipage-copy" value <- "Ada Lovelace is active in the routing reference project and has three pending review requests." /|
+      /|
+    /|
+
+    <page path <- "/docs/*">
+      <column class <- "multipage-page">
+        <text class <- "multipage-eyebrow" value <- "Page " + route.path /|
+        <text class <- "multipage-title" value <- "Documentation" /|
+        <text class <- "multipage-copy" value <- "Browse reference notes, adapter behavior, deployment checklists, and production routing examples." /|
+      /|
+    /|
+
+    <page path <- "*">
+      <column class <- "multipage-page multipage-page-alert">
+        <text class <- "multipage-eyebrow" value <- "Page " + route.path /|
+        <text class <- "multipage-title" value <- "Not Found" /|
+        <text class <- "multipage-copy" value <- "That workspace location is not available. Return home or choose another section from the navigation." /|
       /|
     /|
   /|

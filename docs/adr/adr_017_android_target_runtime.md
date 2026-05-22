@@ -233,6 +233,8 @@ Rule:
 5. Renderer diagnostics memakai source map dari ViewIR.
 ```
 
+APK size strategy dan opsi renderer Android native View dibahas terpisah di ADR-025.
+
 ---
 
 # Threading and Coroutines

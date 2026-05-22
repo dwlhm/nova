@@ -1,5 +1,5 @@
 .multipage-shell {
-  width: min(760px, 100%);
+  width: min(840px, 100%);
   display: grid;
   gap: 22px;
 }
@@ -19,6 +19,11 @@
   border: 1px solid #dfe5ef;
   border-radius: 8px;
   background: #fbfcfe;
+}
+
+.multipage-page-alert {
+  border-color: #ead2d7;
+  background: #fffafb;
 }
 
 .multipage-eyebrow {

@@ -121,6 +121,8 @@ untuk memilih page aktif tanpa dirty operation di template.
 `/users/{id}`), prefix wildcard (`/docs/*`), dan fallback (`*`). Runtime web dan Android
 menormalisasi query/hash/trailing slash untuk matching, memilih page sibling paling spesifik,
 dan mengisi `route.params` ketika state route berbentuk record/object.
+`examples/multipage` memakai bentuk-bentuk ini dalam satu template agar prioritas exact,
+dynamic, wildcard, dan fallback bisa dicek dari artifact web maupun Android.
 
 ```bash
 cd examples/multipage

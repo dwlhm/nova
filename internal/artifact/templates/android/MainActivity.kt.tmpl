@@ -1,0 +1,128 @@
+package {{.PackageName}}
+
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+
+@OptIn(ExperimentalLayoutApi::class)
+class MainActivity : ComponentActivity() {
+    private val state = mutableStateMapOf<String, Any?>()
+    private val routeBackStack = mutableStateListOf<Any?>()
+    private var applyingSystemBack = false
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        initializeState()
+        initializeNavigationStack()
+        setContent {
+            MaterialTheme {
+                BackHandler(enabled = canNavigateBack()) {
+                    handleSystemBack()
+                }
+                Surface(modifier = Modifier.fillMaxSize()) {
+                    RenderApp()
+                }
+            }
+        }
+    }
+
+    private fun initializeState() {
+        if (state.isNotEmpty()) return
+{{.StateInitializers}}    }
+
+    @Composable
+    private fun RenderApp() {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(24.dp),
+            verticalArrangement = Arrangement.Center
+        ) {
+{{.RenderBody}}        }
+    }
+
+{{.Transitions}}{{.RoutePatterns}}    private fun initializeNavigationStack() {
+        if (!hasRouteState() || routeBackStack.isNotEmpty()) return
+        state["route"] = routeValueForShape(state["route"], routePatterns())
+        routeBackStack.add(cloneRoute(state["route"]))
+    }
+
+    private fun dispatch(eventName: String, args: List<Any?>) {
+        val beforeRoute = cloneRoute(state["route"])
+        for (transition in transitions()) {
+            if (transition.eventName != eventName) continue
+            val payload = transition.params.mapIndexed { index, name -> name to args.getOrNull(index) }.toMap()
+            state[transition.stateName] = evaluate(transition.expression, state, payload)
+        }
+        if (hasRouteState()) {
+            state["route"] = routeValueForShape(state["route"], routePatterns())
+        }
+        reconcileRouteBackStack(beforeRoute, state["route"])
+    }
+
+    private fun hasRouteState(): Boolean = state.containsKey("route")
+
+    private fun hasTransition(eventName: String): Boolean {
+        return transitions().any { it.eventName == eventName }
+    }
+
+    private fun canNavigateBack(): Boolean = routeBackStack.size > 1
+
+    private fun handleSystemBack() {
+        if (!canNavigateBack()) return
+        val targetRoute = cloneRoute(routeBackStack[routeBackStack.lastIndex - 1])
+        val beforeRoute = cloneRoute(state["route"])
+        applyingSystemBack = true
+        try {
+            if (hasTransition("@navigate")) {
+                dispatch("@navigate", listOf(record("kind" to "back")))
+            } else {
+                dispatch("@route_changed", listOf(targetRoute))
+            }
+        } finally {
+            applyingSystemBack = false
+        }
+        reconcileAfterSystemBack(beforeRoute, state["route"], targetRoute)
+    }
+
+    private fun reconcileAfterSystemBack(beforeRoute: Any?, afterRoute: Any?, targetRoute: Any?) {
+        if (routeKey(beforeRoute) == routeKey(afterRoute)) return
+        if (routeKey(afterRoute) == routeKey(targetRoute)) {
+            routeBackStack.removeAt(routeBackStack.lastIndex)
+            return
+        }
+        routeBackStack.removeAt(routeBackStack.lastIndex)
+        if (routeKey(routeBackStack.lastOrNull()) != routeKey(afterRoute)) {
+            routeBackStack.add(cloneRoute(afterRoute))
+        }
+    }
+
+    private fun reconcileRouteBackStack(beforeRoute: Any?, afterRoute: Any?) {
+        if (!hasRouteState()) return
+        if (routeBackStack.isEmpty()) {
+            routeBackStack.add(cloneRoute(afterRoute))
+            return
+        }
+        if (routeKey(beforeRoute) == routeKey(afterRoute) || applyingSystemBack) return
+        if (routeKey(routeBackStack.lastOrNull()) != routeKey(afterRoute)) {
+            routeBackStack.add(cloneRoute(afterRoute))
+        }
+    }
+
+    private fun activeRoutePath(): String = pathOf(state["route"])
+}
