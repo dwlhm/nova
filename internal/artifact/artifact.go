@@ -198,24 +198,38 @@ func webFiles(input GenerateInput, bundle irBundle, metadata target.ArtifactMeta
 }
 
 func androidFiles(input GenerateInput, bundle irBundle, metadata target.ArtifactMetadata, config androidTargetConfig) []File {
-	return []File{
+	files := []File{
 		{Path: "build/android/nova-ir/app.nova-ir.json", Content: mustJSON(bundle)},
 		{Path: "build/android/nova-ir/app.source-map.json", Content: mustJSON(sourceMapSummary(input.Plan, bundle))},
 		{Path: "build/android/nova-ir/permissions.json", Content: mustJSON(permissionSummary(input.Plan.Permissions))},
 		{Path: "build/android/nova-ir/target-manifest.json", Content: mustJSON(targetManifestSummary(input.TargetManifest))},
 		{Path: "build/android/nova-ir/metadata.json", Content: mustJSON(metadataSummary(metadata))},
 		{Path: "build/android/settings.gradle.kts", Content: androidSettings(input.Project.Project.Name, config)},
-		{Path: "build/android/gradle.properties", Content: androidGradleProperties()},
+		{Path: "build/android/gradle.properties", Content: androidGradleProperties(config)},
 		{Path: "build/android/build.gradle.kts", Content: androidGradle(input.Project.Project.Name, config)},
 		{Path: "build/android/app/build.gradle.kts", Content: androidAppGradle(config)},
 		{Path: "build/android/app/src/main/AndroidManifest.xml", Content: androidManifest(config)},
 		{Path: "build/android/app/src/main/res/values/styles.xml", Content: androidStyles(config)},
-		{Path: "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", Content: androidMainActivity(input.Project.Project.Name, bundle, config)},
-		{Path: "build/android/app/src/main/kotlin/nova/generated/NovaRuntime.kt", Content: androidRuntime(config)},
-		{Path: "build/android/generated/NovaApp.kt", Content: androidApp(input.Project.Project.Name, bundle.Target, config)},
-		{Path: "build/android/generated/NovaRoutes.kt", Content: androidRoutes(bundle, config)},
-		{Path: "build/android/generated/NovaExternalBindings.kt", Content: androidExternalBindings(input.Plan.ExternalOperations, config)},
 	}
+	if config.NativeRenderer() {
+		sourceRoot := "build/android/app/src/main/java/" + strings.ReplaceAll(config.Namespace, ".", "/")
+		files = append(files,
+			File{Path: sourceRoot + "/MainActivity.java", Content: androidMainActivity(input.Project.Project.Name, bundle, config)},
+			File{Path: sourceRoot + "/NovaRuntime.java", Content: androidRuntime(config)},
+			File{Path: "build/android/generated/NovaApp.java", Content: androidApp(input.Project.Project.Name, bundle.Target, config)},
+			File{Path: "build/android/generated/NovaRoutes.java", Content: androidRoutes(bundle, config)},
+			File{Path: "build/android/generated/NovaExternalBindings.java", Content: androidExternalBindings(input.Plan.ExternalOperations, config)},
+		)
+		return files
+	}
+	files = append(files,
+		File{Path: "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", Content: androidMainActivity(input.Project.Project.Name, bundle, config)},
+		File{Path: "build/android/app/src/main/kotlin/nova/generated/NovaRuntime.kt", Content: androidRuntime(config)},
+		File{Path: "build/android/generated/NovaApp.kt", Content: androidApp(input.Project.Project.Name, bundle.Target, config)},
+		File{Path: "build/android/generated/NovaRoutes.kt", Content: androidRoutes(bundle, config)},
+		File{Path: "build/android/generated/NovaExternalBindings.kt", Content: androidExternalBindings(input.Plan.ExternalOperations, config)},
+	)
+	return files
 }
 
 func selectedTemplate(plan build.BuildPlan, sources map[string]parser.File) (parser.TemplateDecl, bool) {

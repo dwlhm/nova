@@ -83,7 +83,7 @@ AppInstance {
 }
 ```
 
-MVP:
+Production v1:
 
 ```txt
 1 app instance per browser tab

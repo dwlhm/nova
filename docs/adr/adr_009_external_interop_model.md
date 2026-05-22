@@ -56,6 +56,15 @@ diselesaikan oleh target adapter
 tidak boleh membawa platform object ke Nova core
 ```
 
+Production layering untuk `@env/*`:
+
+```txt
+lifecycle -> external operation table -> @env adapter -> platform API
+```
+
+Tidak ada lapisan Kotlin/Compose/JS framework tambahan di antara adapter dan OS. Adapter web
+memakai modul JS platform; adapter Android memakai kelas Java platform (`*.android.java`).
+
 ---
 
 # External Import Source
@@ -331,7 +340,7 @@ Target conformance menjadi sulit.
 
 Nova memiliki async/await atau coroutine syntax.
 
-Rejected for MVP because:
+Out of production v1 scope because:
 
 ```txt
 Scheduler event model sudah menyediakan async completion.
@@ -369,7 +378,7 @@ Native handle harus tinggal di adapter.
 ```txt
 1. External result harus dimodelkan sebagai event/error.
 2. Adapter perlu marshalling dan validation.
-3. Pure helper external belum didukung pada MVP.
+3. Pure helper external belum didukung pada production v1.
 4. Package author harus menyediakan implementasi target yang konsisten.
 ```
 

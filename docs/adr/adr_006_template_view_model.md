@@ -37,7 +37,7 @@ Template tidak mengenal:
 ```txt
 DOM
 UIView
-Compose node
+native view node (Compose hanya pada @nova/android-compose deprecated)
 SwiftUI View
 desktop widget object
 platform handle
@@ -82,8 +82,8 @@ static/dynamic slot metadata
 Jadi Web dapat berakhir sebagai HTML/DOM, tetapi Nova tetap melewati view IR agar semantic,
 diagnostics, event route, dan state dependency tetap sama dengan target lain.
 
-Untuk Android MVP, lowering menghasilkan target IR/runtime binding native Android. Bentuk final
-Android dapat berupa View tree atau Compose layer, tetapi keputusan itu milik Android renderer
+Untuk Android production, lowering menghasilkan binding Java ke Android View framework. Bentuk final
+Android production memakai View tree Java; Compose hanya pada renderer compatibility deprecated
 adapter dan harus tetap mengikuti contract view IR.
 
 ---
@@ -490,7 +490,7 @@ Rule:
 
 ## Direct Platform Template Without IR
 
-Template web langsung menjadi HTML/DOM dan Android langsung menjadi View/Compose tanpa view IR bersama.
+Template web menjadi HTML/DOM dan Android menjadi Java View tree tanpa melewati view IR bersama (anti-pattern).
 
 Rejected because:
 

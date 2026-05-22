@@ -99,7 +99,7 @@ entry = "src/App.nova"
 renderer = "@nova/web"
 
 [targets.android]
-renderer = "@nova/android"
+renderer = "@nova/android"   # production Java native View
 
 [permissions]
 storage.read = true

@@ -27,7 +27,7 @@ web
 android
 ```
 
-Standard package tidak boleh membocorkan DOM, Android View, Compose object, atau platform handle
+Standard package tidak boleh membocorkan DOM, Android View, atau platform handle
 ke core Nova.
 
 ---
@@ -41,7 +41,7 @@ Nova membagi package resmi menjadi dua keluarga:
 @env/*   environment capability yang dipenuhi target adapter
 ```
 
-MVP standard package:
+Production v1 standard package:
 
 ```txt
 @nova/core
@@ -149,7 +149,7 @@ Setiap operation wajib menyatakan permission dan failure mode.
 
 `@nova/core` menyediakan contract dan helper pure minimal.
 
-Isi MVP:
+Isi production v1:
 
 ```txt
 Result<T, E>
@@ -177,7 +177,7 @@ Rule:
 
 `@nova/ui` adalah primitive renderer-neutral.
 
-Primitive MVP:
+Primitive production v1:
 
 ```txt
 text
@@ -217,11 +217,11 @@ on_blur -> @event
 Rule:
 
 ```txt
-1. Primitive harus bisa diturunkan ke DOM dan Compose.
+1. Primitive harus bisa diturunkan ke DOM (web) dan Android View (Java).
 2. Primitive tidak menjanjikan pixel-identical output.
 3. Semantic role, label, enabled, dan focus harus dipertahankan.
 4. List item dinamis harus memakai key stabil atau menghasilkan warning.
-5. Style MVP adalah token/record data, bukan CSS string bebas atau Compose Modifier object.
+5. Style production v1 adalah token/record data, bukan CSS string bebas atau platform modifier object.
 ```
 
 ---
@@ -230,7 +230,7 @@ Rule:
 
 `@nova/forms` menyediakan primitive input target-neutral.
 
-Primitive MVP:
+Primitive production v1:
 
 ```txt
 text_input
@@ -312,7 +312,7 @@ Rule:
 
 `@nova/app` menyediakan event app lifecycle target-neutral.
 
-Events MVP:
+Events production v1:
 
 ```txt
 @app_started(void)
@@ -342,7 +342,7 @@ Rule:
 
 # @env/storage
 
-Operations MVP:
+Operations production v1:
 
 ```txt
 get(key: string) -> unknown
@@ -378,7 +378,7 @@ Rule:
 
 # @env/network
 
-Operations MVP:
+Operations production v1:
 
 ```txt
 request(input: RequestData) -> ResponseData
@@ -426,7 +426,7 @@ Rule:
 
 ```txt
 1. Interactive primitive harus punya accessible label dari text child, label prop, atau diagnostic.
-2. Role semantic harus dipertahankan ke DOM/Compose.
+2. Role semantic harus dipertahankan ke DOM (web) dan View (android).
 3. Disabled state harus memengaruhi event route.
 4. Focus order harus mengikuti tree order kecuali ada contract eksplisit.
 5. Target adapter wajib memiliki snapshot accessibility minimal di conformance.
@@ -450,5 +450,5 @@ Trade-off:
 ```txt
 standard package harus konservatif
 fitur platform unik perlu masuk lewat capability yang eksplisit
-style dan input MVP tidak mengejar seluruh kemampuan CSS atau Android native
+style dan input production v1 tidak mengejar seluruh kemampuan CSS atau Android native
 ```

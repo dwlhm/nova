@@ -31,6 +31,7 @@ type FixtureExpected struct {
 	DiagnosticCodes []string                  `json:"diagnosticCodes"`
 	Artifact        *ExpectedArtifactMetadata `json:"artifact,omitempty"`
 	View            *ExpectedViewMetadata     `json:"view,omitempty"`
+	Scheduler       *ExpectedScheduler        `json:"scheduler,omitempty"`
 }
 
 type ExpectedArtifactMetadata struct {
@@ -96,12 +97,28 @@ func RunFixtureDir(root string) FixtureResult {
 	}
 	diagnostics = append(diagnostics, compareExpectedArtifact(spec.Expected.Artifact, actual.Artifact)...)
 	diagnostics = append(diagnostics, compareExpectedView(spec.Expected.View, actual.View)...)
+	if spec.Expected.Scheduler != nil {
+		if !traceSpecified(spec.Expected.Scheduler.Trace) {
+			return FixtureResult{
+				Name:        name,
+				Target:      spec.Target,
+				Diagnostics: []Diagnostic{fixtureDiagnostic("NVA-CONFORMANCE-033", "scheduler fixture requires non-empty expected trace")},
+			}
+		}
+		schedulerDiagnostics, _, ok := runSchedulerFixture(actual.Resolution.Plan, actual.Sources, spec.Expected.Scheduler)
+		if !ok {
+			return FixtureResult{Name: name, Target: spec.Target, Diagnostics: diagnostic.StableSort(append(diagnostics, schedulerDiagnostics...))}
+		}
+		diagnostics = append(diagnostics, schedulerDiagnostics...)
+	}
 	return FixtureResult{Name: name, Target: spec.Target, Diagnostics: diagnostic.StableSort(diagnostics)}
 }
 
 type fixtureActual struct {
-	Artifact ExpectedArtifactMetadata
-	View     ExpectedViewMetadata
+	Artifact   ExpectedArtifactMetadata
+	View       ExpectedViewMetadata
+	Resolution build.ResolutionResult
+	Sources    []build.SourceFile
 }
 
 func evaluateFixture(root string, targetID string) (fixtureActual, []Diagnostic) {
@@ -153,7 +170,9 @@ func evaluateFixture(root string, targetID string) (fixtureActual, []Diagnostic)
 			Modules:     resolution.Plan.Artifact.Modules,
 			Permissions: resolution.Plan.Artifact.Permissions,
 		},
-		View: viewMetadata,
+		View:       viewMetadata,
+		Resolution: resolution,
+		Sources:    sources,
 	}, nil
 }
 

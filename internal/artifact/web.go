@@ -204,28 +204,40 @@ window.NovaRuntime = (() => {
 
   function dispatch(runtime, event, args, options) {
     const beforeRoute = routeKey(runtime);
+    const beforeState = cloneState(runtime.state);
     const payload = payloadFor(runtime.app, event, args || []);
     for (const cell of (runtime.app.model || {}).states || []) {
       const transition = (cell.transitions || []).find((candidate) => candidate.event === event);
       if (!transition) continue;
-      runtime.state[cell.name] = evaluate(transition.expression, runtime.state, payload);
+      runtime.state[cell.name] = evaluate(transition.expression, beforeState, payload);
     }
     reconcileRouteState(runtime);
-    render(runtime);
+    update(runtime, stateInvalidations(runtime, beforeState));
     reconcileNavigation(runtime, beforeRoute, options || {});
   }
 
   function render(runtime) {
     const root = runtime.root;
-    root.replaceChildren(...renderNodes(pick(runtime.app.viewIR, "nodes", "Nodes", []), runtime));
+    runtime.refs = new Map();
+    root.replaceChildren(...renderNodes(pick(runtime.app.viewIR, "nodes", "Nodes", []), runtime, []));
+    update(runtime, null);
   }
 
-  function renderNodes(nodes, runtime) {
+  function update(runtime, invalidations) {
+    if (!runtime.refs) {
+      render(runtime);
+      return;
+    }
+    if (invalidations && !invalidations.size) return;
+    updateBindings(runtime, invalidations);
+    updatePages(runtime, pick(runtime.app.viewIR, "nodes", "Nodes", []), []);
+  }
+
+  function renderNodes(nodes, runtime, parentPath) {
     const list = nodes || [];
     const selectedPages = selectedPageNodes(list, runtime);
     return list.map((node, index) => {
-      if (nodeKind(node) === "page" && !selectedPages.has(index)) return null;
-      return renderNode(node, runtime);
+      return renderNode(node, runtime, parentPath.concat(index), selectedPages.has(index));
     }).filter(Boolean);
   }
 
@@ -249,38 +261,136 @@ window.NovaRuntime = (() => {
     return selected;
   }
 
+  function updateBindings(runtime, invalidations) {
+    for (const ref of metadataBindings(runtime.app)) {
+      const states = pick(ref, "states", "States", []) || [];
+      const prop = pick(ref, "prop", "Prop", "");
+      if (prop === "key" || prop.includes("#arg")) continue;
+      if (!shouldApplyBinding(states, invalidations)) continue;
+      const path = pick(ref, "nodePath", "NodePath", []) || [];
+      const target = runtime.refs.get(pathKey(path));
+      if (!target) continue;
+      const node = nodeAtPath(runtime.app, path);
+      if (!node) continue;
+      updateNodeBinding(target, node, prop, runtime);
+    }
+  }
+
+  function updatePages(runtime, nodes, parentPath) {
+    const list = nodes || [];
+    const selectedPages = selectedPageNodes(list, runtime);
+    list.forEach((node, index) => {
+      const path = parentPath.concat(index);
+      if (nodeKind(node) === "page") {
+        const target = runtime.refs.get(pathKey(path));
+        if (target) target.hidden = !selectedPages.has(index);
+      }
+      updatePages(runtime, pick(node, "children", "Children", []) || [], path);
+    });
+  }
+
+  function updateNodeBinding(target, node, prop, runtime) {
+    const props = pick(node, "props", "Props", {}) || {};
+    const binding = props[prop];
+    if (!binding) return;
+    const value = evaluate(bindingExpression(binding, runtime.app), runtime.state, {});
+    if (target.nodeType === Node.TEXT_NODE) {
+      target.textContent = String(value);
+      return;
+    }
+    if (prop === "value" && nodeKind(node) === "text") {
+      target.textContent = String(value);
+      return;
+    }
+    applyPropValue(target, prop, value);
+  }
+
+  function metadataBindings(app) {
+    const viewIR = pick(app, "viewIR", "ViewIR", {}) || {};
+    const metadata = pick(viewIR, "metadata", "Metadata", {}) || {};
+    return pick(metadata, "bindings", "Bindings", []) || [];
+  }
+
+  function shouldApplyBinding(states, invalidations) {
+    if (!invalidations) return true;
+    return (states || []).some((state) => invalidations.has(state));
+  }
+
+  function nodeAtPath(app, path) {
+    let list = pick(pick(app, "viewIR", "ViewIR", {}) || {}, "nodes", "Nodes", []) || [];
+    let node = null;
+    for (const index of path || []) {
+      node = list[index];
+      if (!node) return null;
+      list = pick(node, "children", "Children", []) || [];
+    }
+    return node;
+  }
+
+  function pathKey(path) {
+    return (path || []).join(".");
+  }
+
+  function cloneState(state) {
+    return { ...(state || {}) };
+  }
+
+  function stateInvalidations(runtime, beforeState) {
+    const invalidations = new Set();
+    for (const cell of (runtime.app.model || {}).states || []) {
+      if (!sameValue(beforeState[cell.name], runtime.state[cell.name])) {
+        invalidations.add(cell.name);
+      }
+    }
+    return invalidations;
+  }
+
+  function sameValue(left, right) {
+    if (Object.is(left, right)) return true;
+    try {
+      return JSON.stringify(left) === JSON.stringify(right);
+    } catch (_) {
+      return false;
+    }
+  }
+
   function nodeKind(node) {
     return pick(node, "kind", "Kind", "div");
   }
 
-  function renderNode(node, runtime) {
+  function renderNode(node, runtime, path, pageActive) {
     const kind = pick(node, "kind", "Kind", "div");
     const props = pick(node, "props", "Props", {}) || {};
     const events = pick(node, "events", "Events", {}) || {};
     const children = pick(node, "children", "Children", []) || [];
     if (kind === "page") {
-      return renderPage(props, children, runtime);
+      return renderPage(node, props, children, runtime, path, pageActive);
     }
     if (kind === "#text") {
-      return document.createTextNode(String(evaluate(bindingExpression(props.value, runtime.app), runtime.state, {})));
+      const text = document.createTextNode("");
+      runtime.refs.set(pathKey(path), text);
+      updateNodeBinding(text, node, "value", runtime);
+      return text;
     }
     const element = document.createElement(tagFor(kind));
+    runtime.refs.set(pathKey(path), element);
     element.dataset.novaKind = kind;
     applyProps(element, props, runtime);
     applyEvents(element, events, runtime);
-    element.append(...renderNodes(children, runtime));
+    element.append(...renderNodes(children, runtime, path));
     if (kind === "text" && !children.length && props.value) {
-      element.textContent = String(evaluate(bindingExpression(props.value, runtime.app), runtime.state, {}));
+      updateNodeBinding(element, node, "value", runtime);
     }
     return element;
   }
 
-  function renderPage(props, children, runtime) {
-    const pattern = pagePattern(props, runtime);
-    if (!routeMatch(pattern, activeRoutePath(runtime)).matched) return null;
-    const fragment = document.createDocumentFragment();
-    fragment.append(...renderNodes(children, runtime));
-    return fragment;
+  function renderPage(node, props, children, runtime, path, active) {
+    const element = document.createElement("div");
+    runtime.refs.set(pathKey(path), element);
+    element.dataset.novaKind = "page";
+    element.hidden = !active;
+    element.append(...renderNodes(children, runtime, path));
+    return element;
   }
 
   function pagePattern(props, runtime) {
@@ -581,11 +691,25 @@ window.NovaRuntime = (() => {
     for (const [name, binding] of Object.entries(props || {})) {
       if (name === "value") continue;
       const value = evaluate(bindingExpression(binding, runtime.app), runtime.state, {});
-      if (name === "class") element.className = String(value);
-      else if (name === "label") element.setAttribute("aria-label", String(value));
-      else if (name === "enabled" && value === false) element.setAttribute("disabled", "");
-      else element.setAttribute(name.replaceAll("_", "-"), String(value));
+      applyPropValue(element, name, value);
     }
+  }
+
+  function applyPropValue(element, name, value) {
+    if (name === "class") {
+      element.className = String(value || "");
+      return;
+    }
+    if (name === "label") {
+      element.setAttribute("aria-label", String(value));
+      return;
+    }
+    if (name === "enabled") {
+      if (value === false) element.setAttribute("disabled", "");
+      else element.removeAttribute("disabled");
+      return;
+    }
+    element.setAttribute(name.replaceAll("_", "-"), String(value));
   }
 
   function applyEvents(element, events, runtime) {

@@ -2,25 +2,25 @@
 
 ## Status
 
-Proposed
+Accepted
 
 ## Context
 
-ADR-017 memilih Jetpack Compose dan Material3 sebagai renderer MVP Android karena mempercepat
-implementasi awal dan cocok dengan ViewIR deklaratif. Setelah APK debug dihasilkan, ukuran artifact
-dapat membesar oleh dependency UI AndroidX, Compose runtime, Material3, resource, dan DEX eksternal.
+Fase eksperimen awal pernah memakai Jetpack Compose + Kotlin; production baseline (ADR-000, ADR-017,
+ADR-025) beralih ke Java native View untuk mengecilkan APK dan memangkas lapisan UI.
 
-Jumlah file Kotlin generated Nova bukan penyebab utama pembengkakan APK. Memecah output menjadi
+Pembengkakan APK utama berasal dari dependency UI AndroidX, Compose runtime, Material3, resource,
+dan DEX eksternal — bukan dari jumlah file generated Nova. Memecah output menjadi
 `MainActivity.kt`, `NovaRuntime.kt`, `NovaRoutes.kt`, dan file generated lain tetap masuk source set
 Kotlin yang sama dan tidak menambah overhead runtime berarti.
 
 Nova membutuhkan strategi jangka panjang agar aplikasi sederhana yang hanya memakai primitive dasar
 tidak perlu membawa dependency UI besar.
 
-## Proposal
+## Decision
 
-Tambahkan renderer Android native View milik Nova sebagai kandidat pengganti Compose renderer untuk
-mode APK kecil.
+Production Android memakai renderer native View milik Nova sebagai default `@nova/android`.
+Compose/Kotlin (`@nova/android-compose`) hanya compatibility path yang deprecated.
 
 Target arah:
 
@@ -34,49 +34,32 @@ Renderer native View harus dapat berjalan tanpa:
 androidx.compose.*
 androidx.activity:activity-compose
 androidx.compose.material3:material3
+org.jetbrains.kotlin.android
+Kotlin stdlib/runtime pada APK final
 dependency UI berat yang tidak dipakai oleh primitive app
 ```
 
-Nova dapat tetap mempertahankan Compose renderer sebagai mode produktivitas atau compatibility selama
-native View renderer belum mencapai parity.
+Untuk mode APK kecil, renderer native View menghasilkan source Java di `app/src/main/java`.
+Compose renderer boleh tetap memakai Kotlin selama mode compatibility, tetapi native View renderer
+tidak boleh bergantung pada Kotlin plugin atau stdlib supaya baseline ukuran APK benar-benar
+mengukur renderer Nova dan Android framework platform.
 
-## Tasks
-
-```txt
-1. Ukur baseline APK debug dan release untuk renderer Compose saat ini.
-2. Tambahkan target/config renderer Android native View minimal.
-3. Turunkan primitive dasar text, button, row, column, stack, page, dan surface ke View/ViewGroup.
-4. Build primitive UI dasar Nova sendiri, termasuk styling minimal, state update, dan event bridge.
-5. Hilangkan Material3, Compose UI, dan activity-compose saat renderer native View aktif.
-6. Ukur ulang APK debug/release untuk native View renderer dan bandingkan dengan Compose renderer.
-7. Evaluasi setiap dependency UI eksternal berdasarkan ukuran APK, effort implementasi, aksesibilitas,
-   styling, maintainability, dan parity lintas target.
-8. Tambahkan conformance atau smoke fixture Android untuk memastikan kedua renderer menjaga semantic
-   ViewIR, event route, routing, dan state update yang sama.
-```
-
-## Decision Criteria
-
-Renderer native View layak menjadi default Android bila:
+Implementasi production (lihat `internal/artifact/android.go`):
 
 ```txt
-APK release lebih kecil secara signifikan untuk app primitive dasar
-event/state/routing semantics tetap setara dengan renderer Compose
-aksesibilitas dasar tidak mundur
-styling primitive tetap cukup konsisten dengan target web
-biaya maintenance masih wajar untuk Nova
+1. `@nova/android` menghasilkan Java di app/src/main/java tanpa Kotlin plugin.
+2. Primitive ViewIR diturunkan ke Android View/ViewGroup + invalidation granular.
+3. Material3, Compose, activity-compose, dan Kotlin stdlib tidak masuk dependency graph default.
+4. Conformance + scheduler trace menjaga parity semantic dengan target web.
+5. `@nova/android-compose` tetap ada untuk migrasi project lama, bukan default baru.
 ```
-
-Dependency UI eksternal boleh tetap dipakai bila penghematan ukuran tidak sepadan dengan effort
-implementasi atau risiko kualitas.
 
 ## Non Goals
 
 ```txt
-Menghapus Compose renderer segera
+Menghapus jalur Compose sebelum migrasi project lama selesai
 Membuat clone Material3 lengkap di Nova
 Mengorbankan semantic ViewIR atau event scheduler demi ukuran APK
-Mengoptimalkan APK sebelum ada baseline debug/release yang terukur
 ```
 
 ## Consequences
@@ -93,6 +76,7 @@ Trade-off:
 
 ```txt
 Native View renderer membutuhkan implementasi layout, styling, accessibility, dan invalidation sendiri
-Parity dengan Compose renderer harus dijaga lewat test dan conformance
+Scheduler hanya mengetahui state/capability invalidation; pemetaan ke View native tetap milik renderer
+Parity semantic dengan jalur `@nova/android-compose` (deprecated) dijaga lewat conformance
 Beberapa primitive kompleks mungkin tetap lebih murah memakai dependency eksternal
 ```

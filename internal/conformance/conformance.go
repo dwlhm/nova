@@ -9,43 +9,62 @@ import (
 )
 
 type EventTrace struct {
-	Sequence scheduler.LogicalSequence
-	Source   scheduler.CapabilityRef
-	Name     scheduler.SchedulerEvent
-	Payload  scheduler.DataValue
+	Sequence scheduler.LogicalSequence `json:"sequence"`
+	Source   scheduler.CapabilityRef   `json:"source"`
+	Name     scheduler.SchedulerEvent  `json:"name"`
+	Payload  scheduler.DataValue       `json:"payload,omitempty"`
 }
 
 type LifecycleTrace struct {
-	Owner scheduler.CapabilityRef
-	Phase scheduler.LifecyclePhase
-	Event scheduler.SchedulerEvent
-	Error string
+	Owner scheduler.CapabilityRef  `json:"owner"`
+	Phase scheduler.LifecyclePhase `json:"phase"`
+	Event scheduler.SchedulerEvent `json:"event"`
+	Error string                   `json:"error,omitempty"`
 }
 
 type ExternalCallTrace struct {
-	Source     scheduler.CapabilityRef
-	Capability string
-	Operation  string
-	Input      map[string]scheduler.DataValue
-	OutputType string
-	OnSuccess  scheduler.SchedulerEvent
-	OnFailure  scheduler.SchedulerEvent
+	Source     scheduler.CapabilityRef        `json:"source"`
+	Capability string                         `json:"capability"`
+	Operation  string                         `json:"operation"`
+	Input      map[string]scheduler.DataValue `json:"input,omitempty"`
+	OutputType string                         `json:"outputType"`
+	OnSuccess  scheduler.SchedulerEvent       `json:"onSuccess"`
+	OnFailure  scheduler.SchedulerEvent       `json:"onFailure"`
 }
 
 type ErrorTrace struct {
-	Source  scheduler.CapabilityRef
-	Phase   scheduler.SchedulerPhase
-	Event   scheduler.SchedulerEvent
-	State   string
-	Message string
+	Source  scheduler.CapabilityRef  `json:"source"`
+	Phase   scheduler.SchedulerPhase `json:"phase"`
+	Event   scheduler.SchedulerEvent `json:"event"`
+	State   string                   `json:"state,omitempty"`
+	Message string                   `json:"message"`
 }
 
 type Trace struct {
-	Events         []EventTrace
-	Commits        []scheduler.StateCommit
-	LifecycleCalls []LifecycleTrace
-	ExternalCalls  []ExternalCallTrace
-	Errors         []ErrorTrace
+	Events         []EventTrace        `json:"events,omitempty"`
+	Commits        []CommitTrace       `json:"commits,omitempty"`
+	LifecycleCalls []LifecycleTrace    `json:"lifecycleCalls,omitempty"`
+	ExternalCalls  []ExternalCallTrace `json:"externalCalls,omitempty"`
+	Errors         []ErrorTrace        `json:"errors,omitempty"`
+}
+
+type CommitTrace struct {
+	Sequence      scheduler.LogicalSequence `json:"sequence"`
+	Event         scheduler.SchedulerEvent  `json:"event"`
+	Committed     bool                      `json:"committed"`
+	Changes       []StateChangeTrace        `json:"changes,omitempty"`
+	Invalidations []StateKeyTrace           `json:"invalidations,omitempty"`
+}
+
+type StateChangeTrace struct {
+	Key    StateKeyTrace       `json:"key"`
+	Before scheduler.DataValue `json:"before,omitempty"`
+	After  scheduler.DataValue `json:"after,omitempty"`
+}
+
+type StateKeyTrace struct {
+	Owner scheduler.CapabilityRef `json:"owner"`
+	Name  scheduler.StateName     `json:"name"`
 }
 
 type Diagnostic = diagnostic.Diagnostic
@@ -59,7 +78,7 @@ func TraceSchedulerResults(results []scheduler.StepResult) Trace {
 			Name:     result.Event.Name,
 			Payload:  result.Event.Payload,
 		})
-		trace.Commits = append(trace.Commits, result.Commit)
+		trace.Commits = append(trace.Commits, commitTraceFromScheduler(result.Commit))
 		for _, lifecycle := range result.LifecycleInvocations {
 			errorMessage := ""
 			if lifecycle.Error != nil {
@@ -90,7 +109,46 @@ func TraceSchedulerResults(results []scheduler.StepResult) Trace {
 	return trace
 }
 
+func commitTraceFromScheduler(commit scheduler.StateCommit) CommitTrace {
+	changes := make([]StateChangeTrace, 0, len(commit.Changes))
+	for _, change := range commit.Changes {
+		changes = append(changes, StateChangeTrace{
+			Key:    StateKeyTrace{Owner: change.Key.Owner, Name: change.Key.Name},
+			Before: normalizeTraceDataValue(change.Before),
+			After:  normalizeTraceDataValue(change.After),
+		})
+	}
+	invalidations := make([]StateKeyTrace, 0, len(commit.Invalidations))
+	for _, key := range commit.Invalidations {
+		invalidations = append(invalidations, StateKeyTrace{Owner: key.Owner, Name: key.Name})
+	}
+	return CommitTrace{
+		Sequence:      commit.Sequence,
+		Event:         commit.Event,
+		Committed:     commit.Committed,
+		Changes:       changes,
+		Invalidations: invalidations,
+	}
+}
+
+func normalizeTraceDataValue(value scheduler.DataValue) scheduler.DataValue {
+	switch typed := value.(type) {
+	case int:
+		return float64(typed)
+	case int64:
+		return float64(typed)
+	case int32:
+		return float64(typed)
+	case float32:
+		return float64(typed)
+	default:
+		return value
+	}
+}
+
 func CompareTrace(expected Trace, actual Trace) []Diagnostic {
+	expected = normalizeTrace(expected)
+	actual = normalizeTrace(actual)
 	diagnostics := make([]Diagnostic, 0)
 	if !reflect.DeepEqual(expected.Events, actual.Events) {
 		diagnostics = append(diagnostics, mismatch("NVA-CONFORMANCE-001", "scheduler events", expected.Events, actual.Events))
@@ -108,6 +166,25 @@ func CompareTrace(expected Trace, actual Trace) []Diagnostic {
 		diagnostics = append(diagnostics, mismatch("NVA-CONFORMANCE-005", "runtime errors", expected.Errors, actual.Errors))
 	}
 	return diagnostic.StableSort(diagnostics)
+}
+
+func normalizeTrace(trace Trace) Trace {
+	for index := range trace.Events {
+		trace.Events[index].Payload = normalizeTraceDataValue(trace.Events[index].Payload)
+	}
+	for index := range trace.Commits {
+		for changeIndex := range trace.Commits[index].Changes {
+			change := &trace.Commits[index].Changes[changeIndex]
+			change.Before = normalizeTraceDataValue(change.Before)
+			change.After = normalizeTraceDataValue(change.After)
+		}
+	}
+	for index := range trace.ExternalCalls {
+		for key, value := range trace.ExternalCalls[index].Input {
+			trace.ExternalCalls[index].Input[key] = normalizeTraceDataValue(value)
+		}
+	}
+	return trace
 }
 
 func mismatch(code string, section string, expected any, actual any) Diagnostic {

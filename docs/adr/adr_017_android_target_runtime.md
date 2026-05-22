@@ -14,7 +14,8 @@ Nova menargetkan Android sebagai target awal bersama Web.
 
 ADR-002 menetapkan scheduler semantics harus platform-neutral.
 ADR-006 dan ADR-008 menetapkan template diturunkan ke ViewIR/TargetIR.
-ADR-014 menetapkan runtime Android harus native Kotlin/JVM Android.
+ADR-014 menetapkan runtime Android harus native JVM/Android framework. Production memakai Java
+source, bukan Kotlin/Compose.
 
 Android memiliki:
 
@@ -35,31 +36,25 @@ Detail tersebut tidak boleh bocor ke core Nova.
 
 # Decision
 
-Target Android Nova menggunakan runtime native Kotlin.
+Target Android Nova menggunakan runtime native **Java** di atas Android SDK.
 
 Komponen target Android:
 
 ```txt
-nova-android-runtime
-nova-android-compose-renderer
-nova-android-host-adapter
-nova-android-external-adapter
-nova-android-gradle-plugin
-nova-android-artifact-builder
+nova-android-runtime          (Java: NovaRuntime, scheduler bridge)
+nova-android-view-renderer    (Java: View/ViewGroup primitive lowering)
+nova-android-host-adapter     (Activity, back stack, lifecycle)
+nova-android-env-adapters     (@env/* -> platform API)
+nova-android-artifact-builder (Gradle project generation)
 ```
 
-Renderer Android MVP memakai **Jetpack Compose adapter**.
+Renderer production default: **`@nova/android`** — native View renderer tanpa Kotlin stdlib atau Compose.
 
-Reason:
+`@nova/android-compose` adalah jalur compatibility deprecated untuk project yang masih membutuhkan
+Compose; tidak boleh menjadi default baru.
 
-```txt
-Compose bersifat deklaratif
-ViewIR tree dapat dipetakan ke composable tree
-state invalidation dapat dihubungkan ke snapshot state adapter
-accessibility semantics dapat dipetakan dengan jelas
-```
-
-Nova core tetap tidak mengenal Compose object.
+Nova core tetap tidak mengenal `android.view.View` atau Compose object secara langsung; hanya ViewIR
+dan ABI contract.
 
 ---
 
@@ -87,7 +82,7 @@ Host adapter memetakan:
 Activity lifecycle
 ProcessLifecycleOwner event
 back navigation
-Compose UI event
+View/button UI event
 permission result
 intent/deep link
 external operation completion
@@ -100,13 +95,13 @@ EventEnvelope
 SchedulerError
 ```
 
-## Compose Renderer
+## Native View Renderer (production)
 
-Compose renderer menerima:
+Renderer `@nova/android` menerima:
 
 ```txt
-ViewIR/AndroidTargetIR
-StateCommit
+ViewIR
+StateCommit + Invalidations
 DependencyMetadata
 EventRouteTable
 ```
@@ -114,28 +109,32 @@ EventRouteTable
 dan menghasilkan:
 
 ```txt
-Composable tree
-state-backed recomposition trigger
-event callback bridge
-accessibility semantics
-render diagnostics
+Java MainActivity + NovaRuntime
+Android View/ViewGroup tree
+granular binding update (applyBindings)
+event callback bridge (dispatch)
+page visibility dari route state
 ```
 
-Compose state dan Modifier tidak pernah menjadi Nova data.
+Platform View object tidak pernah menjadi Nova data.
+
+## Compose Renderer (deprecated compatibility)
+
+`@nova/android-compose` mempertahankan jalur Kotlin + Compose untuk migrasi project lama.
+Tidak menjadi default baru dan tidak boleh menjadi requirement conformance production.
 
 ---
 
 # Artifact Model
 
-Build Android menghasilkan salah satu bentuk:
+Build Android production menghasilkan:
 
 ```txt
-generated Gradle module
-Android library module
+generated Gradle module (Java-only, no Kotlin plugin)
 app project integration
 ```
 
-Recommended output:
+Recommended output (`@nova/android`):
 
 ```txt
 build/android/
@@ -144,12 +143,17 @@ build/android/
     app.source-map.json
     permissions.json
     target-manifest.json
+  app/src/main/java/<namespace>/
+    MainActivity.java
+    NovaRuntime.java
   generated/
-    NovaApp.kt
-    NovaRoutes.kt
-    NovaExternalBindings.kt
+    NovaApp.java
+    NovaRoutes.java
+    NovaExternalBindings.java
   build.gradle.kts
 ```
+
+Jalur `@nova/android-compose` masih dapat menghasilkan `*.kt` dengan struktur serupa untuk compatibility.
 
 Final app packaging dapat menghasilkan:
 
@@ -167,7 +171,7 @@ tergantung mode project.
 
 APK identity harus berasal dari konfigurasi target di project manifest, bukan dari contoh atau runtime package.
 
-Konfigurasi wajib target Android:
+Konfigurasi wajib target Android (`@nova/android`):
 
 ```txt
 application_id
@@ -176,17 +180,22 @@ compile_sdk
 min_sdk
 target_sdk
 version_code
-version_name or project.version
 gradle_plugin
+theme
+theme_parent
+java_version
+label or project.name
+version_name or project.version (optional)
+```
+
+Konfigurasi tambahan hanya untuk `@nova/android-compose` (deprecated):
+
+```txt
 kotlin_plugin
 compose_compiler_plugin
 compose_bom
 activity_compose
 material3
-theme
-theme_parent
-java_version
-label or project.name
 ```
 
 `namespace` dan package generated code boleh tetap stabil untuk kebutuhan compiler/runtime, tetapi
@@ -197,39 +206,39 @@ Rule:
 
 ```txt
 1. Artifact builder tidak boleh menurunkan applicationId dari nama example.
-2. Versi Gradle, SDK, dependency Compose, namespace, theme, Java version, dan label harus berasal dari manifest project.
-3. Jika konfigurasi wajib kosong, build gagal dengan diagnostic.
-4. Nilai fallback hanya boleh berasal dari field user-side lain, misalnya versionName dari project.version.
+2. Versi Gradle, SDK, namespace, theme, Java version, dan label harus berasal dari manifest project.
+3. Jika konfigurasi wajib kosong, build gagal dengan diagnostic NVA-ANDROID-001.
+4. Production default tidak memuat Kotlin plugin atau Compose dependency.
 ```
 
 ---
 
 # Rendering Strategy
 
-Primitive mapping awal:
+Primitive mapping production (`@nova/android`):
 
 ```txt
-text          -> Text
+text          -> TextView
 button        -> Button
-image         -> Image or AsyncImage adapter if package enabled
-list/item     -> LazyColumn/LazyRow with stable key
-surface       -> Surface/Box
-row           -> Row
-column        -> Column
-stack         -> Box
-scroll        -> scrollable container
-text_input    -> TextField
-toggle        -> Switch
-slider        -> Slider
+image         -> ImageView (atau adapter @env jika perlu)
+list/item     -> repeated child views dengan stable key metadata
+surface       -> LinearLayout container
+row           -> LinearLayout HORIZONTAL
+column        -> LinearLayout VERTICAL
+stack         -> FrameLayout
+scroll        -> ScrollView
+text_input    -> EditText (future primitive)
+toggle        -> Switch (future primitive)
+slider        -> SeekBar (future primitive)
 ```
 
 Rule:
 
 ```txt
-1. Compose renderer memakai stable key dari ViewIR untuk list.
-2. Recomposition adalah optimisasi renderer, bukan semantic scheduler.
-3. Event callback hanya enqueue event melalui host adapter.
-4. Renderer tidak boleh membaca atau menulis state cell langsung.
+1. Native View renderer memakai invalidation granular dari StateCommit.
+2. Rebuild View tree penuh hanya pada mount awal; update state memakai applyBindings.
+3. Event callback hanya enqueue event melalui dispatch() di MainActivity.
+4. Renderer tidak boleh membaca atau menulis state cell di luar scheduler contract.
 5. Renderer diagnostics memakai source map dari ViewIR.
 ```
 
@@ -317,24 +326,26 @@ Rule:
 External Android implementation dapat berupa:
 
 ```txt
-project-local Kotlin
+project-local Java
 package adapter
 @env/* Android adapter
 ```
 
-Naming convention:
+Naming convention (production):
 
 ```txt
-name.android.kt
-platform/android/name.android.kt
+name.android.java
+platform/android/name.android.java
 ```
+
+Compatibility path `@nova/android-compose` masih boleh memakai `*.android.kt`.
 
 Operation bridge:
 
 ```txt
 Nova data input
-  -> Kotlin adapter input DTO
-  -> suspend or immediate operation
+  -> Java adapter (Map/POJO serializable)
+  -> background thread jika perlu (di dalam adapter)
   -> Nova data output validation
   -> scheduler completion event
 ```
@@ -345,10 +356,7 @@ Forbidden output:
 Context
 Activity
 View
-Composable lambda
-CoroutineScope
-Job
-Flow
+platform callback handle
 File descriptor
 Socket
 ```
@@ -375,16 +383,16 @@ Rule:
 Keuntungan:
 
 ```txt
-Android target terasa native
-Compose cocok dengan declarative ViewIR
-threading Android tetap di adapter
+Android target terasa native dengan APK lebih kecil
+ViewIR tetap renderer-neutral
+threading Android tetap di @env adapter
 state restoration punya kontrak yang sama dengan Web hydration
 ```
 
 Trade-off:
 
 ```txt
-Compose menjadi pilihan renderer MVP Android
-Gradle plugin dan generated Kotlin harus dijaga kompatibilitasnya
+Native View renderer membutuhkan pemeliharaan primitive layout sendiri
+Jalur Compose deprecated masih perlu parity conformance sampai dihapus
 Android lifecycle lebih kompleks dari Web dan membutuhkan conformance fixture khusus
 ```

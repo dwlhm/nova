@@ -36,7 +36,7 @@ Nova menyediakan CLI resmi:
 nova
 ```
 
-Command MVP:
+Production commands:
 
 ```txt
 nova init
@@ -103,7 +103,7 @@ hot reload when compatible
 fallback full reload when necessary
 ```
 
-MVP dev mode berjalan sebagai proses long-running. Developer menjalankan `nova dev`
+Production dev mode berjalan sebagai proses long-running. Developer menjalankan `nova dev`
 sekali, lalu CLI melakukan rebuild/deploy setiap kali file project berubah. Ini menjadi
 kontrak ergonomi lintas target: user tidak perlu menjalankan command build/dev ulang
 untuk setiap perubahan source.
@@ -217,7 +217,7 @@ hot reload
 source-mapped errors
 ```
 
-MVP implementation:
+Production implementation:
 
 ```txt
 poll watched project files
@@ -234,7 +234,7 @@ Rule:
 2. Event injection devtools harus melewati event contract validation.
 3. State editing devtools hanya tersedia dalam dev mode dan harus tercatat di trace.
 4. Dev server external adapters tetap dianggap dirty.
-5. MVP boleh memakai full browser reload sampai ABI patching tersedia.
+5. Production boleh memakai full browser reload sampai ABI patching tersedia.
 ```
 
 ---
@@ -245,7 +245,7 @@ Rule:
 
 ```txt
 Gradle integration
-generated Kotlin update
+generated Java update (@nova/android) atau Kotlin update (@nova/android-compose deprecated)
 device/emulator deploy
 runtime diagnostic bridge
 hot restart when ABI incompatible
@@ -253,7 +253,7 @@ state-preserving renderer patch when compatible
 source-mapped errors
 ```
 
-MVP implementation memilih install/update sync, bukan runtime HMR:
+Production implementation memilih install/update sync, bukan runtime HMR:
 
 ```txt
 poll watched project files
@@ -267,7 +267,7 @@ repeat on every project file change
 Pendekatan ini meniru workflow "Run" Android Studio pada level minimum yang dibutuhkan:
 APK debug langsung dipasang/diperbarui ke device atau emulator dari proses dev yang
 tetap berjalan. Runtime HMR Android ditunda karena biaya bridge, ABI diff, state
-migration, dan Compose patching belum sepadan untuk MVP.
+migration, dan granular hot patch belum sepadan untuk production v1.
 
 Karena dev mode mengutamakan first-run ergonomics, Android dev bundling default tidak
 memakai offline mode. Developer tetap dapat mengaktifkan `--offline` ketika Gradle cache
@@ -291,7 +291,7 @@ Rule:
 1. Android dev runtime must not require production app to expose debug bridge.
 2. Generated code changes must be deterministic.
 3. Runtime event trace must use the same format as conformance trace.
-4. MVP Android dev mode must not require repeating `nova dev` after every source change.
+4. Production Android dev mode must not require repeating `nova dev` after every source change.
 5. Android HMR is optional; install/update sync is the required fallback strategy.
 6. Android install/update sync must target exactly one Android user/profile by default.
 ```
@@ -311,7 +311,7 @@ Rule:
 4. Formatter should be idempotent.
 ```
 
-MVP formatter may be conservative and only normalize whitespace around known constructs.
+Production formatter may be conservative and only normalize whitespace around known constructs.
 
 ---
 

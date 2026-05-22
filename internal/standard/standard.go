@@ -316,7 +316,7 @@ func rendererPackage(name string, exports map[string]string) packages.Manifest {
 		Exports: exports,
 		Targets: map[string]packages.TargetAdapter{
 			"web":     {Adapter: "platform/web/index.web.js"},
-			"android": {Adapter: "platform/android/Index.android.kt"},
+			"android": {Adapter: "platform/android/Index.android.java"},
 		},
 	}
 }
@@ -329,7 +329,7 @@ func frameworkPackage(name string, exports map[string]string) packages.Manifest 
 		Exports: exports,
 		Targets: map[string]packages.TargetAdapter{
 			"web":     {Adapter: "platform/web/index.web.js"},
-			"android": {Adapter: "platform/android/Index.android.kt"},
+			"android": {Adapter: "platform/android/Index.android.java"},
 		},
 	}
 }
@@ -342,7 +342,7 @@ func envPackage(name string, permissions security.PermissionMap, adapter string)
 		Permissions: permissions,
 		Targets: map[string]packages.TargetAdapter{
 			"web":     {Adapter: "platform/web/" + adapter + ".web.js"},
-			"android": {Adapter: "platform/android/" + adapter + ".android.kt"},
+			"android": {Adapter: "platform/android/" + adapter + ".android.java"},
 		},
 	}
 }

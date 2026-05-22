@@ -1,7 +1,8 @@
 # Architecture
 
-Dokumen ini adalah peta kerja untuk implementasi Go Nova. ADR di `docs/adr/` tetap menjadi sumber
-keputusan desain, terutama ADR-011, ADR-012, ADR-014, ADR-020, dan ADR-024.
+Dokumen ini adalah peta kerja untuk implementasi Go Nova. ADR di `docs/adr/` tetap menjadi sumber keputusan desain. Indeks lengkap:
+[docs/adr/README.md](adr/README.md). Mulai dari `docs/adr/adr_000_production_baseline.md`, lalu
+ADR-011, ADR-012, ADR-014, ADR-017, ADR-020, ADR-024, dan ADR-025.
 
 ## Pipeline
 
@@ -20,6 +21,16 @@ cmd/nova
 
 Rule utama: source `.nova` diturunkan menjadi kontrak data yang deterministik. Target runtime tidak
 membaca source `.nova` langsung dari production artifact.
+
+Production runtime:
+
+```txt
+web     -> JavaScript di browser (internal/artifact web bundle)
+android -> Java di Android SDK View layer (@nova/android, tanpa Kotlin/Compose default)
+```
+
+Go packages `internal/scheduler`, `internal/app`, dan sejenisnya adalah conformance reference;
+bukan runtime production userland.
 
 ## Layers
 
@@ -121,6 +132,14 @@ Rule ini diperiksa oleh test arsitektur di `internal/architecture`.
 1. Pilih prefix code dari ADR-011.
 2. Pastikan ordering deterministic.
 3. Update unit test dan conformance expected jika diagnostic menjadi contract.
+
+### Scheduler Semantics
+
+1. Tambahkan atau ubah blok `scheduler` di `nova.conformance.json` bila transisi state, lifecycle,
+   atau external operation ikut berubah.
+2. `steps` memuat aksi simulasi (`enqueue`); `trace` memuat expected event, commit, lifecycle,
+   external call, dan error trace yang dibandingkan dengan scheduler Go reference.
+3. Jalankan `go run ./cmd/nova test` setelah mengubah expected trace.
 
 ## ADR Boundary
 

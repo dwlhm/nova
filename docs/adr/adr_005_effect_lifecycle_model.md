@@ -268,7 +268,7 @@ Rule:
 
 `before @event` berjalan sebelum transition.
 
-Rule MVP:
+Rule (production v1):
 
 ```txt
 1. before lifecycle tidak dapat membatalkan event utama.

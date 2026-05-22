@@ -111,6 +111,52 @@ func TestGenerateWebArtifactScopesScopedStylesAndWritesStyleManifest(t *testing.
 	assertArtifactFile(t, files, "build/web/style-manifest.json", `"outputPath": "assets/styles/src/App.css"`)
 }
 
+func TestGenerateWebRuntimeUsesDependencyInvalidationsForGranularUpdates(t *testing.T) {
+	source := parseNova(t, `<contract state Counter>
+  count: number <- 0 {
+    @increment -> count + 1;
+  };
+/|
+<template target <- web>
+  <surface>
+    <text value <- "Count: " + count /|
+    <button on_press -> @increment>
+      <text value <- "+" /|
+    /|
+  /|
+/|`)
+	manifest := project.Manifest{
+		Project: project.Project{Name: "demo", Version: "0.1.0", Entry: "src/App.nova"},
+	}
+	targetManifest := build.WebTargetManifest()
+	plan := build.Resolve(build.ResolutionInput{
+		Project:        manifest,
+		Target:         "web",
+		Sources:        []build.SourceFile{{Path: "src/App.nova", File: source}},
+		TargetManifest: targetManifest,
+	})
+	if len(plan.Diagnostics) != 0 {
+		t.Fatalf("unexpected build diagnostics: %+v", plan.Diagnostics)
+	}
+
+	files, diagnostics := Generate(GenerateInput{
+		Project:        manifest,
+		Plan:           plan.Plan,
+		Sources:        []build.SourceFile{{Path: "src/App.nova", File: source}},
+		TargetManifest: targetManifest,
+	})
+	if len(diagnostics) != 0 {
+		t.Fatalf("unexpected diagnostics: %+v", diagnostics)
+	}
+
+	assertArtifactFile(t, files, "build/web/assets/nova-runtime.js", "runtime.refs = new Map()")
+	assertArtifactFile(t, files, "build/web/assets/nova-runtime.js", "update(runtime, stateInvalidations(runtime, beforeState))")
+	assertArtifactFile(t, files, "build/web/assets/nova-runtime.js", "function updateBindings(runtime, invalidations)")
+	assertArtifactFile(t, files, "build/web/assets/nova-runtime.js", "function shouldApplyBinding(states, invalidations)")
+	assertArtifactFile(t, files, "build/web/assets/nova-runtime.js", "root.replaceChildren(...renderNodes")
+	assertArtifactFileNotContains(t, files, "build/web/assets/nova-runtime.js", "render(runtime);\n    reconcileNavigation")
+}
+
 func TestGenerateAndroidArtifactIncludesGradleAndGeneratedBindings(t *testing.T) {
 	source := parseNova(t, `<contract state Counter>
   count: number <- 0 {
@@ -153,23 +199,23 @@ func TestGenerateAndroidArtifactIncludesGradleAndGeneratedBindings(t *testing.T)
 	}
 
 	assertArtifactFile(t, files, "build/android/settings.gradle.kts", "include(\":app\")")
-	assertArtifactFile(t, files, "build/android/gradle.properties", "android.useAndroidX=true")
+	assertArtifactFileNotContains(t, files, "build/android/gradle.properties", "android.useAndroidX=true")
 	assertArtifactFile(t, files, "build/android/build.gradle.kts", "com.android.tools.build:gradle:8.12.3")
+	assertArtifactFileNotContains(t, files, "build/android/build.gradle.kts", "kotlin-gradle-plugin")
 	assertArtifactFile(t, files, "build/android/app/build.gradle.kts", "apply(plugin = \"com.android.application\")")
 	assertArtifactFile(t, files, "build/android/app/build.gradle.kts", "applicationId = \"dev.example.demo\"")
 	assertArtifactFile(t, files, "build/android/app/build.gradle.kts", "compileSdk = 35")
 	assertArtifactFile(t, files, "build/android/app/build.gradle.kts", "JavaVersion.VERSION_17")
-	assertArtifactFile(t, files, "build/android/app/build.gradle.kts", "compilerOptions.jvmTarget.set(JvmTarget.JVM_17)")
-	assertArtifactFile(t, files, "build/android/app/build.gradle.kts", "add(\"implementation\", platform(\"androidx.compose:compose-bom:2024.10.00\"))")
+	assertArtifactFileNotContains(t, files, "build/android/app/build.gradle.kts", "androidx.compose")
 	assertArtifactFile(t, files, "build/android/app/src/main/AndroidManifest.xml", "android:label=\"demo\"")
 	assertArtifactFile(t, files, "build/android/app/src/main/AndroidManifest.xml", "nova.generated.MainActivity")
 	assertArtifactFile(t, files, "build/android/app/src/main/res/values/styles.xml", "Theme.Nova")
-	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "mutableStateMapOf")
-	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "dispatch(\"@increment\"")
-	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/NovaRuntime.kt", "internal data class NovaTransition")
-	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/NovaRuntime.kt", "internal fun evaluate(")
-	assertArtifactFile(t, files, "build/android/generated/NovaApp.kt", "class NovaApp")
-	assertArtifactFile(t, files, "build/android/generated/NovaExternalBindings.kt", "NovaExternalBindings")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "public final class MainActivity extends Activity")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "dispatch(\"@increment\"")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/NovaRuntime.java", "public final class NovaRuntime")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/NovaRuntime.java", "public static Object evaluate(")
+	assertArtifactFile(t, files, "build/android/generated/NovaApp.java", "public final class NovaApp")
+	assertArtifactFile(t, files, "build/android/generated/NovaExternalBindings.java", "NovaExternalBindings")
 	assertArtifactFile(t, files, "build/android/nova-ir/app.nova-ir.json", "\"viewIR\"")
 	assertArtifactFile(t, files, "build/android/nova-ir/permissions.json", "\"permissions\": []")
 	assertArtifactFile(t, files, "build/android/nova-ir/target-manifest.json", "\"id\": \"android\"")
@@ -372,16 +418,16 @@ func TestGenerateAndroidArtifactSupportsMultiPageRouteProjection(t *testing.T) {
 		t.Fatalf("unexpected diagnostics: %+v", diagnostics)
 	}
 
-	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "state[\"route\"] = record(\"path\" to \"/\")")
-	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "dispatch(\"@route_changed\", listOf(record(\"path\" to \"/settings\")))")
-	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "BackHandler(enabled = canNavigateBack())")
-	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "private val routeBackStack = mutableStateListOf<Any?>()")
-	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "dispatch(\"@navigate\", listOf(record(\"kind\" to \"back\")))")
-	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "hasTransition(\"@navigate\")")
-	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "handleSystemBack()")
-	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "activeRoutePath()")
-	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "\"Page \" + textValue(pathOf(state[\"route\"]))")
-	assertArtifactFile(t, files, "build/android/generated/NovaRoutes.kt", "const val settings = \"/settings\"")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "state.put(\"route\", record(entry(\"path\", \"/\")))")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "dispatch(\"@route_changed\", Arrays.<Object>asList(record(entry(\"path\", \"/settings\"))))")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "public void onBackPressed()")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "private final List<Object> routeBackStack")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "dispatch(\"@navigate\", Collections.singletonList(record(entry(\"kind\", \"back\"))))")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "hasTransition(\"@navigate\")")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "handleSystemBack()")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "activeRoutePath()")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "applyBindings(invalidations)")
+	assertArtifactFile(t, files, "build/android/generated/NovaRoutes.java", "SETTINGS = \"/settings\"")
 }
 
 func TestGenerateAndroidArtifactSupportsProductionRouteMatching(t *testing.T) {
@@ -435,16 +481,63 @@ func TestGenerateAndroidArtifactSupportsProductionRouteMatching(t *testing.T) {
 		t.Fatalf("unexpected diagnostics: %+v", diagnostics)
 	}
 
-	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "routeMatches(textValue(")
-	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "private fun routePatterns(): List<String>")
-	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "state[\"route\"] = routeValueForShape(state[\"route\"], routePatterns())")
-	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/NovaRuntime.kt", "internal fun routeParams(pattern: String, value: String)")
-	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/NovaRuntime.kt", "next[\"params\"] = best.params")
-	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/NovaRuntime.kt", "val uri = URI(text)")
-	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/NovaRuntime.kt", "private fun safeDecodePathSegment(value: String): String")
-	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/NovaRuntime.kt", "private fun encodeComponent(value: String): String")
-	assertArtifactFile(t, files, "build/android/generated/NovaRoutes.kt", "const val users_id = \"/users/:id\"")
-	assertArtifactFile(t, files, "build/android/generated/NovaRoutes.kt", "const val fallback = \"*\"")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "routeMatches(textValue(")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "private List<String> routePatterns()")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "state.put(\"route\", routeValueForShape(state.get(\"route\"), routePatterns()))")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/NovaRuntime.java", "private static RouteMatch routeMatch(String pattern, String value)")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/NovaRuntime.java", "next.put(\"params\", best.params)")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/NovaRuntime.java", "URI.create(text)")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/NovaRuntime.java", "safeDecodePathSegment")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/NovaRuntime.java", "encodeComponent")
+	assertArtifactFile(t, files, "build/android/generated/NovaRoutes.java", "USERS_ID = \"/users/:id\"")
+	assertArtifactFile(t, files, "build/android/generated/NovaRoutes.java", "FALLBACK = \"*\"")
+}
+
+func TestGenerateAndroidComposeRendererStillAvailableForCompatibility(t *testing.T) {
+	source := parseNova(t, `<contract state Router>
+  route: string <- "/" {
+    @route_changed(next: string) -> next;
+  };
+/|
+<template target <- android>
+  <surface>
+    <row>
+      <button on_press -> @route_changed("/")>
+        <text value <- "Home" /|
+      /|
+      <button on_press -> @route_changed("/docs/reference/routing")>
+        <text value <- "Docs" /|
+      /|
+    /|
+  /|
+/|`)
+	manifest := project.Manifest{
+		Project: project.Project{Name: "demo", Version: "0.1.0", Entry: "src/App.nova"},
+		Targets: map[string]project.Target{"android": testAndroidComposeTarget("dev.example.routing")},
+	}
+	targetManifest := build.AndroidTargetManifest()
+	plan := build.Resolve(build.ResolutionInput{
+		Project:        manifest,
+		Target:         "android",
+		Sources:        []build.SourceFile{{Path: "src/App.nova", File: source}},
+		TargetManifest: targetManifest,
+	})
+	if len(plan.Diagnostics) != 0 {
+		t.Fatalf("unexpected build diagnostics: %+v", plan.Diagnostics)
+	}
+
+	files, diagnostics := Generate(GenerateInput{
+		Project:        manifest,
+		Plan:           plan.Plan,
+		Sources:        []build.SourceFile{{Path: "src/App.nova", File: source}},
+		TargetManifest: targetManifest,
+	})
+	if len(diagnostics) != 0 {
+		t.Fatalf("unexpected diagnostics: %+v", diagnostics)
+	}
+
+	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "FlowRow(")
+	assertArtifactFile(t, files, "build/android/app/build.gradle.kts", "androidx.compose.material3:material3")
 }
 
 func TestGenerateAndroidArtifactWrapsRowsForDenseNavigation(t *testing.T) {
@@ -499,12 +592,9 @@ func TestGenerateAndroidArtifactWrapsRowsForDenseNavigation(t *testing.T) {
 		t.Fatalf("unexpected diagnostics: %+v", diagnostics)
 	}
 
-	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "import androidx.compose.foundation.layout.FlowRow")
-	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "@OptIn(ExperimentalLayoutApi::class)")
-	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "FlowRow(")
-	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "verticalArrangement = Arrangement.spacedBy(8.dp)")
-	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "Text(text = \"Docs\")")
-	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "Text(text = \"Missing\")")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "LinearLayout.HORIZONTAL")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "new Button(this)")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "TextView")
 }
 
 func TestExpressionToJSCompilesRecordLiterals(t *testing.T) {
@@ -529,6 +619,26 @@ func parseNova(t *testing.T, input string) parser.File {
 func testAndroidTarget(applicationID string) project.Target {
 	return project.Target{
 		Renderer: "@nova/android",
+		Options: map[string]string{
+			"application_id": applicationID,
+			"namespace":      "nova.generated",
+			"compile_sdk":    "35",
+			"min_sdk":        "23",
+			"target_sdk":     "35",
+			"version_code":   "1",
+			"version_name":   "0.1.0",
+			"gradle_plugin":  "8.12.3",
+			"theme":          "Theme.Nova",
+			"theme_parent":   "android:style/Theme.DeviceDefault.Light.NoActionBar",
+			"java_version":   "17",
+			"label":          "demo",
+		},
+	}
+}
+
+func testAndroidComposeTarget(applicationID string) project.Target {
+	return project.Target{
+		Renderer: "@nova/android-compose",
 		Options: map[string]string{
 			"application_id":          applicationID,
 			"namespace":               "nova.generated",
@@ -564,6 +674,31 @@ func assertArtifactFile(t *testing.T, files []File, path string, want string) {
 		return
 	}
 	t.Fatalf("missing artifact file %s in %+v", path, files)
+}
+
+func assertArtifactFileNotContains(t *testing.T, files []File, path string, unwanted string) {
+	t.Helper()
+
+	for _, file := range files {
+		if file.Path != path {
+			continue
+		}
+		if strings.Contains(file.Content, unwanted) {
+			t.Fatalf("%s = %s, want content not containing %q", path, file.Content, unwanted)
+		}
+		return
+	}
+	t.Fatalf("missing artifact file %s in %+v", path, files)
+}
+
+func assertArtifactFileMissing(t *testing.T, files []File, path string) {
+	t.Helper()
+
+	for _, file := range files {
+		if file.Path == path {
+			t.Fatalf("artifact file %s should be missing", path)
+		}
+	}
 }
 
 func assertArtifactDiagnostic(t *testing.T, diagnostics []Diagnostic, want string) {

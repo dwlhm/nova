@@ -204,11 +204,11 @@ external operation graph
 template dependency graph
 ```
 
-Rule MVP:
+Rule (production v1):
 
 ```txt
 1. Runtime module graph harus acyclic.
-2. Type reference lintas file juga harus acyclic pada MVP.
+2. Type reference lintas file juga harus acyclic pada production v1.
 3. Recursive type dalam file yang sama ditunda sampai type checker mendukungnya.
 4. Lifecycle dependency tidak boleh menciptakan mount/dispose loop.
 5. Event emission cycle boleh ada karena scheduler queue memproses event secara FIFO.
@@ -254,7 +254,7 @@ security audit
 
 # Visibility Rules
 
-Nova tidak memiliki modifier visibility pada MVP.
+Nova tidak memiliki modifier visibility pada production v1.
 
 Rule:
 
@@ -312,7 +312,7 @@ Build graph menjadi platform-dependent.
 
 Setiap file harus menulis export list.
 
-Rejected for MVP because:
+Out of production v1 scope because:
 
 ```txt
 Surface language menjadi lebih besar.
@@ -350,7 +350,7 @@ Template tetap deklaratif, bukan instance method.
 ## Negative
 
 ```txt
-1. Cross-file cycle ditolak pada MVP.
+1. Cross-file cycle ditolak pada production v1.
 2. Semua top-level construct public sampai visibility modifier ditambahkan.
 3. Tooling perlu menampilkan graph agar dependency mudah dipahami.
 4. Event cycle butuh warning dan debugger queue yang baik.

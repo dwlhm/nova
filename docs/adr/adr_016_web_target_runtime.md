@@ -38,13 +38,13 @@ nova-web-dev-server
 nova-web-artifact-builder
 ```
 
-Output utama MVP:
+Output utama production:
 
 ```txt
 CSR browser application
 ```
 
-Output supported setelah MVP:
+Output supported setelah production v1:
 
 ```txt
 SSR HTML + hydration
@@ -143,7 +143,7 @@ build/web/
   target-manifest.json
 ```
 
-MVP boleh menggabungkan file runtime dan app bundle, tetapi semantic metadata harus tetap
+Production build boleh menggabungkan file runtime dan app bundle, tetapi semantic metadata harus tetap
 dapat diinspeksi oleh tooling.
 
 Artifact metadata:
@@ -164,7 +164,7 @@ externalOperations
 
 # Rendering Strategy
 
-Web MVP memakai DOM renderer imperative yang dikendalikan oleh ViewIR.
+Web production memakai DOM renderer imperative yang dikendalikan oleh ViewIR.
 
 Rule:
 
@@ -325,7 +325,7 @@ Keuntungan:
 ```txt
 Web runtime native terhadap browser
 DOM detail tetap di adapter
-CSR MVP sederhana tetapi jalur SSR/hydration tersedia
+CSR production v1 sederhana tetapi jalur SSR/hydration tersedia
 diagnostics dan event ordering tetap sama dengan Android
 ```
 

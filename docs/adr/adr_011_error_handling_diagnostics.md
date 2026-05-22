@@ -209,7 +209,7 @@ error
 Rule:
 
 ```txt
-1. Error in before lifecycle does not cancel event in MVP.
+1. Error in before lifecycle does not cancel event in production v1.
 2. Error in after lifecycle does not rollback commit.
 3. Error in error lifecycle is guarded and reported to host.
 4. Lifecycle output events produced before failure are adapter/runtime-defined only if execution semantics allow it.
@@ -330,7 +330,7 @@ Runtime errors in generated target code should map back to `.nova` source if pos
 
 Expose try/catch or exception throwing in Nova.
 
-Rejected for MVP because:
+Out of production v1 scope because:
 
 ```txt
 Scheduler event/error routing already defines failure flow.

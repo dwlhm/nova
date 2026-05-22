@@ -62,7 +62,7 @@ Snapshot tidak boleh berisi:
 
 ```txt
 DOM node
-Compose state
+Android View state (Compose hanya compatibility path)
 Android Context
 Promise/Future/Coroutine
 external adapter object
@@ -210,7 +210,7 @@ Rule:
 5. Event before hydration is either buffered or blocked by runtime config.
 ```
 
-MVP Web may ship CSR only, but ABI must not block SSR/hydration later.
+Production web may ship CSR only, but ABI must not block SSR/hydration later.
 
 ---
 
@@ -256,7 +256,7 @@ pure migration function
 fallback policy
 ```
 
-MVP:
+Production v1:
 
 ```txt
 1. If state cell type changes incompatibly, snapshot restore fails.
@@ -298,6 +298,6 @@ Trade-off:
 
 ```txt
 state migration butuh desain lanjutan
-partial restore sengaja dibatasi pada MVP
+partial restore sengaja dibatasi pada production v1
 adapter perlu mengelola storage platform tanpa membocorkan object native
 ```

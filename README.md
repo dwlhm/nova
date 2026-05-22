@@ -1,13 +1,16 @@
 # Nova
 
-Nova adalah eksperimen bahasa dan runtime lintas target untuk membangun aplikasi dari satu source graph. Saat ini target MVP yang tersedia adalah `web` dan `android`, dengan pipeline build yang menurunkan source `.nova` menjadi artifact target, bundle manifest, dan APK debug untuk Android.
+Nova adalah bahasa dan runtime lintas target untuk membangun aplikasi dari satu source graph.
+Target production yang didukung: `web` (JavaScript/DOM) dan `android` (Java/Android View).
 
 ## Status Singkat
 
-- Source Nova diparse, divalidasi, dan diturunkan menjadi IR.
+- Source Nova diparse, divalidasi, dan diturunkan menjadi IR deterministik.
 - Target `web` menghasilkan aplikasi static browser.
-- Target `android` menghasilkan project Gradle Compose dan menjalankan `assembleDebug` lewat CLI.
-- Example tersedia di `examples/counter` dan `examples/multipage`.
+- Target `android` menghasilkan project Gradle Java tanpa Kotlin/Compose default (`@nova/android`).
+- External capability (`@env/*`) langsung ke adapter platform.
+- Example: `examples/counter`, `examples/multipage`.
+- ADR: [docs/adr/README.md](docs/adr/README.md) (indeks lengkap; baseline: [adr_000](docs/adr/adr_000_production_baseline.md)).
 
 ## Struktur Penting
 
@@ -30,7 +33,7 @@ docs/adr/                 ADR desain Nova
 - [docs/code-style.md](docs/code-style.md) menjelaskan gaya Go, `.nova`, diagnostic, test, dan generated output.
 - [CONTRIBUTING.md](CONTRIBUTING.md) merangkum alur kontribusi dan command verifikasi lokal.
 
-## Command MVP
+## Commands
 
 ```bash
 go run ./cmd/nova init --name demo
@@ -142,9 +145,9 @@ Jika hanya ingin memeriksa generated Android project tanpa menjalankan Gradle:
 go run ../../cmd/nova build --target android --bundle=false
 ```
 
-`[targets.android]` wajib membawa konfigurasi build dari sisi project, termasuk
-`application_id`, `namespace`, SDK version, plugin/dependency version, `theme`,
-`theme_parent`, `java_version`, dan `label`.
+`[targets.android]` wajib membawa konfigurasi production minimal: `application_id`, `namespace`,
+SDK version, `gradle_plugin`, `theme`, `theme_parent`, `java_version`, dan `label`.
+Tidak perlu `kotlin_plugin` atau dependency Compose untuk renderer default `@nova/android`.
 Lihat `examples/*/nova.toml` untuk contoh lengkap.
 
 ## Build Android

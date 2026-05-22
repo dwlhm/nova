@@ -58,7 +58,7 @@ diagnostics
 
 # Target IDs
 
-Target resmi MVP:
+Target resmi production:
 
 ```txt
 web
@@ -105,7 +105,8 @@ entry = "src/App.nova"
 renderer = "@nova/web"
 
 [targets.android]
-renderer = "@nova/android"
+renderer = "@nova/android"          # production: Java native View
+renderer = "@nova/android-compose"  # deprecated compatibility only
 
 [permissions]
 storage.read = true
@@ -370,7 +371,7 @@ Generated artifacts need target-specific lowering.
 
 One artifact contains all targets.
 
-Rejected for MVP because:
+Out of production v1 scope because:
 
 ```txt
 Mobile/native targets need target-specific packaging.

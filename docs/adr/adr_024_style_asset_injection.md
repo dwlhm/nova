@@ -6,7 +6,7 @@ Accepted
 
 ## Scope
 
-ADR ini hanya mengikat style asset injection level MVP. Implementasi MVP memakai stylesheet global
+ADR ini mengikat style asset injection level production v1. Implementasi memakai stylesheet global
 yang didaftarkan dari manifest target web. CSS module, style import per capability, scoping otomatis,
 ordering antar capability, conflict handling, dan typed style token sengaja belum diputuskan di sini.
 Area tersebut wajib dibahas dalam ADR lanjutan sebelum diimplementasikan.
@@ -20,7 +20,7 @@ class milik user source tidak boleh menjadi aturan khusus di runtime umum.
 
 ## Decision
 
-Style dibagi menjadi dua lapisan untuk MVP:
+Style dibagi menjadi dua lapisan untuk production v1:
 
 ```txt
 runtime base style   -> generic primitive defaults milik target runtime
@@ -31,7 +31,7 @@ Runtime base style hanya boleh menargetkan primitive renderer-neutral atau marke
 misalnya `data-nova-kind="row"`, `data-nova-kind="surface"`, atau Android theme yang dikonfigurasi
 user. Runtime base style tidak boleh menargetkan class name yang berasal dari example atau aplikasi.
 
-Untuk MVP, user style injection memakai stylesheet global di target web:
+Untuk production v1, user style injection memakai stylesheet global di target web:
 
 ```toml
 [targets.web]
@@ -57,7 +57,7 @@ tidak diputuskan di ADR ini. Area tersebut harus dibuat dalam ADR lanjutan sebel
 1. Runtime target tidak boleh hardcode class milik example.
 2. `class` adalah style hook user-side, bukan semantic branch compiler.
 3. Target web boleh menyertakan base CSS generic untuk primitive defaults.
-4. User CSS MVP masuk melalui `[targets.web].styles`, bukan disisipkan ke runtime umum.
+4. User CSS production v1 masuk melalui `[targets.web].styles`, bukan disisipkan ke runtime umum.
 5. Android theme, dependency styling, dan label harus berasal dari konfigurasi target project.
 6. Runtime tetap harus generic dan tidak boleh mengompensasi dengan style khusus example.
 7. Capability-local style import dan CSS module harus menunggu ADR lanjutan.
@@ -70,7 +70,7 @@ Keuntungan:
 runtime tidak drift mengikuti example
 template tetap portable lintas target
 style user dapat diaudit sebagai asset project
-MVP tidak menambah grammar import baru
+Production v1 tidak menambah grammar import baru
 ```
 
 Trade-off:

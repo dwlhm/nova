@@ -10,7 +10,7 @@ ADR-018 menetapkan bahwa multi screen Nova memakai route state, conditional temp
 projection, dan capability composition. ADR-006 juga menyebut conditional view, tetapi syntax
 conditional belum dikunci di grammar.
 
-MVP web membutuhkan cara yang cukup eksplisit untuk membuat beberapa page tanpa menambah dirty
+Production web membutuhkan cara yang cukup eksplisit untuk membuat beberapa page tanpa menambah dirty
 zone atau native router object ke bahasa.
 
 ## Decision
@@ -38,7 +38,7 @@ atau:
 route: Route { path: string }
 ```
 
-MVP memilih nama state `route` sebagai convention. Transition tetap event scheduler biasa:
+Production v1 memilih nama state `route` sebagai convention. Transition tetap event scheduler biasa:
 
 ```nova
 <contract type Route>
@@ -68,7 +68,7 @@ Target adapter awal:
 
 ```txt
 web      -> DOM fragment projection
-android  -> Compose projection dari route state hasil scheduler transition
+android  -> Java View projection dari route state hasil scheduler transition
 ```
 
 ## Rules
@@ -81,7 +81,7 @@ android  -> Compose projection dari route state hasil scheduler transition
 6. Android adapter tidak boleh mengubah route aktif langsung dari event handler; handler harus
    dispatch event route, transition model memperbarui state, lalu renderer memproyeksikan page aktif.
 7. Browser History API dan Android back stack tetap adapter reconciliation dari ADR-018, bukan
-   bagian wajib page projection MVP.
+   bagian wajib page projection production v1.
 8. `page.path` boleh berupa exact path (`/settings`), dynamic segment (`/users/:id` atau
    `/users/{id}`), prefix wildcard (`/docs/*`), atau fallback (`*` dan `/*`).
 9. Adapter memilih page paling spesifik di level sibling yang sama. Exact/static segment mengalahkan

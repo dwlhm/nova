@@ -30,13 +30,8 @@ target_sdk = 35
 version_code = 1
 version_name = "0.1.0"
 gradle_plugin = "8.12.3"
-kotlin_plugin = "2.0.21"
-compose_compiler_plugin = "2.0.21"
-compose_bom = "2024.10.00"
-activity_compose = "1.9.3"
-material3 = "1.3.0"
 theme = "Theme.Nova"
-theme_parent = "android:style/Theme.Material.Light.NoActionBar"
+theme_parent = "android:style/Theme.DeviceDefault.Light.NoActionBar"
 java_version = "17"
 label = "demo"
 	`)
@@ -87,20 +82,20 @@ label = "demo"
 		t.Fatalf("android build exit = %d\nstdout=%s\nstderr=%s", code, out.String(), errOut.String())
 	}
 	assertFileContains(t, cwd, "build/android/build.gradle.kts", "com.android.tools.build:gradle:8.12.3")
-	assertFileContains(t, cwd, "build/android/gradle.properties", "android.useAndroidX=true")
-	assertFileContains(t, cwd, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "dispatch(\"@increment\"")
-	assertFileContains(t, cwd, "build/android/generated/NovaApp.kt", "target = \"android\"")
+	assertFileNotContains(t, cwd, "build/android/gradle.properties", "android.useAndroidX=true")
+	assertFileContains(t, cwd, "build/android/app/src/main/java/nova/generated/MainActivity.java", "dispatch(\"@increment\"")
+	assertFileContains(t, cwd, "build/android/generated/NovaApp.java", "target = \"android\"")
 	assertFileContains(t, cwd, "build/android/app/build/outputs/apk/debug/app-debug.apk", "apk")
 	assertFileContains(t, cwd, "build/android/bundle-manifest.json", "\"format\": \"apk\"")
 	assertFileContains(t, cwd, "gradle.log", "--offline assembleDebug")
 
-	writeFile(t, cwd, "build/android/app/src/main/kotlin/nova/generated/Stale.kt", "stale")
+	writeFile(t, cwd, "build/android/app/src/main/java/nova/generated/Stale.java", "stale")
 	out.Reset()
 	errOut.Reset()
 	if code := Run([]string{"build", "--target", "android"}, cwd, &out, &errOut); code != 0 {
 		t.Fatalf("second android build exit = %d\nstdout=%s\nstderr=%s", code, out.String(), errOut.String())
 	}
-	assertFileMissing(t, cwd, "build/android/app/src/main/kotlin/nova/generated/Stale.kt")
+	assertFileMissing(t, cwd, "build/android/app/src/main/java/nova/generated/Stale.java")
 }
 
 func TestRunDevOnceBuildsWebArtifact(t *testing.T) {
@@ -145,13 +140,8 @@ target_sdk = 35
 version_code = 1
 version_name = "0.1.0"
 gradle_plugin = "8.12.3"
-kotlin_plugin = "2.0.21"
-compose_compiler_plugin = "2.0.21"
-compose_bom = "2024.10.00"
-activity_compose = "1.9.3"
-material3 = "1.3.0"
 theme = "Theme.Nova"
-theme_parent = "android:style/Theme.Material.Light.NoActionBar"
+theme_parent = "android:style/Theme.DeviceDefault.Light.NoActionBar"
 java_version = "17"
 label = "demo"
 `)
@@ -194,13 +184,8 @@ target_sdk = 35
 version_code = 1
 version_name = "0.1.0"
 gradle_plugin = "8.12.3"
-kotlin_plugin = "2.0.21"
-compose_compiler_plugin = "2.0.21"
-compose_bom = "2024.10.00"
-activity_compose = "1.9.3"
-material3 = "1.3.0"
 theme = "Theme.Nova"
-theme_parent = "android:style/Theme.Material.Light.NoActionBar"
+theme_parent = "android:style/Theme.DeviceDefault.Light.NoActionBar"
 java_version = "17"
 label = "demo"
 `)

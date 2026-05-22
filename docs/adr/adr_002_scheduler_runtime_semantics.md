@@ -33,7 +33,7 @@ external operation completion
 error routing
 ```
 
-Target platform MVP Nova mencakup:
+Target platform production Nova mencakup:
 
 ```txt
 Web
@@ -61,7 +61,7 @@ Implementasi scheduler untuk target aplikasi harus **native to the platform**:
 
 ```txt
 web      -> scheduler runtime native JavaScript/TypeScript browser runtime
-android  -> scheduler runtime native Kotlin/JVM Android runtime
+android  -> scheduler runtime native Java/Android runtime
 ```
 
 Implementasi Go yang ada di repository adalah **reference/conformance prototype** untuk
@@ -101,10 +101,10 @@ Core Nova tidak mengenal:
 
 ```txt
 DOM
-View
+Android View
 UIView
-Compose
 SwiftUI
+(Compose hanya pada @nova/android-compose deprecated)
 thread native
 platform clock
 storage native
@@ -294,7 +294,7 @@ error          dipanggil ketika transition/lifecycle/external operation gagal.
 ## Before Lifecycle
 
 `before @event` boleh melakukan dirty operation dan emit event, tetapi tidak boleh membatalkan
-event utama pada MVP scheduler.
+event utama pada production scheduler.
 
 Reason:
 
@@ -370,11 +370,11 @@ Core runtime wajib sama secara semantic untuk semua platform.
 
 Core runtime harus diimplementasikan native per target yang didukung.
 
-MVP implementation target:
+Production implementation target:
 
 ```txt
 web      -> JavaScript/TypeScript scheduler runtime
-android  -> Kotlin scheduler runtime
+android  -> Java scheduler runtime (generated MainActivity + NovaRuntime)
 ```
 
 Reference implementation:
@@ -430,7 +430,7 @@ StateCommit
 
 Renderer adapter boleh berbeda per target, tetapi harus memakai data hasil commit yang sama.
 
-Core scheduler native tidak memanggil DOM, Android View/Compose, atau platform UI API secara
+Core scheduler native tidak memanggil DOM, Android View, atau platform UI API secara
 langsung. Integrasi platform tetap melalui adapter.
 
 ## External Adapter
@@ -625,7 +625,7 @@ button press
   -> after @increment lifecycle persists count
 ```
 
-Flow semantic tersebut sama untuk MVP Web dan Android.
+Flow semantic tersebut sama untuk production Web dan Android.
 
 Future target seperti iOS dan Desktop harus mengikuti flow semantic yang sama saat didukung.
 

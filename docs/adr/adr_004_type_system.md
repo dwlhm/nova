@@ -142,7 +142,7 @@ Nova mendukung literal type untuk finite state sederhana.
 /|
 ```
 
-Literal yang didukung pada MVP:
+Literal yang didukung pada production v1:
 
 ```txt
 string literal
@@ -321,7 +321,7 @@ Rule:
 ```
 
 Narrowing expression detail ditunda ke expression specification.
-MVP validator minimal harus mengecek assignment, event payload, dan function return.
+Production validator minimal harus mengecek assignment, event payload, dan function return.
 
 ---
 
@@ -359,9 +359,9 @@ Rule:
 
 ```txt
 1. Function parameter selalu explicit.
-2. Return type wajib untuk function public pada MVP.
+2. Return type wajib untuk function public pada production v1.
 3. Function body harus type-check terhadap return type.
-4. Function tidak memiliki higher-order function type pada MVP.
+4. Function tidak memiliki higher-order function type pada production v1.
 5. Function value tidak dapat disimpan di state/event.
 ```
 
@@ -496,11 +496,11 @@ State/event harus serializable.
 Renderer adapter yang boleh memegang platform object.
 ```
 
-## Full Generic Type System on MVP
+## Full Generic Type System on production v1
 
 Generic type dan higher-order function didukung dari awal.
 
-Rejected for MVP because:
+Out of production v1 scope because:
 
 ```txt
 Parser, checker, diagnostics, dan lowering menjadi jauh lebih kompleks.

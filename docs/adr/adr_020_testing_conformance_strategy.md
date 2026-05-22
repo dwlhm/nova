@@ -15,7 +15,7 @@ Nova membutuhkan beberapa runtime:
 ```txt
 Go reference/conformance prototype
 Web TypeScript/JavaScript runtime
-Android Kotlin runtime
+Android Java runtime (production) + Go scheduler reference (conformance)
 future iOS/Desktop runtime
 ```
 
@@ -51,7 +51,8 @@ security conformance
 artifact conformance
 ```
 
-Runtime target Web dan Android wajib lulus subset MVP sebelum dianggap supported.
+Runtime target Web dan Android wajib lulus conformance production (metadata + scheduler trace
+bila semantic berubah) sebelum dianggap supported.
 
 ---
 
@@ -178,7 +179,7 @@ Android harness:
 
 ```txt
 JVM unit tests for scheduler/runtime
-instrumented tests for Compose renderer and permission bridge
+instrumented tests for Android View renderer and permission bridge
 fake lifecycle owner
 fake external adapter
 snapshot restoration fixture
@@ -269,11 +270,11 @@ deprecated
 removed
 ```
 
-MVP target awal:
+Production target baseline:
 
 ```txt
 web      -> preview once CSR + storage/network + DOM renderer pass
-android  -> preview once Compose renderer + storage/network + lifecycle pass
+android  -> Java View renderer + storage/network + lifecycle pass conformance
 ```
 
 ---

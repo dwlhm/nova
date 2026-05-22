@@ -240,10 +240,14 @@ func collectAndroidOutputs(artifactDir string, outputPath string) ([]bundleOutpu
 		filepath.Join(artifactDir, "app", "build.gradle.kts"),
 		filepath.Join(artifactDir, "app", "src", "main", "AndroidManifest.xml"),
 		filepath.Join(artifactDir, "app", "src", "main", "kotlin", "nova", "generated", "MainActivity.kt"),
+		filepath.Join(artifactDir, "app", "src", "main", "java", "nova", "generated", "MainActivity.java"),
 		filepath.Join(artifactDir, "app", "src", "main", "res", "values", "styles.xml"),
 		filepath.Join(artifactDir, "generated", "NovaApp.kt"),
+		filepath.Join(artifactDir, "generated", "NovaApp.java"),
 		filepath.Join(artifactDir, "generated", "NovaRoutes.kt"),
+		filepath.Join(artifactDir, "generated", "NovaRoutes.java"),
 		filepath.Join(artifactDir, "generated", "NovaExternalBindings.kt"),
+		filepath.Join(artifactDir, "generated", "NovaExternalBindings.java"),
 		filepath.Join(artifactDir, "nova-ir", "app.nova-ir.json"),
 		filepath.Join(artifactDir, "nova-ir", "metadata.json"),
 		filepath.Join(artifactDir, "nova-ir", "permissions.json"),
@@ -264,6 +268,34 @@ func collectAndroidOutputs(artifactDir string, outputPath string) ([]bundleOutpu
 			return nil, err
 		}
 		outputs = append(outputs, output)
+	}
+	for _, sourceRoot := range []string{
+		filepath.Join(artifactDir, "app", "src", "main", "java"),
+		filepath.Join(artifactDir, "app", "src", "main", "kotlin"),
+	} {
+		if _, err := os.Stat(sourceRoot); err != nil {
+			continue
+		}
+		if err := filepath.WalkDir(sourceRoot, func(path string, entry fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if entry.IsDir() || seen[path] {
+				return nil
+			}
+			if !strings.HasSuffix(entry.Name(), ".java") && !strings.HasSuffix(entry.Name(), ".kt") {
+				return nil
+			}
+			seen[path] = true
+			output, err := fileOutput(artifactDir, path)
+			if err != nil {
+				return err
+			}
+			outputs = append(outputs, output)
+			return nil
+		}); err != nil {
+			return nil, err
+		}
 	}
 	sort.Slice(outputs, func(i, j int) bool { return outputs[i].Path < outputs[j].Path })
 	return outputs, nil

@@ -72,13 +72,15 @@ Lapisan resmi Nova:
 10. developer tooling
 ```
 
-Implementasi Go di repository tetap menjadi **reference/conformance prototype** untuk semantic
-dan tooling awal. Aplikasi produksi target awal memakai runtime native:
+Implementasi Go di repository adalah **compiler + conformance reference** untuk semantic dan
+tooling. Aplikasi production memakai runtime native platform:
 
 ```txt
-web      -> TypeScript/JavaScript runtime
-android  -> Kotlin/JVM Android runtime
+web      -> browser JavaScript runtime (DOM)
+android  -> JVM Java runtime (Android View framework)
 ```
+
+Tidak ada lapisan Kotlin/Compose wajib di antara ABI dan platform.
 
 Runtime native wajib mengikuti scheduler semantics, view IR semantics, permission model,
 dan diagnostic contract yang sama.
@@ -97,7 +99,8 @@ nova-view-ir
 nova-target-manifest
 nova-standard-packages
 nova-web-runtime
-nova-android-runtime
+nova-android-runtime-java
+nova-env-adapters
 nova-conformance
 nova-cli
 ```
@@ -112,7 +115,8 @@ nova-view-ir               renderer-neutral UI contract
 nova-target-manifest       target capability and permission metadata
 nova-standard-packages     @nova/* and @env/* contracts
 nova-web-runtime           browser runtime and DOM adapter
-nova-android-runtime       Android runtime and renderer adapter
+nova-android-runtime-java  Android Java runtime and View renderer adapter
+nova-env-adapters          @env/* bridges to platform APIs
 nova-conformance           cross-runtime test suite
 nova-cli                   build, dev, test, package, inspect
 ```
@@ -234,9 +238,9 @@ web:
   optional SSR/hydration path
 
 android:
-  host adapter
-  Compose renderer adapter
-  external Kotlin adapter bridge
+  host adapter (Activity, back stack)
+  native View renderer adapter (Java)
+  @env Java adapter bridge
   Android permission mapping
   Gradle artifact integration
   activity/process lifecycle mapping
@@ -254,7 +258,7 @@ Target dianggap usable jika bisa:
 6. menjalankan lifecycle dirty boundary
 7. memanggil external operation sesuai permission
 8. melaporkan diagnostic/source map yang konsisten
-9. lulus conformance suite target MVP
+9. lulus conformance suite production
 ```
 
 ---
@@ -278,7 +282,7 @@ nova build --target android
   -> compile semantic model
   -> audit permissions
   -> produce Android artifact
-  -> generate Gradle/Kotlin integration + target IR + adapters
+  -> generate Gradle/Java integration + target IR + adapters
 ```
 
 Runtime flow:
