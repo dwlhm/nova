@@ -114,7 +114,7 @@ abi = ">=0.1.0 <0.2.0"
 adapter = "platform/web/index.web.js"
 
 [targets.android]
-adapter = "platform/android/Index.android.kt"
+adapter = "platform/android/Index.android.java"
 
 [permissions]
 storage.read = false
@@ -251,7 +251,7 @@ used_by:
   - src/Profile.nova lifecycle after @load_profile
 target:
   web adapter platform/web/client.web.js
-  android adapter platform/android/Client.android.kt
+  android adapter platform/android/Client.android.java
 ```
 
 ---

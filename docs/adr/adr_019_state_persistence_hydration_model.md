@@ -62,7 +62,7 @@ Snapshot tidak boleh berisi:
 
 ```txt
 DOM node
-Android View state (Compose hanya compatibility path)
+Android View state
 Android Context
 Promise/Future/Coroutine
 external adapter object

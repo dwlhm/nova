@@ -16,7 +16,11 @@ func TestTargetContractsExposeWebAndAndroidRuntimeBoundaries(t *testing.T) {
 	}
 
 	android := AndroidContract()
-	if android.ID != "android" || android.RendererAdapter != "nova-android-compose-renderer" || !android.SupportsRestoration {
+	if android.ID != "android" ||
+		android.RuntimePackage != "nova-android-runtime" ||
+		android.RendererAdapter != "nova-android-view-renderer" ||
+		android.ExternalAdapter != "nova-android-env-adapters" ||
+		!android.SupportsRestoration {
 		t.Fatalf("android contract = %+v", android)
 	}
 	if !android.PermissionMappings["notification.send"] || !android.PermissionMappings["network.request"] {

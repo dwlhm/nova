@@ -31,16 +31,22 @@ Runtime base style hanya boleh menargetkan primitive renderer-neutral atau marke
 misalnya `data-nova-kind="row"`, `data-nova-kind="surface"`, atau Android theme yang dikonfigurasi
 user. Runtime base style tidak boleh menargetkan class name yang berasal dari example atau aplikasi.
 
-Untuk production v1, user style injection memakai stylesheet global di target web:
+Untuk production v1, user style injection memakai stylesheet global per target:
 
 ```toml
 [targets.web]
 renderer = "@nova/web"
 styles = ["src/theme.css", "src/counter.css"]
+
+[targets.android]
+renderer = "@nova/android"
+styles = ["src/theme.css", "src/counter.css"]
 ```
 
-Stylesheet tersebut disalin ke artifact web dan di-link setelah runtime base CSS. Class dari template
-tetap pass-through:
+Stylesheet web disalin ke artifact web dan di-link setelah runtime base CSS. Target Android memakai
+subset class CSS statis dari stylesheet target untuk menghasilkan native View styling dasar
+(`color`, `font-size`, `font-weight`, `text-transform`, `text-align`, `line-height`, `padding`,
+`min-height`, `background`, `border`, dan `border-radius`). Class dari template tetap pass-through:
 
 ```nova
 <surface class <- "dashboard-shell">
@@ -57,8 +63,8 @@ tidak diputuskan di ADR ini. Area tersebut harus dibuat dalam ADR lanjutan sebel
 1. Runtime target tidak boleh hardcode class milik example.
 2. `class` adalah style hook user-side, bukan semantic branch compiler.
 3. Target web boleh menyertakan base CSS generic untuk primitive defaults.
-4. User CSS production v1 masuk melalui `[targets.web].styles`, bukan disisipkan ke runtime umum.
-5. Android theme, dependency styling, dan label harus berasal dari konfigurasi target project.
+4. User CSS production v1 masuk melalui `styles` target, bukan disisipkan ke runtime umum.
+5. Android theme, dependency styling, label, dan stylesheet harus berasal dari konfigurasi target project.
 6. Runtime tetap harus generic dan tidak boleh mengompensasi dengan style khusus example.
 7. Capability-local style import dan CSS module harus menunggu ADR lanjutan.
 

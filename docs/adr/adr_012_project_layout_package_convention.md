@@ -60,7 +60,7 @@ my-app/
     web/
       storage.web.js
     android/
-      storage.android.kt
+      storage.android.java
     ios/
       storage.ios.swift
     desktop/
@@ -172,7 +172,7 @@ Target-specific external files:
 
 ```txt
 storage.web.js
-storage.android.kt
+      storage.android.java
 storage.ios.swift
 storage.desktop.rs
 storage.common.js

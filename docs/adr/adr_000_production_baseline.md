@@ -24,11 +24,8 @@ web     -> static web artifact + browser JavaScript runtime
 android -> Gradle Java project + Android framework View runtime
 ```
 
-`@nova/android` adalah renderer production default. Renderer memakai source Java di
-`app/src/main/java` tanpa Kotlin plugin, Compose, atau Material3.
-
-`@nova/android-compose` tetap tersedia sebagai jalur compatibility yang deprecated untuk
-project lama; tidak menjadi default baru.
+`@nova/android` adalah satu-satunya renderer production Android. Renderer memakai source Java di
+`app/src/main/java` tanpa framework UI tambahan.
 
 ### Layer trimming
 
@@ -58,6 +55,6 @@ label target akhir.
 
 ## Consequences
 
-- APK Android lebih kecil karena menghindari Kotlin stdlib dan Compose stack.
+- APK Android lebih kecil karena menghindari dependency UI eksternal yang tidak dibutuhkan primitive dasar.
 - Dokumentasi dan example memakai konfigurasi Java-native minimal.
 - Conformance wajib mencakup scheduler trace untuk perubahan semantic (lihat ADR-020).

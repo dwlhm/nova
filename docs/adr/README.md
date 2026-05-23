@@ -1,7 +1,8 @@
 # Architecture Decision Records
 
-Nova memakai ADR untuk keputusan desain yang mengikat implementasi. Mulai transisi production,
-baca [adr_000_production_baseline.md](adr_000_production_baseline.md) terlebih dahulu.
+Nova memakai ADR untuk keputusan desain yang mengikat implementasi. Mulai transisi production, baca [adr_000_production_baseline.md](adr_000_production_baseline.md).
+Untuk sistem modular (capability, package, platform), baca [adr_026_modular_system_architecture.md](adr_026_modular_system_architecture.md).
+Untuk primitive di luar `@nova/ui`, baca [adr_027_renderer_primitive_extension_dictionary.md](adr_027_renderer_primitive_extension_dictionary.md).
 
 ## Terminologi
 
@@ -9,7 +10,6 @@ baca [adr_000_production_baseline.md](adr_000_production_baseline.md) terlebih d
 | --- | --- |
 | **production** / **production v1** | Perilaku dan target yang didukung hari ini (`web`, `@nova/android`) |
 | **v1** | Ruang lingkup fitur yang sengaja dibatasi; bukan "belum selesai" |
-| **deprecated** | Masih ada di repo untuk migrasi (`@nova/android-compose`) |
 | **Out of production v1 scope** | Sengaja ditunda; bukan keputusan final menolak fitur |
 
 Semua ADR di bawah ini telah dirapikan dari istilah "MVP" ke terminologi di atas, kecuali
@@ -20,6 +20,7 @@ adr_000 yang merujuk fase eksperimen secara historis.
 | ADR | Topik | Status |
 | --- | --- | --- |
 | [000](adr_000_production_baseline.md) | Production baseline, layer trimming | Accepted |
+| [026](adr_026_modular_system_architecture.md) | **Modular system overview** + user `platform/` JS/Java adapters | Accepted |
 | [001](adr_001_language_specification.md) | Bahasa Nova | Implemented / Accepted |
 | [002](adr_002_scheduler_runtime_semantics.md) | Scheduler semantics | Implemented / Accepted |
 | [003](adr_003_capability_module_system.md) | Capability & module graph | Implemented / Accepted |
@@ -45,6 +46,7 @@ adr_000 yang merujuk fase eksperimen secara historis.
 | [023](adr_023_page_projection_routing.md) | Page projection & routing | Implemented / Accepted |
 | [024](adr_024_style_asset_injection.md) | Style asset injection | Implemented / Accepted |
 | [025](adr_025_android_apk_size_renderer_strategy.md) | Android APK size & renderer | Accepted |
+| [027](adr_027_renderer_primitive_extension_dictionary.md) | **Primitive extensions** via `renderer-package` + `nova.toml` package list | Accepted (design) |
 
 ## Renderer defaults (production)
 
@@ -53,13 +55,7 @@ adr_000 yang merujuk fase eksperimen secara historis.
 renderer = "@nova/web"
 
 [targets.android]
-renderer = "@nova/android"   # Java native View, no Kotlin/Compose
-```
-
-Compatibility only:
-
-```toml
-renderer = "@nova/android-compose"   # deprecated Kotlin + Compose path
+renderer = "@nova/android"   # Java native View
 ```
 
 ## Menambah ADR baru

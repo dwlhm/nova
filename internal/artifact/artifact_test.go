@@ -55,9 +55,10 @@ func TestGenerateWebArtifactIncludesRuntimeViewIRAndMetadata(t *testing.T) {
 		t.Fatalf("unexpected diagnostics: %+v", diagnostics)
 	}
 
-	assertArtifactFile(t, files, "build/web/index.html", "<script src=\"assets/nova-runtime.js\"></script>")
+	assertArtifactFile(t, files, "build/web/index.html", "<script src=\"assets/nova-scheduler.js\"></script>\n  <script src=\"assets/nova-runtime.js\"></script>")
 	assertArtifactFile(t, files, "build/web/index.html", "assets/styles/src/App.css")
 	assertArtifactFile(t, files, "build/web/assets/styles/src/App.css", ".app { color: red; }")
+	assertArtifactFile(t, files, "build/web/assets/nova-scheduler.js", "window.NovaScheduler")
 	assertArtifactFile(t, files, "build/web/assets/nova-runtime.js", "window.NovaRuntime")
 	assertArtifactFile(t, files, "build/web/app.bundle.js", "window.__NOVA_APP__")
 	assertArtifactFile(t, files, "build/web/app.nova-ir.json", "\"viewIR\"")
@@ -149,8 +150,14 @@ func TestGenerateWebRuntimeUsesDependencyInvalidationsForGranularUpdates(t *test
 		t.Fatalf("unexpected diagnostics: %+v", diagnostics)
 	}
 
+	assertArtifactFile(t, files, "build/web/assets/nova-scheduler.js", "function enqueue(scheduler, host, source, event, args, options)")
+	assertArtifactFile(t, files, "build/web/assets/nova-scheduler.js", "scheduler.queue.push(envelope)")
+	assertArtifactFile(t, files, "build/web/assets/nova-scheduler.js", "function drain(scheduler, host)")
+	assertArtifactFile(t, files, "build/web/assets/nova-scheduler.js", "function planStateCommit(host, envelope, beforeState)")
+	assertArtifactFile(t, files, "build/web/assets/nova-scheduler.js", "host.commitState(commit.state)")
+	assertArtifactFile(t, files, "build/web/assets/nova-scheduler.js", "host.update(commit.invalidations)")
 	assertArtifactFile(t, files, "build/web/assets/nova-runtime.js", "runtime.refs = new Map()")
-	assertArtifactFile(t, files, "build/web/assets/nova-runtime.js", "update(runtime, stateInvalidations(runtime, beforeState))")
+	assertArtifactFile(t, files, "build/web/assets/nova-runtime.js", "window.NovaScheduler.create(schedulerHost(runtime))")
 	assertArtifactFile(t, files, "build/web/assets/nova-runtime.js", "function updateBindings(runtime, invalidations)")
 	assertArtifactFile(t, files, "build/web/assets/nova-runtime.js", "function shouldApplyBinding(states, invalidations)")
 	assertArtifactFile(t, files, "build/web/assets/nova-runtime.js", "root.replaceChildren(...renderNodes")
@@ -167,7 +174,7 @@ func TestGenerateAndroidArtifactIncludesGradleAndGeneratedBindings(t *testing.T)
 /|
 <template target <- android>
   <surface class <- "counter-shell">
-    <text value <- "Count: " + count /|
+    <text class <- "counter-value" value <- "Count: " + count /|
     <button on_press -> @increment>
       <text value <- "+" /|
     /|
@@ -193,6 +200,11 @@ func TestGenerateAndroidArtifactIncludesGradleAndGeneratedBindings(t *testing.T)
 		Plan:           plan.Plan,
 		Sources:        []build.SourceFile{{Path: "src/App.nova", File: source}},
 		TargetManifest: targetManifest,
+		StyleAssets: []StyleAsset{{
+			SourcePath: "src/App.css",
+			Content:    ".counter-shell { padding: 12px; background: #fbfcfe; border: 1px solid #dfe5ef; border-radius: 8px; }\n.counter-value { color: #151923; font-size: 34px; font-weight: 800; text-align: center; }",
+			Scope:      StyleScopeGlobal,
+		}},
 	})
 	if len(diagnostics) != 0 {
 		t.Fatalf("unexpected diagnostics: %+v", diagnostics)
@@ -200,25 +212,35 @@ func TestGenerateAndroidArtifactIncludesGradleAndGeneratedBindings(t *testing.T)
 
 	assertArtifactFile(t, files, "build/android/settings.gradle.kts", "include(\":app\")")
 	assertArtifactFileNotContains(t, files, "build/android/gradle.properties", "android.useAndroidX=true")
-	assertArtifactFile(t, files, "build/android/build.gradle.kts", "com.android.tools.build:gradle:8.12.3")
-	assertArtifactFileNotContains(t, files, "build/android/build.gradle.kts", "kotlin-gradle-plugin")
-	assertArtifactFile(t, files, "build/android/app/build.gradle.kts", "apply(plugin = \"com.android.application\")")
+	assertArtifactFile(t, files, "build/android/settings.gradle.kts", "id(\"com.android.application\") version \"8.12.3\"")
+	assertArtifactFile(t, files, "build/android/app/build.gradle.kts", "plugins {\n    id(\"com.android.application\")")
 	assertArtifactFile(t, files, "build/android/app/build.gradle.kts", "applicationId = \"dev.example.demo\"")
 	assertArtifactFile(t, files, "build/android/app/build.gradle.kts", "compileSdk = 35")
 	assertArtifactFile(t, files, "build/android/app/build.gradle.kts", "JavaVersion.VERSION_17")
-	assertArtifactFileNotContains(t, files, "build/android/app/build.gradle.kts", "androidx.compose")
+	assertArtifactFile(t, files, "build/android/app/build.gradle.kts", "implementation(project(\":nova-scheduler\"))")
+	assertArtifactFile(t, files, "build/android/settings.gradle.kts", "include(\":nova-scheduler\")")
 	assertArtifactFile(t, files, "build/android/app/src/main/AndroidManifest.xml", "android:label=\"demo\"")
 	assertArtifactFile(t, files, "build/android/app/src/main/AndroidManifest.xml", "nova.generated.MainActivity")
 	assertArtifactFile(t, files, "build/android/app/src/main/res/values/styles.xml", "Theme.Nova")
-	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "public final class MainActivity extends Activity")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "public final class MainActivity extends Activity implements NovaScheduler.Host")
 	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "dispatch(\"@increment\"")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "private final NovaScheduler scheduler = new NovaScheduler(this)")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "public Map<String, Object> schedulerState()")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "node_0.setPadding(dp(12), dp(12), dp(12), dp(12));")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "GradientDrawable node_0Style = new GradientDrawable();")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "node_0_0.setTextSize(TypedValue.COMPLEX_UNIT_SP, 34);")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "node_0_0.setTypeface(Typeface.DEFAULT, Typeface.BOLD);")
 	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/NovaRuntime.java", "public final class NovaRuntime")
 	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/NovaRuntime.java", "public static Object evaluate(")
+	assertArtifactFile(t, files, "build/android/nova-scheduler/src/main/java/nova/scheduler/NovaScheduler.java", "public final class NovaScheduler")
+	assertArtifactFile(t, files, "build/android/nova-scheduler/src/main/java/nova/scheduler/NovaEventEnvelope.java", "final class NovaEventEnvelope")
+	assertArtifactFile(t, files, "build/android/nova-scheduler/src/main/java/nova/scheduler/NovaTransition.java", "public final class NovaTransition")
 	assertArtifactFile(t, files, "build/android/generated/NovaApp.java", "public final class NovaApp")
 	assertArtifactFile(t, files, "build/android/generated/NovaExternalBindings.java", "NovaExternalBindings")
 	assertArtifactFile(t, files, "build/android/nova-ir/app.nova-ir.json", "\"viewIR\"")
 	assertArtifactFile(t, files, "build/android/nova-ir/permissions.json", "\"permissions\": []")
 	assertArtifactFile(t, files, "build/android/nova-ir/target-manifest.json", "\"id\": \"android\"")
+	assertArtifactFile(t, files, "build/android/nova-ir/target-manifest.json", "platform/android/storage.android.java")
 }
 
 func TestGenerateAndroidArtifactRequiresUserTargetConfig(t *testing.T) {
@@ -247,6 +269,39 @@ func TestGenerateAndroidArtifactRequiresUserTargetConfig(t *testing.T) {
 	})
 	assertArtifactDiagnostic(t, diagnostics, "targets.android.application_id is required")
 	assertArtifactDiagnostic(t, diagnostics, "targets.android.compile_sdk is required")
+}
+
+func TestGenerateAndroidArtifactRejectsUnsupportedRenderer(t *testing.T) {
+	source := parseNova(t, `<template target <- android>
+  <text value <- "Hello" /|
+/|`)
+	manifest := project.Manifest{
+		Project: project.Project{Name: "demo", Version: "0.1.0", Entry: "src/App.nova"},
+		Targets: map[string]project.Target{
+			"android": {
+				Renderer: "@nova/android-legacy",
+				Options:  testAndroidTarget("dev.example.demo").Options,
+			},
+		},
+	}
+	targetManifest := build.AndroidTargetManifest()
+	plan := build.Resolve(build.ResolutionInput{
+		Project:        manifest,
+		Target:         "android",
+		Sources:        []build.SourceFile{{Path: "src/App.nova", File: source}},
+		TargetManifest: targetManifest,
+	})
+	if len(plan.Diagnostics) != 0 {
+		t.Fatalf("unexpected build diagnostics: %+v", plan.Diagnostics)
+	}
+
+	_, diagnostics := Generate(GenerateInput{
+		Project:        manifest,
+		Plan:           plan.Plan,
+		Sources:        []build.SourceFile{{Path: "src/App.nova", File: source}},
+		TargetManifest: targetManifest,
+	})
+	assertArtifactDiagnostic(t, diagnostics, "targets.android.renderer must be @nova/android")
 }
 
 func TestGenerateWebArtifactSupportsMultiPageRouteProjection(t *testing.T) {
@@ -481,9 +536,11 @@ func TestGenerateAndroidArtifactSupportsProductionRouteMatching(t *testing.T) {
 		t.Fatalf("unexpected diagnostics: %+v", diagnostics)
 	}
 
-	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "routeMatches(textValue(")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "int selectedRouteScore = bestRouteScore(routePatterns(), activePath)")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "routeMatchScore(textValue(")
 	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "private List<String> routePatterns()")
 	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "state.put(\"route\", routeValueForShape(state.get(\"route\"), routePatterns()))")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/NovaRuntime.java", "public static int bestRouteScore(List<String> patterns, String value)")
 	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/NovaRuntime.java", "private static RouteMatch routeMatch(String pattern, String value)")
 	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/NovaRuntime.java", "next.put(\"params\", best.params)")
 	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/NovaRuntime.java", "URI.create(text)")
@@ -491,53 +548,6 @@ func TestGenerateAndroidArtifactSupportsProductionRouteMatching(t *testing.T) {
 	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/NovaRuntime.java", "encodeComponent")
 	assertArtifactFile(t, files, "build/android/generated/NovaRoutes.java", "USERS_ID = \"/users/:id\"")
 	assertArtifactFile(t, files, "build/android/generated/NovaRoutes.java", "FALLBACK = \"*\"")
-}
-
-func TestGenerateAndroidComposeRendererStillAvailableForCompatibility(t *testing.T) {
-	source := parseNova(t, `<contract state Router>
-  route: string <- "/" {
-    @route_changed(next: string) -> next;
-  };
-/|
-<template target <- android>
-  <surface>
-    <row>
-      <button on_press -> @route_changed("/")>
-        <text value <- "Home" /|
-      /|
-      <button on_press -> @route_changed("/docs/reference/routing")>
-        <text value <- "Docs" /|
-      /|
-    /|
-  /|
-/|`)
-	manifest := project.Manifest{
-		Project: project.Project{Name: "demo", Version: "0.1.0", Entry: "src/App.nova"},
-		Targets: map[string]project.Target{"android": testAndroidComposeTarget("dev.example.routing")},
-	}
-	targetManifest := build.AndroidTargetManifest()
-	plan := build.Resolve(build.ResolutionInput{
-		Project:        manifest,
-		Target:         "android",
-		Sources:        []build.SourceFile{{Path: "src/App.nova", File: source}},
-		TargetManifest: targetManifest,
-	})
-	if len(plan.Diagnostics) != 0 {
-		t.Fatalf("unexpected build diagnostics: %+v", plan.Diagnostics)
-	}
-
-	files, diagnostics := Generate(GenerateInput{
-		Project:        manifest,
-		Plan:           plan.Plan,
-		Sources:        []build.SourceFile{{Path: "src/App.nova", File: source}},
-		TargetManifest: targetManifest,
-	})
-	if len(diagnostics) != 0 {
-		t.Fatalf("unexpected diagnostics: %+v", diagnostics)
-	}
-
-	assertArtifactFile(t, files, "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", "FlowRow(")
-	assertArtifactFile(t, files, "build/android/app/build.gradle.kts", "androidx.compose.material3:material3")
 }
 
 func TestGenerateAndroidArtifactWrapsRowsForDenseNavigation(t *testing.T) {
@@ -592,7 +602,8 @@ func TestGenerateAndroidArtifactWrapsRowsForDenseNavigation(t *testing.T) {
 		t.Fatalf("unexpected diagnostics: %+v", diagnostics)
 	}
 
-	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "LinearLayout.HORIZONTAL")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "GridLayout")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "setColumnCount(3)")
 	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "new Button(this)")
 	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "TextView")
 }
@@ -632,31 +643,6 @@ func testAndroidTarget(applicationID string) project.Target {
 			"theme_parent":   "android:style/Theme.DeviceDefault.Light.NoActionBar",
 			"java_version":   "17",
 			"label":          "demo",
-		},
-	}
-}
-
-func testAndroidComposeTarget(applicationID string) project.Target {
-	return project.Target{
-		Renderer: "@nova/android-compose",
-		Options: map[string]string{
-			"application_id":          applicationID,
-			"namespace":               "nova.generated",
-			"compile_sdk":             "35",
-			"min_sdk":                 "23",
-			"target_sdk":              "35",
-			"version_code":            "1",
-			"version_name":            "0.1.0",
-			"gradle_plugin":           "8.12.3",
-			"kotlin_plugin":           "2.0.21",
-			"compose_compiler_plugin": "2.0.21",
-			"compose_bom":             "2024.10.00",
-			"activity_compose":        "1.9.3",
-			"material3":               "1.3.0",
-			"theme":                   "Theme.Nova",
-			"theme_parent":            "android:style/Theme.Material.Light.NoActionBar",
-			"java_version":            "17",
-			"label":                   "demo",
 		},
 	}
 }

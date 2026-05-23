@@ -112,7 +112,7 @@ func TestResolveFallsBackToTargetFamilyBeforeCommonImplementation(t *testing.T) 
 							Name: "load",
 							Implementations: []Implementation{
 								{Path: "platform/common/storage.common.js", Common: true},
-								{Path: "platform/mobile/storage.mobile.kt", Family: "mobile"},
+								{Path: "platform/mobile/storage.mobile.java", Family: "mobile"},
 							},
 						},
 					},
@@ -124,11 +124,31 @@ func TestResolveFallsBackToTargetFamilyBeforeCommonImplementation(t *testing.T) 
 	if len(result.Diagnostics) != 0 {
 		t.Fatalf("unexpected diagnostics: %+v", result.Diagnostics)
 	}
-	if got := result.Plan.ExternalOperations[0].Implementation.Path; got != "platform/mobile/storage.mobile.kt" {
+	if got := result.Plan.ExternalOperations[0].Implementation.Path; got != "platform/mobile/storage.mobile.java" {
 		t.Fatalf("implementation = %s, want mobile family fallback", got)
 	}
 	if result.Plan.Template.Selection != SelectionPolymorphic {
 		t.Fatalf("template selection = %+v, want polymorphic fallback", result.Plan.Template)
+	}
+}
+
+func TestAndroidTargetManifestUsesJavaEnvironmentAdapters(t *testing.T) {
+	manifest := AndroidTargetManifest()
+
+	for _, capability := range manifest.ExternalCapabilities {
+		for _, operation := range capability.Operations {
+			for _, implementation := range operation.Implementations {
+				if implementation.Target != "android" {
+					t.Fatalf("%s.%s target = %q, want android", capability.Source, operation.Name, implementation.Target)
+				}
+				if strings.Contains(implementation.Path, ".kt") {
+					t.Fatalf("%s.%s implementation = %s, want Java production adapter", capability.Source, operation.Name, implementation.Path)
+				}
+				if !strings.HasSuffix(implementation.Path, ".android.java") {
+					t.Fatalf("%s.%s implementation = %s, want .android.java", capability.Source, operation.Name, implementation.Path)
+				}
+			}
+		}
 	}
 }
 

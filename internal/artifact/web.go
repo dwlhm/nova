@@ -193,27 +193,26 @@ window.NovaRuntime = (() => {
     return state;
   }
 
-  function payloadFor(app, event, args) {
-    const transitions = ((app.model || {}).states || []).flatMap((state) => state.transitions || []);
-    const transition = transitions.find((candidate) => candidate.event === event && (candidate.params || []).length === args.length);
-    if (!transition) return {};
-    const payload = {};
-    (transition.params || []).forEach((name, index) => { payload[name] = args[index]; });
-    return payload;
+  function schedulerHost(runtime) {
+    return {
+      app: runtime.app,
+      state: () => runtime.state,
+      commitState: (state) => { runtime.state = state; },
+      evaluate,
+      cloneState,
+      pick,
+      stateInvalidations: (beforeState, afterState) => stateInvalidations(runtime, beforeState, afterState),
+      hasRouteState: () => hasRouteState(runtime),
+      routeKey: () => routeKey(runtime),
+      routeObject,
+      routeValueForShape: (route, shape) => routeValueForShape(route, shape, runtime),
+      update: (invalidations) => update(runtime, invalidations),
+      reconcileNavigation: (beforeRoute, options) => reconcileNavigation(runtime, beforeRoute, options)
+    };
   }
 
   function dispatch(runtime, event, args, options) {
-    const beforeRoute = routeKey(runtime);
-    const beforeState = cloneState(runtime.state);
-    const payload = payloadFor(runtime.app, event, args || []);
-    for (const cell of (runtime.app.model || {}).states || []) {
-      const transition = (cell.transitions || []).find((candidate) => candidate.event === event);
-      if (!transition) continue;
-      runtime.state[cell.name] = evaluate(transition.expression, beforeState, payload);
-    }
-    reconcileRouteState(runtime);
-    update(runtime, stateInvalidations(runtime, beforeState));
-    reconcileNavigation(runtime, beforeRoute, options || {});
+    runtime.scheduler.dispatch(event, args || [], options || {});
   }
 
   function render(runtime) {
@@ -335,10 +334,11 @@ window.NovaRuntime = (() => {
     return { ...(state || {}) };
   }
 
-  function stateInvalidations(runtime, beforeState) {
+  function stateInvalidations(runtime, beforeState, afterState) {
     const invalidations = new Set();
+    const state = afterState || runtime.state;
     for (const cell of (runtime.app.model || {}).states || []) {
-      if (!sameValue(beforeState[cell.name], runtime.state[cell.name])) {
+      if (!sameValue(beforeState[cell.name], state[cell.name])) {
         invalidations.add(cell.name);
       }
     }
@@ -727,7 +727,11 @@ window.NovaRuntime = (() => {
 
   function mount(app) {
     const root = document.getElementById("nova-root");
+    if (!window.NovaScheduler) {
+      throw new Error("NovaScheduler module is required before NovaRuntime");
+    }
     const runtime = { app, root, state: initialState(app) };
+    runtime.scheduler = window.NovaScheduler.create(schedulerHost(runtime));
     window.__NOVA_RUNTIME__ = runtime;
     setupNavigation(runtime);
     render(runtime);

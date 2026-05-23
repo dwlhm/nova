@@ -58,9 +58,9 @@ func AndroidContract() RuntimeContract {
 	return RuntimeContract{
 		ID:                  "android",
 		RuntimePackage:      "nova-android-runtime",
-		RendererAdapter:     "nova-android-compose-renderer",
+		RendererAdapter:     "nova-android-view-renderer",
 		HostAdapter:         "nova-android-host-adapter",
-		ExternalAdapter:     "nova-android-external-adapter",
+		ExternalAdapter:     "nova-android-env-adapters",
 		ArtifactRoot:        "build/android",
 		SupportsRestoration: true,
 		PermissionMappings: security.PermissionSet(

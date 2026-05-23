@@ -62,7 +62,7 @@ Production layering untuk `@env/*`:
 lifecycle -> external operation table -> @env adapter -> platform API
 ```
 
-Tidak ada lapisan Kotlin/Compose/JS framework tambahan di antara adapter dan OS. Adapter web
+Tidak ada framework tambahan di antara adapter dan OS. Adapter web
 memakai modul JS platform; adapter Android memakai kelas Java platform (`*.android.java`).
 
 ---
@@ -265,7 +265,7 @@ Target-specific files may follow naming convention:
 
 ```txt
 name.web.js
-name.android.kt
+name.android.java
 name.ios.swift
 name.desktop.rs
 name.common.js

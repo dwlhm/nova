@@ -73,9 +73,22 @@ func TestHostIOImportsStayAtEdges(t *testing.T) {
 
 func allowedInternalImports() map[string]map[string]bool {
 	return map[string]map[string]bool{
-		"cmd/nova":             set("internal/cli"),
-		"internal/app":         set("internal/diagnostic", "internal/effect", "internal/scheduler", "internal/types", "internal/view"),
-		"internal/artifact":    set("internal/build", "internal/capability", "internal/diagnostic", "internal/lexer", "internal/parser", "internal/project", "internal/routing", "internal/security", "internal/target", "internal/view"),
+		"cmd/nova":     set("internal/cli"),
+		"internal/app": set("internal/diagnostic", "internal/effect", "internal/scheduler", "internal/types", "internal/view"),
+		"internal/artifact": set(
+			"internal/build",
+			"internal/capability",
+			"internal/diagnostic",
+			"internal/lexer",
+			"internal/parser",
+			"internal/project",
+			"internal/routing",
+			"internal/security",
+			"internal/target",
+			"internal/view",
+			"runtime/nova-scheduler-java",
+			"runtime/nova-scheduler-js",
+		),
 		"internal/build":       set("internal/parser", "internal/project", "internal/security"),
 		"internal/bundler":     set(),
 		"internal/capability":  set("internal/parser"),

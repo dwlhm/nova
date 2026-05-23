@@ -80,7 +80,7 @@ web      -> browser JavaScript runtime (DOM)
 android  -> JVM Java runtime (Android View framework)
 ```
 
-Tidak ada lapisan Kotlin/Compose wajib di antara ABI dan platform.
+Tidak ada framework UI tambahan wajib di antara ABI dan platform.
 
 Runtime native wajib mengikuti scheduler semantics, view IR semantics, permission model,
 dan diagnostic contract yang sama.

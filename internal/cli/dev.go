@@ -289,7 +289,7 @@ func isWatchedDevFile(path string) bool {
 		return true
 	}
 	switch filepath.Ext(path) {
-	case ".nova", ".css", ".js", ".ts", ".kt", ".kts", ".toml":
+	case ".nova", ".css", ".js", ".ts", ".java", ".kts", ".toml":
 		return true
 	default:
 		return false

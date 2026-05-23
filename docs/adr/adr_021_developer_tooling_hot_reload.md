@@ -245,7 +245,7 @@ Rule:
 
 ```txt
 Gradle integration
-generated Java update (@nova/android) atau Kotlin update (@nova/android-compose deprecated)
+generated Java update (@nova/android)
 device/emulator deploy
 runtime diagnostic bridge
 hot restart when ABI incompatible

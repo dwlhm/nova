@@ -1,8 +1,9 @@
 # Architecture
 
 Dokumen ini adalah peta kerja untuk implementasi Go Nova. ADR di `docs/adr/` tetap menjadi sumber keputusan desain. Indeks lengkap:
-[docs/adr/README.md](adr/README.md). Mulai dari `docs/adr/adr_000_production_baseline.md`, lalu
-ADR-011, ADR-012, ADR-014, ADR-017, ADR-020, ADR-024, dan ADR-025.
+[docs/adr/README.md](adr/README.md). Mulai dari `docs/adr/adr_000_production_baseline.md`;
+untuk modularitas baca `docs/adr/adr_026_modular_system_architecture.md`, lalu ADR-003, ADR-012,
+ADR-022. ADR operasional: 011, 014, 017, 020, 024, 025.
 
 ## Pipeline
 
@@ -25,9 +26,12 @@ membaca source `.nova` langsung dari production artifact.
 Production runtime:
 
 ```txt
-web     -> JavaScript di browser (internal/artifact web bundle)
-android -> Java di Android SDK View layer (@nova/android, tanpa Kotlin/Compose default)
+web     -> JavaScript di browser (runtime/nova-scheduler-js + generated web runtime)
+android -> Java di Android SDK View layer (@nova/android + runtime/nova-scheduler-java)
 ```
+
+Scheduler production code lives in `runtime/nova-scheduler-js` and `runtime/nova-scheduler-java`
+as installable libraries; `internal/artifact` embeds and copies them into build output.
 
 Go packages `internal/scheduler`, `internal/app`, dan sejenisnya adalah conformance reference;
 bukan runtime production userland.
@@ -76,6 +80,7 @@ mengambil dependency ke CLI, bundler, atau filesystem host.
 | `internal/view` | Projection template menjadi ViewIR dan dependency metadata. |
 | `internal/capability` | Manifest capability dari source/parser contract. |
 | `internal/artifact` | Generate file web/android dari build plan dan IR, tanpa menulis disk. |
+| `internal/standard` | Katalog built-in `@nova/ui` (LSP); user extension dictionary → ADR-027 (belum di wire ke build). |
 | `internal/bundler` | Validasi artifact target, manifest bundle, Gradle/process execution. |
 | `internal/dev` | Planning dev cycle yang pure dan mudah diuji. |
 | `internal/tooling` | Helper tooling kecil yang tidak masuk pipeline utama. |

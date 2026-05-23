@@ -232,7 +232,7 @@ Contoh:
 
 ```txt
 storage.web.js
-storage.mobile.kt
+storage.mobile.java
 storage.common.js
 ```
 

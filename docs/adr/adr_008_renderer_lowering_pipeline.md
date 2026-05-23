@@ -11,7 +11,7 @@ Implemented / Accepted
 ## Context
 
 Nova template harus dapat dirender ke berbagai target tanpa membuat semantic core bergantung
-pada DOM, Compose, UIKit, SwiftUI, atau toolkit desktop.
+pada DOM, Android View, UIKit, SwiftUI, atau toolkit desktop.
 
 Nova juga perlu menjaga agar diagnostic, source map, invalidation, dan event routing tetap konsisten
 sepanjang pipeline compiler ke runtime.

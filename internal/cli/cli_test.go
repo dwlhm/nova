@@ -22,6 +22,7 @@ styles = ["src/App.css"]
 
 [targets.android]
 renderer = "@nova/android"
+styles = ["src/App.css"]
 application_id = "dev.example.demo"
 namespace = "nova.generated"
 compile_sdk = 35
@@ -60,6 +61,7 @@ label = "demo"
 	/|`)
 	writeFile(t, cwd, "src/App.css", `.counter-shell {
   display: grid;
+  padding: 12px;
 }
 `)
 
@@ -81,9 +83,13 @@ label = "demo"
 	if code := Run([]string{"build", "--target", "android"}, cwd, &out, &errOut); code != 0 {
 		t.Fatalf("android build exit = %d\nstdout=%s\nstderr=%s", code, out.String(), errOut.String())
 	}
-	assertFileContains(t, cwd, "build/android/build.gradle.kts", "com.android.tools.build:gradle:8.12.3")
+	assertFileContains(t, cwd, "build/android/settings.gradle.kts", "id(\"com.android.application\") version \"8.12.3\"")
+	assertFileContains(t, cwd, "build/android/settings.gradle.kts", "include(\":nova-scheduler\")")
 	assertFileNotContains(t, cwd, "build/android/gradle.properties", "android.useAndroidX=true")
+	assertFileContains(t, cwd, "build/android/app/build.gradle.kts", "implementation(project(\":nova-scheduler\"))")
+	assertFileContains(t, cwd, "build/android/nova-scheduler/src/main/java/nova/scheduler/NovaScheduler.java", "public final class NovaScheduler")
 	assertFileContains(t, cwd, "build/android/app/src/main/java/nova/generated/MainActivity.java", "dispatch(\"@increment\"")
+	assertFileContains(t, cwd, "build/android/app/src/main/java/nova/generated/MainActivity.java", "node_0.setPadding(dp(12), dp(12), dp(12), dp(12));")
 	assertFileContains(t, cwd, "build/android/generated/NovaApp.java", "target = \"android\"")
 	assertFileContains(t, cwd, "build/android/app/build/outputs/apk/debug/app-debug.apk", "apk")
 	assertFileContains(t, cwd, "build/android/bundle-manifest.json", "\"format\": \"apk\"")

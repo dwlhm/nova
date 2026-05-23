@@ -15,7 +15,7 @@ Nova menargetkan Android sebagai target awal bersama Web.
 ADR-002 menetapkan scheduler semantics harus platform-neutral.
 ADR-006 dan ADR-008 menetapkan template diturunkan ke ViewIR/TargetIR.
 ADR-014 menetapkan runtime Android harus native JVM/Android framework. Production memakai Java
-source, bukan Kotlin/Compose.
+source.
 
 Android memiliki:
 
@@ -48,12 +48,9 @@ nova-android-env-adapters     (@env/* -> platform API)
 nova-android-artifact-builder (Gradle project generation)
 ```
 
-Renderer production default: **`@nova/android`** — native View renderer tanpa Kotlin stdlib atau Compose.
+Renderer production Android: **`@nova/android`** — native View renderer berbasis Java.
 
-`@nova/android-compose` adalah jalur compatibility deprecated untuk project yang masih membutuhkan
-Compose; tidak boleh menjadi default baru.
-
-Nova core tetap tidak mengenal `android.view.View` atau Compose object secara langsung; hanya ViewIR
+Nova core tetap tidak mengenal `android.view.View` atau object platform secara langsung; hanya ViewIR
 dan ABI contract.
 
 ---
@@ -118,19 +115,12 @@ page visibility dari route state
 
 Platform View object tidak pernah menjadi Nova data.
 
-## Compose Renderer (deprecated compatibility)
-
-`@nova/android-compose` mempertahankan jalur Kotlin + Compose untuk migrasi project lama.
-Tidak menjadi default baru dan tidak boleh menjadi requirement conformance production.
-
----
-
 # Artifact Model
 
 Build Android production menghasilkan:
 
 ```txt
-generated Gradle module (Java-only, no Kotlin plugin)
+generated Gradle module (Java source)
 app project integration
 ```
 
@@ -152,8 +142,6 @@ build/android/
     NovaExternalBindings.java
   build.gradle.kts
 ```
-
-Jalur `@nova/android-compose` masih dapat menghasilkan `*.kt` dengan struktur serupa untuk compatibility.
 
 Final app packaging dapat menghasilkan:
 
@@ -188,16 +176,6 @@ label or project.name
 version_name or project.version (optional)
 ```
 
-Konfigurasi tambahan hanya untuk `@nova/android-compose` (deprecated):
-
-```txt
-kotlin_plugin
-compose_compiler_plugin
-compose_bom
-activity_compose
-material3
-```
-
 `namespace` dan package generated code boleh tetap stabil untuk kebutuhan compiler/runtime, tetapi
 Android install identity adalah `applicationId`. Dua project Nova berbeda harus menghasilkan
 `applicationId` berbeda agar Android tidak menganggap APK sebagai update dari app lain.
@@ -208,7 +186,7 @@ Rule:
 1. Artifact builder tidak boleh menurunkan applicationId dari nama example.
 2. Versi Gradle, SDK, namespace, theme, Java version, dan label harus berasal dari manifest project.
 3. Jika konfigurasi wajib kosong, build gagal dengan diagnostic NVA-ANDROID-001.
-4. Production default tidak memuat Kotlin plugin atau Compose dependency.
+4. Production Android tidak memuat dependency UI tambahan di luar primitive Nova.
 ```
 
 ---
@@ -338,8 +316,6 @@ name.android.java
 platform/android/name.android.java
 ```
 
-Compatibility path `@nova/android-compose` masih boleh memakai `*.android.kt`.
-
 Operation bridge:
 
 ```txt
@@ -393,6 +369,5 @@ Trade-off:
 
 ```txt
 Native View renderer membutuhkan pemeliharaan primitive layout sendiri
-Jalur Compose deprecated masih perlu parity conformance sampai dihapus
 Android lifecycle lebih kompleks dari Web dan membutuhkan conformance fixture khusus
 ```

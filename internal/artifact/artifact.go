@@ -54,6 +54,10 @@ const (
 )
 
 func Generate(input GenerateInput) ([]File, []Diagnostic) {
+	if err := schedulerLibraryVersionCheck(); err != nil {
+		return nil, []Diagnostic{errorDiagnostic("NVA-TARGET-019", err.Error())}
+	}
+
 	contract, ok := runtimeContract(input.Plan.Target)
 	if !ok {
 		return nil, []Diagnostic{errorDiagnostic("NVA-TARGET-019", fmt.Sprintf("unsupported build target %s", input.Plan.Target))}
@@ -87,7 +91,8 @@ func Generate(input GenerateInput) ([]File, []Diagnostic) {
 		if len(configDiagnostics) > 0 {
 			return nil, configDiagnostics
 		}
-		return androidFiles(input, bundle, artifactMetadata, config), nil
+		files, libDiagnostics := androidFiles(input, bundle, artifactMetadata, config)
+		return files, libDiagnostics
 	default:
 		return nil, []Diagnostic{errorDiagnostic("NVA-TARGET-019", fmt.Sprintf("unsupported build target %s", input.Plan.Target))}
 	}
@@ -185,6 +190,7 @@ func webFiles(input GenerateInput, bundle irBundle, metadata target.ArtifactMeta
 	files := []File{
 		{Path: "build/web/index.html", Content: webIndex(input.Project.Project.Name, webStyleHrefs(styles.Files), styles.RootScope)},
 		{Path: "build/web/assets/nova-runtime.css", Content: webCSS()},
+		{Path: "build/web/assets/nova-scheduler.js", Content: webSchedulerModule()},
 		{Path: "build/web/assets/nova-runtime.js", Content: webRuntime()},
 		{Path: "build/web/app.bundle.js", Content: webBundle(bundle)},
 		{Path: "build/web/app.nova-ir.json", Content: mustJSON(bundle)},
@@ -197,7 +203,12 @@ func webFiles(input GenerateInput, bundle irBundle, metadata target.ArtifactMeta
 	return append(files, styles.Files...)
 }
 
-func androidFiles(input GenerateInput, bundle irBundle, metadata target.ArtifactMetadata, config androidTargetConfig) []File {
+func androidFiles(input GenerateInput, bundle irBundle, metadata target.ArtifactMetadata, config androidTargetConfig) ([]File, []Diagnostic) {
+	schedulerFiles, err := androidSchedulerLibraryFiles()
+	if err != nil {
+		return nil, []Diagnostic{errorDiagnostic("NVA-TARGET-019", "android scheduler library: "+err.Error())}
+	}
+
 	files := []File{
 		{Path: "build/android/nova-ir/app.nova-ir.json", Content: mustJSON(bundle)},
 		{Path: "build/android/nova-ir/app.source-map.json", Content: mustJSON(sourceMapSummary(input.Plan, bundle))},
@@ -211,25 +222,16 @@ func androidFiles(input GenerateInput, bundle irBundle, metadata target.Artifact
 		{Path: "build/android/app/src/main/AndroidManifest.xml", Content: androidManifest(config)},
 		{Path: "build/android/app/src/main/res/values/styles.xml", Content: androidStyles(config)},
 	}
-	if config.NativeRenderer() {
-		sourceRoot := "build/android/app/src/main/java/" + strings.ReplaceAll(config.Namespace, ".", "/")
-		files = append(files,
-			File{Path: sourceRoot + "/MainActivity.java", Content: androidMainActivity(input.Project.Project.Name, bundle, config)},
-			File{Path: sourceRoot + "/NovaRuntime.java", Content: androidRuntime(config)},
-			File{Path: "build/android/generated/NovaApp.java", Content: androidApp(input.Project.Project.Name, bundle.Target, config)},
-			File{Path: "build/android/generated/NovaRoutes.java", Content: androidRoutes(bundle, config)},
-			File{Path: "build/android/generated/NovaExternalBindings.java", Content: androidExternalBindings(input.Plan.ExternalOperations, config)},
-		)
-		return files
-	}
+	sourceRoot := "build/android/app/src/main/java/" + strings.ReplaceAll(config.Namespace, ".", "/")
+	files = append(files, schedulerFiles...)
 	files = append(files,
-		File{Path: "build/android/app/src/main/kotlin/nova/generated/MainActivity.kt", Content: androidMainActivity(input.Project.Project.Name, bundle, config)},
-		File{Path: "build/android/app/src/main/kotlin/nova/generated/NovaRuntime.kt", Content: androidRuntime(config)},
-		File{Path: "build/android/generated/NovaApp.kt", Content: androidApp(input.Project.Project.Name, bundle.Target, config)},
-		File{Path: "build/android/generated/NovaRoutes.kt", Content: androidRoutes(bundle, config)},
-		File{Path: "build/android/generated/NovaExternalBindings.kt", Content: androidExternalBindings(input.Plan.ExternalOperations, config)},
+		File{Path: sourceRoot + "/MainActivity.java", Content: androidMainActivity(input.Project.Project.Name, bundle, config, input.StyleAssets)},
+		File{Path: sourceRoot + "/NovaRuntime.java", Content: androidRuntime(config)},
+		File{Path: "build/android/generated/NovaApp.java", Content: androidApp(input.Project.Project.Name, bundle.Target, config)},
+		File{Path: "build/android/generated/NovaRoutes.java", Content: androidRoutes(bundle, config)},
+		File{Path: "build/android/generated/NovaExternalBindings.java", Content: androidExternalBindings(input.Plan.ExternalOperations, config)},
 	)
-	return files
+	return files, nil
 }
 
 func selectedTemplate(plan build.BuildPlan, sources map[string]parser.File) (parser.TemplateDecl, bool) {
@@ -387,7 +389,7 @@ func webIndex(name string, styleHrefs []string, rootStyleScope string) string {
 	if strings.TrimSpace(rootStyleScope) != "" {
 		scopeAttr = " data-nova-style-scope=\"" + escapeHTML(rootStyleScope) + "\""
 	}
-	return "<!doctype html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n  <title>" + escapeHTML(name) + "</title>\n" + links + "</head>\n<body>\n  <main id=\"nova-root\"" + scopeAttr + " aria-label=\"" + escapeHTML(name) + "\"></main>\n  <script src=\"assets/nova-runtime.js\"></script>\n  <script src=\"app.bundle.js\"></script>\n</body>\n</html>\n"
+	return "<!doctype html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n  <title>" + escapeHTML(name) + "</title>\n" + links + "</head>\n<body>\n  <main id=\"nova-root\"" + scopeAttr + " aria-label=\"" + escapeHTML(name) + "\"></main>\n  <script src=\"assets/nova-scheduler.js\"></script>\n  <script src=\"assets/nova-runtime.js\"></script>\n  <script src=\"app.bundle.js\"></script>\n</body>\n</html>\n"
 }
 
 type webStyles struct {
@@ -489,7 +491,7 @@ func clonePermissions(permissions []security.Permission) []security.Permission {
 	return out
 }
 
-func quoteKotlin(value string) string {
+func quoteCodeString(value string) string {
 	encoded, _ := json.Marshal(value)
 	return string(encoded)
 }

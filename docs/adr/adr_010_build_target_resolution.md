@@ -106,7 +106,6 @@ renderer = "@nova/web"
 
 [targets.android]
 renderer = "@nova/android"          # production: Java native View
-renderer = "@nova/android-compose"  # deprecated compatibility only
 
 [permissions]
 storage.read = true
@@ -183,7 +182,7 @@ Example:
 
 ```txt
 storage.web.js
-storage.mobile.kt
+storage.mobile.java
 storage.common.js
 ```
 
@@ -196,7 +195,7 @@ storage.web.js
 For target `android`:
 
 ```txt
-storage.mobile.kt if family mobile is configured
+storage.mobile.java if family mobile is configured
 else storage.common.js
 else fail
 ```

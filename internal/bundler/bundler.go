@@ -239,14 +239,10 @@ func collectAndroidOutputs(artifactDir string, outputPath string) ([]bundleOutpu
 		filepath.Join(artifactDir, "build.gradle.kts"),
 		filepath.Join(artifactDir, "app", "build.gradle.kts"),
 		filepath.Join(artifactDir, "app", "src", "main", "AndroidManifest.xml"),
-		filepath.Join(artifactDir, "app", "src", "main", "kotlin", "nova", "generated", "MainActivity.kt"),
 		filepath.Join(artifactDir, "app", "src", "main", "java", "nova", "generated", "MainActivity.java"),
 		filepath.Join(artifactDir, "app", "src", "main", "res", "values", "styles.xml"),
-		filepath.Join(artifactDir, "generated", "NovaApp.kt"),
 		filepath.Join(artifactDir, "generated", "NovaApp.java"),
-		filepath.Join(artifactDir, "generated", "NovaRoutes.kt"),
 		filepath.Join(artifactDir, "generated", "NovaRoutes.java"),
-		filepath.Join(artifactDir, "generated", "NovaExternalBindings.kt"),
 		filepath.Join(artifactDir, "generated", "NovaExternalBindings.java"),
 		filepath.Join(artifactDir, "nova-ir", "app.nova-ir.json"),
 		filepath.Join(artifactDir, "nova-ir", "metadata.json"),
@@ -271,7 +267,6 @@ func collectAndroidOutputs(artifactDir string, outputPath string) ([]bundleOutpu
 	}
 	for _, sourceRoot := range []string{
 		filepath.Join(artifactDir, "app", "src", "main", "java"),
-		filepath.Join(artifactDir, "app", "src", "main", "kotlin"),
 	} {
 		if _, err := os.Stat(sourceRoot); err != nil {
 			continue
@@ -283,7 +278,7 @@ func collectAndroidOutputs(artifactDir string, outputPath string) ([]bundleOutpu
 			if entry.IsDir() || seen[path] {
 				return nil
 			}
-			if !strings.HasSuffix(entry.Name(), ".java") && !strings.HasSuffix(entry.Name(), ".kt") {
+			if !strings.HasSuffix(entry.Name(), ".java") {
 				return nil
 			}
 			seen[path] = true

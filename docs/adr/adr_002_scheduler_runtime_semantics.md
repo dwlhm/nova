@@ -104,7 +104,7 @@ DOM
 Android View
 UIView
 SwiftUI
-(Compose hanya pada @nova/android-compose deprecated)
+(Android View renderer)
 thread native
 platform clock
 storage native
@@ -454,7 +454,7 @@ Untuk multiplatform, source external dapat dipetakan oleh build target:
 
 ```txt
 storage.web.js
-storage.android.kt
+storage.android.java
 ```
 
 Target future dapat menambahkan:

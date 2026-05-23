@@ -7,7 +7,7 @@ Target production yang didukung: `web` (JavaScript/DOM) dan `android` (Java/Andr
 
 - Source Nova diparse, divalidasi, dan diturunkan menjadi IR deterministik.
 - Target `web` menghasilkan aplikasi static browser.
-- Target `android` menghasilkan project Gradle Java tanpa Kotlin/Compose default (`@nova/android`).
+- Target `android` menghasilkan project Gradle Java dengan renderer `@nova/android`.
 - External capability (`@env/*`) langsung ke adapter platform.
 - Example: `examples/counter`, `examples/multipage`.
 - ADR: [docs/adr/README.md](docs/adr/README.md) (indeks lengkap; baseline: [adr_000](docs/adr/adr_000_production_baseline.md)).
@@ -83,19 +83,24 @@ build/web/bundle-manifest.json
 
 `index.html` bisa dibuka langsung di browser.
 
-CSS project web bisa didaftarkan sebagai stylesheet global atau app-scoped dari manifest:
+CSS project bisa didaftarkan per target sebagai stylesheet global atau app-scoped dari manifest:
 
 ```toml
 [targets.web]
 renderer = "@nova/web"
 styles = ["src/Counter.css"]
 scoped_styles = ["src/App.css"]
+
+[targets.android]
+renderer = "@nova/android"
+styles = ["src/Counter.css"]
 ```
 
-File CSS disalin ke artifact web dan di-link setelah runtime base CSS. `scoped_styles`
+File CSS web disalin ke artifact web dan di-link setelah runtime base CSS. `scoped_styles`
 diprefix ke root app web (`#nova-root[data-nova-style-scope~="app"]`) dan dicatat di
-`build/web/style-manifest.json`. Detail CSS module dan style per capability masih area
-lanjutan; lihat
+`build/web/style-manifest.json`. Target Android memakai subset class CSS statis untuk native View
+styling dasar seperti warna, font, padding, border, background, dan min-height. Detail CSS module
+dan style per capability masih area lanjutan; lihat
 `docs/adr/adr_024_style_asset_injection.md`.
 
 ## Dev Web
@@ -147,7 +152,7 @@ go run ../../cmd/nova build --target android --bundle=false
 
 `[targets.android]` wajib membawa konfigurasi production minimal: `application_id`, `namespace`,
 SDK version, `gradle_plugin`, `theme`, `theme_parent`, `java_version`, dan `label`.
-Tidak perlu `kotlin_plugin` atau dependency Compose untuk renderer default `@nova/android`.
+Renderer `@nova/android` tidak membutuhkan dependency UI eksternal.
 Lihat `examples/*/nova.toml` untuk contoh lengkap.
 
 ## Build Android

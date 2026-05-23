@@ -7,7 +7,7 @@ import (
 	"github.com/dwlhm/nova/internal/view"
 )
 
-func TestOfficialPackagesExposeMVPStandardSurface(t *testing.T) {
+func TestOfficialPackagesExposeProductionStandardSurface(t *testing.T) {
 	manifests := OfficialPackages()
 
 	storage, ok := findPackage(manifests, "@env/storage")
@@ -19,6 +19,9 @@ func TestOfficialPackagesExposeMVPStandardSurface(t *testing.T) {
 	}
 	if storage.Targets["web"].Adapter == "" || storage.Targets["android"].Adapter == "" {
 		t.Fatalf("@env/storage target adapters = %+v, want web and android", storage.Targets)
+	}
+	if got := storage.Targets["android"].Adapter; !strings.HasSuffix(got, ".android.java") {
+		t.Fatalf("@env/storage android adapter = %q, want Java production adapter", got)
 	}
 
 	ui, ok := findPackage(manifests, "@nova/ui")

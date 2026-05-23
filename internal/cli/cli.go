@@ -640,9 +640,6 @@ func projectFiles(sources []build.SourceFile) []project.File {
 }
 
 func loadStyleAssets(cwd string, manifest project.Manifest, targetID string) ([]artifact.StyleAsset, []string, bool) {
-	if targetID != "web" {
-		return nil, nil, true
-	}
 	target := manifest.Targets[targetID]
 	assets := make([]artifact.StyleAsset, 0, len(target.Styles)+len(target.ScopedStyles))
 	diagnostics := make([]string, 0)

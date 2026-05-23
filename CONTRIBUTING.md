@@ -18,6 +18,13 @@ go test ./...
 go run ./cmd/nova test
 ```
 
+Scheduler library checks (when changing `runtime/nova-scheduler-*`):
+
+```bash
+cd runtime/nova-scheduler-js && npm test
+cd runtime/nova-scheduler-java && gradle test
+```
+
 Untuk perubahan yang menyentuh generated artifact atau target runtime, jalankan juga build example
 yang relevan:
 

@@ -37,7 +37,7 @@ Template tidak mengenal:
 ```txt
 DOM
 UIView
-native view node (Compose hanya pada @nova/android-compose deprecated)
+native view node
 SwiftUI View
 desktop widget object
 platform handle
@@ -83,7 +83,7 @@ Jadi Web dapat berakhir sebagai HTML/DOM, tetapi Nova tetap melewati view IR aga
 diagnostics, event route, dan state dependency tetap sama dengan target lain.
 
 Untuk Android production, lowering menghasilkan binding Java ke Android View framework. Bentuk final
-Android production memakai View tree Java; Compose hanya pada renderer compatibility deprecated
+Android production memakai View tree Java
 adapter dan harus tetap mengikuti contract view IR.
 
 ---
