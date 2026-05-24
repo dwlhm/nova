@@ -1,0 +1,10 @@
+[project]
+name = "renderer-conflict-kind"
+version = "0.1.0"
+entry = "src/App.nova"
+
+[renderer.extensions]
+packages = ["@acme/conflict"]
+
+[targets.web]
+renderer = "@nova/web"

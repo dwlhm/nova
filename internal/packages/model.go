@@ -24,14 +24,50 @@ type Manifest struct {
 	Language     string
 	ABI          string
 	Exports      map[string]string
+	Renderer     RendererManifest
 	Targets      map[string]TargetAdapter
 	Permissions  security.PermissionMap
 	Dependencies []Dependency
 	ContentHash  string
 }
 
+type RendererManifest struct {
+	Primitives map[string]RendererPrimitive
+}
+
+type RendererPrimitive struct {
+	Package       string
+	Kind          string
+	Description   string
+	Props         []RendererField
+	Events        []RendererEvent
+	AllowOverride bool
+	Targets       map[string]RendererTarget
+}
+
+type RendererField struct {
+	Name        string
+	Type        string
+	Optional    bool
+	Description string
+}
+
+type RendererEvent struct {
+	Name        string
+	Payload     string
+	Description string
+}
+
+type RendererTarget struct {
+	Strategy string
+	Adapter  string
+	Tag      string
+	Delegate string
+}
+
 type TargetAdapter struct {
 	Adapter string
+	Content string
 }
 
 type Dependency struct {
@@ -55,16 +91,18 @@ type Lockfile struct {
 }
 
 type ResolutionInput struct {
-	Roots      []Dependency
-	Packages   []Manifest
-	Lockfile   Lockfile
-	Target     string
-	Production bool
+	Roots              []Dependency
+	RendererExtensions []Dependency
+	Packages           []Manifest
+	Lockfile           Lockfile
+	Target             string
+	Production         bool
 }
 
 type ResolvedGraph struct {
-	Packages          []ResolvedPackage
-	PermissionSources map[security.Permission][]PermissionSource
+	Packages           []ResolvedPackage
+	RendererExtensions []ResolvedRendererPackage
+	PermissionSources  map[security.Permission][]PermissionSource
 }
 
 type ResolvedPackage struct {
@@ -73,6 +111,14 @@ type ResolvedPackage struct {
 	Types         []PackageType
 	TargetAdapter string
 	Chain         []string
+}
+
+type ResolvedRendererPackage struct {
+	Name                 string
+	Version              string
+	TargetAdapter        string
+	TargetAdapterContent string
+	Primitives           []RendererPrimitive
 }
 
 type PermissionSource struct {

@@ -3,12 +3,17 @@ package artifact
 import (
 	"fmt"
 
+	rendererjs "github.com/dwlhm/nova/runtime/nova-renderer-js"
 	schedulerjava "github.com/dwlhm/nova/runtime/nova-scheduler-java"
 	schedulerjs "github.com/dwlhm/nova/runtime/nova-scheduler-js"
 )
 
 func webSchedulerModule() string {
 	return schedulerjs.Source
+}
+
+func webRendererModule() string {
+	return rendererjs.Source
 }
 
 func androidSchedulerLibraryFiles() ([]File, error) {
@@ -108,6 +113,9 @@ func schedulerLibraryVersionCheck() error {
 	}
 	if schedulerjava.Version != schedulerVersion {
 		return fmt.Errorf("java scheduler library version %s does not match artifact schedulerVersion %s", schedulerjava.Version, schedulerVersion)
+	}
+	if rendererjs.Version != runtimeVersion {
+		return fmt.Errorf("web renderer library version %s does not match artifact runtimeVersion %s", rendererjs.Version, runtimeVersion)
 	}
 	return nil
 }

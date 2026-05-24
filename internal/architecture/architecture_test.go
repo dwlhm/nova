@@ -52,7 +52,7 @@ func TestHostIOImportsStayAtEdges(t *testing.T) {
 	}
 
 	hostImports := set("net", "net/http", "os", "os/exec", "path/filepath")
-	hostPackages := set("cmd/nova", "internal/cli", "internal/bundler", "internal/conformance")
+	hostPackages := set("cmd/nova", "internal/cli", "internal/bundler", "internal/conformance", "internal/packageio")
 	failures := make([]string, 0)
 	for importer, imports := range importsByPackage {
 		if hostPackages[importer] {
@@ -86,20 +86,22 @@ func allowedInternalImports() map[string]map[string]bool {
 			"internal/security",
 			"internal/target",
 			"internal/view",
+			"runtime/nova-renderer-js",
 			"runtime/nova-scheduler-java",
 			"runtime/nova-scheduler-js",
 		),
-		"internal/build":       set("internal/parser", "internal/project", "internal/security"),
+		"internal/build":       set("internal/packages", "internal/parser", "internal/project", "internal/security", "internal/standard"),
 		"internal/bundler":     set(),
 		"internal/capability":  set("internal/parser"),
-		"internal/cli":         set("internal/artifact", "internal/build", "internal/bundler", "internal/conformance", "internal/dev", "internal/format", "internal/lexer", "internal/lsp", "internal/parser", "internal/project", "internal/validator"),
-		"internal/conformance": set("internal/artifact", "internal/build", "internal/diagnostic", "internal/lexer", "internal/parser", "internal/project", "internal/routing", "internal/scheduler", "internal/security", "internal/validator", "internal/view"),
+		"internal/cli":         set("internal/artifact", "internal/build", "internal/bundler", "internal/conformance", "internal/dev", "internal/diagnostic", "internal/format", "internal/lexer", "internal/lsp", "internal/packageio", "internal/packages", "internal/parser", "internal/project", "internal/validator"),
+		"internal/conformance": set("internal/artifact", "internal/build", "internal/diagnostic", "internal/lexer", "internal/packageio", "internal/parser", "internal/project", "internal/routing", "internal/scheduler", "internal/security", "internal/validator", "internal/view"),
 		"internal/dev":         set(),
 		"internal/diagnostic":  set(),
 		"internal/effect":      set("internal/scheduler", "internal/types"),
 		"internal/format":      set(),
 		"internal/lexer":       set(),
-		"internal/lsp":         set("internal/format", "internal/lexer", "internal/parser", "internal/standard", "internal/validator"),
+		"internal/lsp":         set("internal/format", "internal/lexer", "internal/packages", "internal/parser", "internal/standard", "internal/validator"),
+		"internal/packageio":   set("internal/diagnostic", "internal/packages", "internal/project", "internal/standard"),
 		"internal/packages":    set("internal/diagnostic", "internal/security"),
 		"internal/parser":      set("internal/lexer"),
 		"internal/persistence": set("internal/diagnostic", "internal/scheduler"),

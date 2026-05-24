@@ -21,6 +21,10 @@ func Resolve(input ResolutionInput) (ResolvedGraph, []Diagnostic) {
 	for _, root := range sortedDependencies(input.Roots) {
 		resolver.resolve(root, nil)
 	}
+	for _, extension := range input.RendererExtensions {
+		resolver.resolve(extension, nil)
+	}
+	resolver.collectRendererExtensions()
 
 	sortPermissionSources(resolver.graph.PermissionSources)
 	return resolver.graph, diagnostic.StableSort(resolver.diagnostics)
@@ -65,6 +69,27 @@ func (r *packageResolver) resolve(dep Dependency, chain []string) {
 
 	for _, child := range sortedDependencies(manifest.Dependencies) {
 		r.resolve(child, nextChain)
+	}
+}
+
+func (r *packageResolver) collectRendererExtensions() {
+	for _, dep := range r.input.RendererExtensions {
+		manifest, ok := r.selected[dep.Name]
+		if !ok {
+			continue
+		}
+		if !hasPackageType(manifest.Types, PackageRenderer) {
+			r.diagnostics = append(r.diagnostics, pkgDiagnostic("NVA-PKG-015", fmt.Sprintf("renderer extension package %s must declare renderer-package type", manifest.Name)))
+			continue
+		}
+		target := manifest.Targets[r.input.Target]
+		r.graph.RendererExtensions = append(r.graph.RendererExtensions, ResolvedRendererPackage{
+			Name:                 manifest.Name,
+			Version:              manifest.Version,
+			TargetAdapter:        target.Adapter,
+			TargetAdapterContent: target.Content,
+			Primitives:           rendererPrimitives(manifest),
+		})
 	}
 }
 

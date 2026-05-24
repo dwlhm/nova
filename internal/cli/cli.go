@@ -16,9 +16,12 @@ import (
 	"github.com/dwlhm/nova/internal/build"
 	"github.com/dwlhm/nova/internal/bundler"
 	"github.com/dwlhm/nova/internal/conformance"
+	"github.com/dwlhm/nova/internal/diagnostic"
 	novaformat "github.com/dwlhm/nova/internal/format"
 	"github.com/dwlhm/nova/internal/lexer"
 	"github.com/dwlhm/nova/internal/lsp"
+	"github.com/dwlhm/nova/internal/packageio"
+	"github.com/dwlhm/nova/internal/packages"
 	"github.com/dwlhm/nova/internal/parser"
 	"github.com/dwlhm/nova/internal/project"
 	"github.com/dwlhm/nova/internal/validator"
@@ -75,6 +78,7 @@ type projectPipeline struct {
 	TargetManifest build.TargetManifest
 	Sources        []build.SourceFile
 	Resolution     build.ResolutionResult
+	PackageGraph   packages.ResolvedGraph
 	StyleAssets    []artifact.StyleAsset
 	Files          []artifact.File
 }
@@ -251,11 +255,20 @@ func runProjectPipeline(cwd string, targetID string, generateArtifacts bool, std
 		return projectPipeline{}, false
 	}
 
+	packageGraph, packageDiagnostics := packageio.ResolveProjectGraph(cwd, targetID, manifest)
+	for _, item := range packageDiagnostics {
+		fmt.Fprintf(stderr, "%s: %s\n", item.Code, item.Message)
+	}
+	if diagnostic.HasErrors(packageDiagnostics) {
+		return projectPipeline{}, false
+	}
+
 	resolution := build.Resolve(build.ResolutionInput{
 		Project:        manifest,
 		Target:         targetID,
 		Sources:        sources,
 		TargetManifest: targetManifest,
+		PackageGraph:   packageGraph,
 	})
 	if len(resolution.Diagnostics) > 0 {
 		for _, diagnostic := range resolution.Diagnostics {
@@ -270,6 +283,7 @@ func runProjectPipeline(cwd string, targetID string, generateArtifacts bool, std
 		TargetManifest: targetManifest,
 		Sources:        sources,
 		Resolution:     resolution,
+		PackageGraph:   packageGraph,
 		StyleAssets:    styleAssets,
 	}
 	if !generateArtifacts {
@@ -286,7 +300,9 @@ func runProjectPipeline(cwd string, targetID string, generateArtifacts bool, std
 		for _, diagnostic := range artifactDiagnostics {
 			fmt.Fprintf(stderr, "%s: %s\n", diagnostic.Code, diagnostic.Message)
 		}
-		return projectPipeline{}, false
+		if diagnostic.HasErrors(artifactDiagnostics) {
+			return projectPipeline{}, false
+		}
 	}
 	pipeline.Files = files
 	return pipeline, true
@@ -387,6 +403,8 @@ func inspectSummary(pipeline projectPipeline) map[string]any {
 		"template":           pipeline.Resolution.Plan.Template,
 		"permissions":        pipeline.Resolution.Plan.Permissions,
 		"externalOperations": pipeline.Resolution.Plan.ExternalOperations,
+		"packageGraph":       pipeline.PackageGraph.Packages,
+		"renderer":           pipeline.Resolution.Plan.Renderer,
 		"styles":             styles,
 	}
 }

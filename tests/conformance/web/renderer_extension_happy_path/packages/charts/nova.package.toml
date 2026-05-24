@@ -1,0 +1,14 @@
+[package]
+name = "@acme/charts"
+version = "1.0.0"
+type = ["renderer-package"]
+
+[renderer.primitives.sparkline]
+description = "Mini chart"
+props = ["data"]
+
+[renderer.primitives.sparkline.web]
+strategy = "adapter"
+
+[targets.web]
+adapter = "platform/web/register.web.js"

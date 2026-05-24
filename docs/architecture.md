@@ -30,8 +30,9 @@ web     -> JavaScript di browser (runtime/nova-scheduler-js + generated web runt
 android -> Java di Android SDK View layer (@nova/android + runtime/nova-scheduler-java)
 ```
 
-Scheduler production code lives in `runtime/nova-scheduler-js` and `runtime/nova-scheduler-java`
-as installable libraries; `internal/artifact` embeds and copies them into build output.
+Scheduler and renderer production code lives in `runtime/nova-scheduler-js`,
+`runtime/nova-scheduler-java`, and `runtime/nova-renderer-js` as installable libraries;
+`internal/artifact` embeds and copies them into build output.
 
 Go packages `internal/scheduler`, `internal/app`, dan sejenisnya adalah conformance reference;
 bukan runtime production userland.
@@ -40,7 +41,7 @@ bukan runtime production userland.
 
 ```txt
 Edge tooling
-  cmd/nova, internal/cli, internal/bundler, internal/conformance
+  cmd/nova, internal/cli, internal/bundler, internal/conformance, internal/packageio
 
 Project and target planning
   internal/project, internal/build, internal/target, internal/packages, internal/standard
@@ -68,6 +69,7 @@ mengambil dependency ke CLI, bundler, atau filesystem host.
 | --- | --- |
 | `cmd/nova` | Binary entrypoint tipis; delegasi ke `internal/cli`. |
 | `internal/cli` | Parse flag, baca/tulis file, orkestrasi pipeline, dev server, dan command output. |
+| `internal/packageio` | Filesystem loader untuk `nova.package.toml`, adapter package, dan package graph project. |
 | `internal/project` | Parse `nova.toml` dan validasi layout project. |
 | `internal/lexer` | Tokenisasi source `.nova`, tanpa IO. |
 | `internal/parser` | AST/data model dari token Nova. |
@@ -80,7 +82,7 @@ mengambil dependency ke CLI, bundler, atau filesystem host.
 | `internal/view` | Projection template menjadi ViewIR dan dependency metadata. |
 | `internal/capability` | Manifest capability dari source/parser contract. |
 | `internal/artifact` | Generate file web/android dari build plan dan IR, tanpa menulis disk. |
-| `internal/standard` | Katalog built-in `@nova/ui` (LSP); user extension dictionary → ADR-027 (belum di wire ke build). |
+| `internal/standard` | Katalog built-in `@nova/ui` dan merge primitive renderer package untuk LSP/tooling (ADR-027). |
 | `internal/bundler` | Validasi artifact target, manifest bundle, Gradle/process execution. |
 | `internal/dev` | Planning dev cycle yang pure dan mudah diuji. |
 | `internal/tooling` | Helper tooling kecil yang tidak masuk pipeline utama. |
@@ -98,6 +100,10 @@ mengambil dependency ke CLI, bundler, atau filesystem host.
 
 - `cmd/nova` hanya memanggil `internal/cli`.
 - `internal/cli` boleh mengorkestrasi banyak package, tetapi tidak menjadi tempat semantic rule baru.
+- Package `internal` hanya boleh bergantung pada exposed contract package lain. Jangan membuat package
+  mengetahui detail implementasi, format private, cara discovery, atau lifecycle internal package lain.
+- Glue lintas package harus tinggal di package dengan ownership domain yang tepat. Jika belum ada
+  tempat yang sesuai, buat package baru dengan responsibility sempit dan dependency direction jelas.
 - `internal/artifact` boleh bergantung ke build/view/target contract, tetapi tidak boleh menjalankan
   process atau menulis filesystem.
 - `internal/bundler` boleh menjalankan process target seperti Gradle.

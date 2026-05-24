@@ -19,6 +19,49 @@ func TestValidateManifestRequiresPackageTypeAndExternalPermissions(t *testing.T)
 	assertPackageDiagnostic(t, diagnostics, "NVA-PKG-003")
 }
 
+func TestParsePackageManifestCapturesRendererPrimitiveContracts(t *testing.T) {
+	manifest, diagnostics := ParseManifest(`[package]
+name = "@acme/charts"
+version = "1.0.0"
+type = ["renderer-package"]
+language = ">=0.1.0"
+abi = ">=0.1.0 <0.2.0"
+
+[renderer.primitives.sparkline]
+description = "Mini chart"
+props = ["data", "width"]
+events = ["on_press"]
+
+[renderer.primitives.sparkline.web]
+strategy = "adapter"
+
+[targets.web]
+adapter = "platform/web/register.web.js"
+`)
+	if len(diagnostics) != 0 {
+		t.Fatalf("unexpected diagnostics: %+v", diagnostics)
+	}
+	if manifest.Name != "@acme/charts" || manifest.Version != "1.0.0" {
+		t.Fatalf("manifest metadata = %+v", manifest)
+	}
+	if !hasPackageType(manifest.Types, PackageRenderer) {
+		t.Fatalf("types = %+v, want renderer-package", manifest.Types)
+	}
+	primitive := manifest.Renderer.Primitives["sparkline"]
+	if primitive.Kind != "sparkline" || primitive.Package != "@acme/charts" {
+		t.Fatalf("primitive = %+v, want sparkline from @acme/charts", primitive)
+	}
+	if len(primitive.Props) != 2 || primitive.Props[0].Name != "data" {
+		t.Fatalf("props = %+v, want data/width", primitive.Props)
+	}
+	if len(primitive.Events) != 1 || primitive.Events[0].Name != "on_press" {
+		t.Fatalf("events = %+v, want on_press", primitive.Events)
+	}
+	if got := manifest.Targets["web"].Adapter; got != "platform/web/register.web.js" {
+		t.Fatalf("web adapter = %q", got)
+	}
+}
+
 func TestResolvePackagesUsesLockfileDeterministicallyAndSurfacesPermissions(t *testing.T) {
 	manifests := []Manifest{
 		{
@@ -78,6 +121,45 @@ func TestResolvePackagesUsesLockfileDeterministicallyAndSurfacesPermissions(t *t
 	}
 	if sources := graph.PermissionSources["storage.read"]; len(sources) != 1 || sources[0].Package != "@env/storage" {
 		t.Fatalf("permission sources = %+v, want @env/storage", graph.PermissionSources)
+	}
+}
+
+func TestResolvePackagesExposesOrderedRendererExtensions(t *testing.T) {
+	graph, diagnostics := Resolve(ResolutionInput{
+		RendererExtensions: []Dependency{
+			{Name: "@acme/charts", Constraint: "*"},
+			{Name: "@acme/badges", Constraint: "*"},
+		},
+		Target: "web",
+		Packages: []Manifest{
+			{
+				Name:    "@acme/badges",
+				Version: "1.0.0",
+				Types:   []PackageType{PackageRenderer},
+				Renderer: RendererManifest{Primitives: map[string]RendererPrimitive{
+					"badge": {Kind: "badge", Package: "@acme/badges"},
+				}},
+				Targets: map[string]TargetAdapter{"web": {Adapter: "platform/web/register.web.js", Content: "badges"}},
+			},
+			{
+				Name:    "@acme/charts",
+				Version: "1.0.0",
+				Types:   []PackageType{PackageRenderer},
+				Renderer: RendererManifest{Primitives: map[string]RendererPrimitive{
+					"sparkline": {Kind: "sparkline", Package: "@acme/charts"},
+				}},
+				Targets: map[string]TargetAdapter{"web": {Adapter: "platform/web/register.web.js", Content: "charts"}},
+			},
+		},
+	})
+	if len(diagnostics) != 0 {
+		t.Fatalf("unexpected diagnostics: %+v", diagnostics)
+	}
+	if len(graph.RendererExtensions) != 2 || graph.RendererExtensions[0].Name != "@acme/charts" || graph.RendererExtensions[1].Name != "@acme/badges" {
+		t.Fatalf("renderer extensions = %+v, want declaration order", graph.RendererExtensions)
+	}
+	if got := graph.RendererExtensions[0].TargetAdapterContent; got != "charts" {
+		t.Fatalf("adapter content = %q, want charts", got)
 	}
 }
 

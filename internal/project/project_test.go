@@ -82,6 +82,54 @@ write = ["settings"]
 	}
 }
 
+func TestParseManifestCapturesRendererExtensionsAndLocalDictionary(t *testing.T) {
+	input := `[project]
+name = "audiolab"
+version = "0.1.0"
+entry = "src/App.nova"
+
+[renderer]
+unknown_kind = "warn"
+
+[renderer.extensions]
+packages = ["@acme/charts"]
+
+[[renderer.dictionary]]
+kind = "local_meter"
+props = ["value"]
+events = ["on_press"]
+allow_override = true
+
+[renderer.dictionary.web]
+strategy = "adapter"
+adapter = "platform/web/local_meter.web.js"
+`
+
+	manifest, diagnostics := ParseManifest(input)
+	if len(diagnostics) != 0 {
+		t.Fatalf("unexpected diagnostics: %+v", diagnostics)
+	}
+	if manifest.Renderer.UnknownKind != RendererUnknownKindWarn {
+		t.Fatalf("unknown_kind = %q, want warn", manifest.Renderer.UnknownKind)
+	}
+	if len(manifest.Renderer.ExtensionPackages) != 1 || manifest.Renderer.ExtensionPackages[0].Name != "@acme/charts" {
+		t.Fatalf("extensions = %+v, want @acme/charts", manifest.Renderer.ExtensionPackages)
+	}
+	if len(manifest.Renderer.Dictionary) != 1 {
+		t.Fatalf("dictionary = %+v, want one entry", manifest.Renderer.Dictionary)
+	}
+	entry := manifest.Renderer.Dictionary[0]
+	if entry.Kind != "local_meter" || !entry.AllowOverride {
+		t.Fatalf("dictionary entry = %+v", entry)
+	}
+	if len(entry.Props) != 1 || entry.Props[0].Name != "value" {
+		t.Fatalf("dictionary props = %+v", entry.Props)
+	}
+	if got := entry.Targets["web"].Adapter; got != "platform/web/local_meter.web.js" {
+		t.Fatalf("web adapter = %q", got)
+	}
+}
+
 func TestValidateLayoutAllowsRecommendedProjectShape(t *testing.T) {
 	manifest := Manifest{
 		Project: Project{Name: "audiolab", Version: "0.1.0", Entry: "src/App.nova"},

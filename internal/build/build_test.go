@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/dwlhm/nova/internal/lexer"
+	"github.com/dwlhm/nova/internal/packages"
 	"github.com/dwlhm/nova/internal/parser"
 	"github.com/dwlhm/nova/internal/project"
 	"github.com/dwlhm/nova/internal/security"
@@ -132,6 +133,82 @@ func TestResolveFallsBackToTargetFamilyBeforeCommonImplementation(t *testing.T) 
 	}
 }
 
+func TestResolveBuildPlanMergesRendererPackageDictionary(t *testing.T) {
+	entry := parseNova(t, `<template>
+  <sparkline data <- points /|
+/|`)
+
+	result := Resolve(ResolutionInput{
+		Project: project.Manifest{
+			Project: project.Project{Name: "charts", Version: "0.1.0", Entry: "src/App.nova"},
+			Renderer: project.RendererConfig{
+				UnknownKind:       project.RendererUnknownKindError,
+				ExtensionPackages: []project.RendererPackageRef{{Name: "@acme/charts", Constraint: "*"}},
+			},
+		},
+		Target:         "web",
+		Sources:        []SourceFile{{Path: "src/App.nova", File: entry}},
+		TargetManifest: TargetManifest{ID: "web"},
+		PackageGraph: packages.ResolvedGraph{RendererExtensions: []packages.ResolvedRendererPackage{{
+			Name:          "@acme/charts",
+			Version:       "1.0.0",
+			TargetAdapter: "platform/web/register.web.js",
+			Primitives: []packages.RendererPrimitive{{
+				Package: "@acme/charts",
+				Kind:    "sparkline",
+				Props:   []packages.RendererField{{Name: "data", Type: "unknown"}},
+				Targets: map[string]packages.RendererTarget{"web": {Strategy: "adapter"}},
+			}},
+		}}},
+	})
+
+	if len(result.Diagnostics) != 0 {
+		t.Fatalf("unexpected diagnostics: %+v", result.Diagnostics)
+	}
+	if !rendererPlanHasPrimitive(result.Plan.Renderer, "sparkline") {
+		t.Fatalf("renderer plan = %+v, want sparkline", result.Plan.Renderer)
+	}
+	if len(result.Plan.Renderer.Extensions) != 1 || result.Plan.Renderer.Extensions[0].AdapterPath != "platform/web/register.web.js" {
+		t.Fatalf("renderer extensions = %+v", result.Plan.Renderer.Extensions)
+	}
+}
+
+func TestResolveBuildPlanReportsRendererConflictsAndMissingAdapters(t *testing.T) {
+	entry := parseNova(t, `<template>
+  <sparkline data <- points /|
+/|`)
+	result := Resolve(ResolutionInput{
+		Project:        project.Manifest{Project: project.Project{Name: "charts", Version: "0.1.0", Entry: "src/App.nova"}},
+		Target:         "web",
+		Sources:        []SourceFile{{Path: "src/App.nova", File: entry}},
+		TargetManifest: TargetManifest{ID: "web"},
+		PackageGraph: packages.ResolvedGraph{RendererExtensions: []packages.ResolvedRendererPackage{
+			{
+				Name:    "@acme/one",
+				Version: "1.0.0",
+				Primitives: []packages.RendererPrimitive{{
+					Package: "@acme/one",
+					Kind:    "sparkline",
+					Targets: map[string]packages.RendererTarget{"web": {Strategy: "adapter"}},
+				}},
+			},
+			{
+				Name:          "@acme/two",
+				Version:       "1.0.0",
+				TargetAdapter: "platform/web/register.web.js",
+				Primitives: []packages.RendererPrimitive{{
+					Package: "@acme/two",
+					Kind:    "sparkline",
+					Targets: map[string]packages.RendererTarget{"web": {Strategy: "adapter"}},
+				}},
+			},
+		}},
+	})
+
+	assertBuildDiagnostic(t, result.Diagnostics, "NVA-RENDER-003")
+	assertBuildDiagnostic(t, result.Diagnostics, "NVA-RENDER-004")
+}
+
 func TestAndroidTargetManifestUsesJavaEnvironmentAdapters(t *testing.T) {
 	manifest := AndroidTargetManifest()
 
@@ -150,6 +227,15 @@ func TestAndroidTargetManifestUsesJavaEnvironmentAdapters(t *testing.T) {
 			}
 		}
 	}
+}
+
+func rendererPlanHasPrimitive(plan RendererPlan, kind string) bool {
+	for _, primitive := range plan.Primitives {
+		if primitive.Kind == kind {
+			return true
+		}
+	}
+	return false
 }
 
 func TestResolveReportsMissingTargetCapabilityWithCandidateContext(t *testing.T) {

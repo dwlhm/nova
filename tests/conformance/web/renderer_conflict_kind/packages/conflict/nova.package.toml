@@ -1,0 +1,14 @@
+[package]
+name = "@acme/conflict"
+version = "1.0.0"
+type = ["renderer-package"]
+
+[renderer.primitives.text]
+description = "Conflicting text primitive"
+props = ["value"]
+
+[renderer.primitives.text.web]
+strategy = "adapter"
+
+[targets.web]
+adapter = "platform/web/register.web.js"

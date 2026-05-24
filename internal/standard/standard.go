@@ -2,6 +2,7 @@ package standard
 
 import (
 	"fmt"
+	"sort"
 
 	"github.com/dwlhm/nova/internal/diagnostic"
 	"github.com/dwlhm/nova/internal/packages"
@@ -228,6 +229,34 @@ func RendererPrimitives() []RendererPrimitive {
 	}
 }
 
+func RendererPrimitivesFromPackages(graph packages.ResolvedGraph) []RendererPrimitive {
+	merged := make(map[string]RendererPrimitive)
+	for _, primitive := range RendererPrimitives() {
+		merged[primitive.Name] = primitive
+	}
+	for _, extension := range graph.RendererExtensions {
+		for _, primitive := range extension.Primitives {
+			if primitive.Kind == "" {
+				continue
+			}
+			if _, exists := merged[primitive.Kind]; exists {
+				continue
+			}
+			merged[primitive.Kind] = rendererPrimitiveFromPackage(extension.Name, primitive)
+		}
+	}
+	names := make([]string, 0, len(merged))
+	for name := range merged {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	out := make([]RendererPrimitive, 0, len(names))
+	for _, name := range names {
+		out = append(out, merged[name])
+	}
+	return out
+}
+
 func ValidateAccessibility(nodes []view.Node) []Diagnostic {
 	diagnostics := make([]Diagnostic, 0)
 	for _, node := range nodes {
@@ -310,10 +339,11 @@ func purePackage(name string, exports map[string]string) packages.Manifest {
 
 func rendererPackage(name string, exports map[string]string) packages.Manifest {
 	return packages.Manifest{
-		Name:    name,
-		Version: "0.1.0",
-		Types:   []packages.PackageType{packages.PackageRenderer},
-		Exports: exports,
+		Name:     name,
+		Version:  "0.1.0",
+		Types:    []packages.PackageType{packages.PackageRenderer},
+		Exports:  exports,
+		Renderer: packages.RendererManifest{Primitives: rendererPrimitiveContracts(name, exports)},
 		Targets: map[string]packages.TargetAdapter{
 			"web":     {Adapter: "platform/web/index.web.js"},
 			"android": {Adapter: "platform/android/Index.android.java"},
@@ -354,4 +384,98 @@ func findPackage(manifests []packages.Manifest, name string) (packages.Manifest,
 		}
 	}
 	return packages.Manifest{}, false
+}
+
+func rendererPrimitiveContracts(packageName string, exports map[string]string) map[string]packages.RendererPrimitive {
+	contracts := make(map[string]packages.RendererPrimitive, len(exports))
+	for _, primitive := range RendererPrimitives() {
+		if primitive.Package != packageName {
+			continue
+		}
+		contracts[primitive.Name] = packages.RendererPrimitive{
+			Package:     primitive.Package,
+			Kind:        primitive.Name,
+			Description: primitive.Description,
+			Props:       packageRendererFields(primitive.Props),
+			Events:      packageRendererEvents(primitive.Events),
+			Targets: map[string]packages.RendererTarget{
+				"web":     {Strategy: "adapter"},
+				"android": {Strategy: "adapter"},
+			},
+		}
+	}
+	for name := range exports {
+		if _, ok := contracts[name]; ok {
+			continue
+		}
+		contracts[name] = packages.RendererPrimitive{
+			Package: packageName,
+			Kind:    name,
+			Targets: map[string]packages.RendererTarget{
+				"web":     {Strategy: "adapter"},
+				"android": {Strategy: "adapter"},
+			},
+		}
+	}
+	return contracts
+}
+
+func packageRendererFields(fields []PrimitiveField) []packages.RendererField {
+	out := make([]packages.RendererField, 0, len(fields))
+	for _, field := range fields {
+		out = append(out, packages.RendererField{
+			Name:        field.Name,
+			Type:        field.Type,
+			Optional:    field.Optional,
+			Description: field.Description,
+		})
+	}
+	return out
+}
+
+func packageRendererEvents(events []PrimitiveEvent) []packages.RendererEvent {
+	out := make([]packages.RendererEvent, 0, len(events))
+	for _, event := range events {
+		out = append(out, packages.RendererEvent{
+			Name:        event.Name,
+			Payload:     event.Payload,
+			Description: event.Description,
+		})
+	}
+	return out
+}
+
+func rendererPrimitiveFromPackage(packageName string, primitive packages.RendererPrimitive) RendererPrimitive {
+	return RendererPrimitive{
+		Package:     packageName,
+		Name:        primitive.Kind,
+		Description: primitive.Description,
+		Props:       primitiveFieldsFromPackage(primitive.Props),
+		Events:      primitiveEventsFromPackage(primitive.Events),
+	}
+}
+
+func primitiveFieldsFromPackage(fields []packages.RendererField) []PrimitiveField {
+	out := make([]PrimitiveField, 0, len(fields))
+	for _, field := range fields {
+		out = append(out, PrimitiveField{
+			Name:        field.Name,
+			Type:        field.Type,
+			Optional:    field.Optional,
+			Description: field.Description,
+		})
+	}
+	return out
+}
+
+func primitiveEventsFromPackage(events []packages.RendererEvent) []PrimitiveEvent {
+	out := make([]PrimitiveEvent, 0, len(events))
+	for _, event := range events {
+		out = append(out, PrimitiveEvent{
+			Name:        event.Name,
+			Payload:     event.Payload,
+			Description: event.Description,
+		})
+	}
+	return out
 }

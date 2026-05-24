@@ -1,0 +1,7 @@
+[project]
+name = "renderer-unknown-kind"
+version = "0.1.0"
+entry = "src/App.nova"
+
+[targets.web]
+renderer = "@nova/web"

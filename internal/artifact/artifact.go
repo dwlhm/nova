@@ -64,7 +64,7 @@ func Generate(input GenerateInput) ([]File, []Diagnostic) {
 	}
 
 	bundle, diagnostics := buildBundle(input)
-	if len(diagnostics) > 0 {
+	if diagnostic.HasErrors(diagnostics) {
 		return nil, diagnostics
 	}
 
@@ -85,14 +85,14 @@ func Generate(input GenerateInput) ([]File, []Diagnostic) {
 
 	switch input.Plan.Target {
 	case "web":
-		return webFiles(input, bundle, artifactMetadata), nil
+		return webFiles(input, bundle, artifactMetadata), diagnostics
 	case "android":
 		config, configDiagnostics := androidConfig(input.Project)
 		if len(configDiagnostics) > 0 {
 			return nil, configDiagnostics
 		}
 		files, libDiagnostics := androidFiles(input, bundle, artifactMetadata, config)
-		return files, libDiagnostics
+		return files, append(diagnostics, libDiagnostics...)
 	default:
 		return nil, []Diagnostic{errorDiagnostic("NVA-TARGET-019", fmt.Sprintf("unsupported build target %s", input.Plan.Target))}
 	}
@@ -107,7 +107,14 @@ type irBundle struct {
 	Model               appModel                   `json:"model"`
 	ViewIR              view.IR                    `json:"viewIR"`
 	Routes              []routeModel               `json:"routes"`
+	Renderer            rendererBundle             `json:"renderer"`
 	ExternalOperations  []externalOperationSummary `json:"externalOperations"`
+}
+
+type rendererBundle struct {
+	UnknownKind string                    `json:"unknownKind"`
+	Primitives  []build.RendererPrimitive `json:"primitives"`
+	Extensions  []build.RendererExtension `json:"extensions"`
 }
 
 type routeModel struct {
@@ -131,14 +138,14 @@ func buildBundle(input GenerateInput) (irBundle, []Diagnostic) {
 	sourceMap := sourceFiles(input.Sources)
 	selected, ok := selectedTemplate(input.Plan, sourceMap)
 	if !ok {
-		return irBundle{}, []Diagnostic{errorDiagnostic("NVA-RENDER-001", "selected template is not available in source graph")}
+		return irBundle{}, []Diagnostic{errorDiagnostic("NVA-RENDER-006", "selected template is not available in source graph")}
 	}
 
 	viewIR, viewDiagnostics := view.Project(selected, collectStateNames(input.Sources))
 	diagnostics := make([]Diagnostic, 0, len(viewDiagnostics))
 	for _, viewDiagnostic := range viewDiagnostics {
 		diagnostics = append(diagnostics, Diagnostic{
-			Code:     "NVA-RENDER-002",
+			Code:     "NVA-RENDER-005",
 			Severity: diagnostic.SeverityError,
 			Message:  viewDiagnostic.Message,
 		})
@@ -146,6 +153,7 @@ func buildBundle(input GenerateInput) (irBundle, []Diagnostic) {
 	if len(diagnostics) > 0 {
 		return irBundle{}, diagnostics
 	}
+	diagnostics = append(diagnostics, validateRendererKinds(viewIR.Nodes, input.Plan.Renderer, input.Plan.Target)...)
 
 	return irBundle{
 		Target:              input.Plan.Target,
@@ -156,8 +164,9 @@ func buildBundle(input GenerateInput) (irBundle, []Diagnostic) {
 		Model:               buildAppModel(input.Plan.Modules, sourceMap),
 		ViewIR:              viewIR,
 		Routes:              routeModels(viewIR),
+		Renderer:            rendererBundle{UnknownKind: input.Plan.Renderer.UnknownKind, Primitives: input.Plan.Renderer.Primitives, Extensions: input.Plan.Renderer.Extensions},
 		ExternalOperations:  externalSummaries(input.Plan.ExternalOperations),
-	}, nil
+	}, diagnostics
 }
 
 func routeModels(ir view.IR) []routeModel {
@@ -187,10 +196,12 @@ func cloneIntPath(values []int) []int {
 
 func webFiles(input GenerateInput, bundle irBundle, metadata target.ArtifactMetadata) []File {
 	styles := webStyleBundle(input.StyleAssets)
+	extensions := webRendererExtensions(input.Plan.Renderer.Extensions)
 	files := []File{
-		{Path: "build/web/index.html", Content: webIndex(input.Project.Project.Name, webStyleHrefs(styles.Files), styles.RootScope)},
+		{Path: "build/web/index.html", Content: webIndex(input.Project.Project.Name, webStyleHrefs(styles.Files), styles.RootScope, extensions.Enabled)},
 		{Path: "build/web/assets/nova-runtime.css", Content: webCSS()},
 		{Path: "build/web/assets/nova-scheduler.js", Content: webSchedulerModule()},
+		{Path: "build/web/assets/nova-renderer.js", Content: webRendererModule()},
 		{Path: "build/web/assets/nova-runtime.js", Content: webRuntime()},
 		{Path: "build/web/app.bundle.js", Content: webBundle(bundle)},
 		{Path: "build/web/app.nova-ir.json", Content: mustJSON(bundle)},
@@ -199,6 +210,9 @@ func webFiles(input GenerateInput, bundle irBundle, metadata target.ArtifactMeta
 		{Path: "build/web/target-manifest.json", Content: mustJSON(targetManifestSummary(input.TargetManifest))},
 		{Path: "build/web/metadata.json", Content: mustJSON(metadataSummary(metadata))},
 		{Path: "build/web/style-manifest.json", Content: mustJSON(styles.Manifest)},
+	}
+	if extensions.Enabled {
+		files = append(files, File{Path: "build/web/assets/renderer-extensions.js", Content: extensions.Content})
 	}
 	return append(files, styles.Files...)
 }
@@ -227,10 +241,13 @@ func androidFiles(input GenerateInput, bundle irBundle, metadata target.Artifact
 	files = append(files,
 		File{Path: sourceRoot + "/MainActivity.java", Content: androidMainActivity(input.Project.Project.Name, bundle, config, input.StyleAssets)},
 		File{Path: sourceRoot + "/NovaRuntime.java", Content: androidRuntime(config)},
+		File{Path: sourceRoot + "/NovaPrimitiveRegistry.java", Content: androidPrimitiveRegistry(config)},
+		File{Path: sourceRoot + "/NovaRendererExtensions.java", Content: androidRendererExtensions(input.Plan.Renderer.Extensions, config)},
 		File{Path: "build/android/generated/NovaApp.java", Content: androidApp(input.Project.Project.Name, bundle.Target, config)},
 		File{Path: "build/android/generated/NovaRoutes.java", Content: androidRoutes(bundle, config)},
 		File{Path: "build/android/generated/NovaExternalBindings.java", Content: androidExternalBindings(input.Plan.ExternalOperations, config)},
 	)
+	files = append(files, androidRendererAdapterFiles(input.Plan.Renderer.Extensions)...)
 	return files, nil
 }
 
@@ -377,7 +394,7 @@ func runtimeContract(targetID string) (target.RuntimeContract, bool) {
 	}
 }
 
-func webIndex(name string, styleHrefs []string, rootStyleScope string) string {
+func webIndex(name string, styleHrefs []string, rootStyleScope string, rendererExtensions bool) string {
 	if strings.TrimSpace(name) == "" {
 		name = "Nova App"
 	}
@@ -389,7 +406,11 @@ func webIndex(name string, styleHrefs []string, rootStyleScope string) string {
 	if strings.TrimSpace(rootStyleScope) != "" {
 		scopeAttr = " data-nova-style-scope=\"" + escapeHTML(rootStyleScope) + "\""
 	}
-	return "<!doctype html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n  <title>" + escapeHTML(name) + "</title>\n" + links + "</head>\n<body>\n  <main id=\"nova-root\"" + scopeAttr + " aria-label=\"" + escapeHTML(name) + "\"></main>\n  <script src=\"assets/nova-scheduler.js\"></script>\n  <script src=\"assets/nova-runtime.js\"></script>\n  <script src=\"app.bundle.js\"></script>\n</body>\n</html>\n"
+	extensionScript := ""
+	if rendererExtensions {
+		extensionScript = "  <script src=\"assets/renderer-extensions.js\"></script>\n"
+	}
+	return "<!doctype html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n  <title>" + escapeHTML(name) + "</title>\n" + links + "</head>\n<body>\n  <main id=\"nova-root\"" + scopeAttr + " aria-label=\"" + escapeHTML(name) + "\"></main>\n  <script src=\"assets/nova-scheduler.js\"></script>\n  <script src=\"assets/nova-renderer.js\"></script>\n" + extensionScript + "  <script src=\"assets/nova-runtime.js\"></script>\n  <script src=\"app.bundle.js\"></script>\n</body>\n</html>\n"
 }
 
 type webStyles struct {

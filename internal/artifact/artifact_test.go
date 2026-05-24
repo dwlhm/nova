@@ -7,6 +7,7 @@ import (
 
 	"github.com/dwlhm/nova/internal/build"
 	"github.com/dwlhm/nova/internal/lexer"
+	"github.com/dwlhm/nova/internal/packages"
 	"github.com/dwlhm/nova/internal/parser"
 	"github.com/dwlhm/nova/internal/project"
 )
@@ -55,10 +56,11 @@ func TestGenerateWebArtifactIncludesRuntimeViewIRAndMetadata(t *testing.T) {
 		t.Fatalf("unexpected diagnostics: %+v", diagnostics)
 	}
 
-	assertArtifactFile(t, files, "build/web/index.html", "<script src=\"assets/nova-scheduler.js\"></script>\n  <script src=\"assets/nova-runtime.js\"></script>")
+	assertArtifactFile(t, files, "build/web/index.html", "<script src=\"assets/nova-scheduler.js\"></script>\n  <script src=\"assets/nova-renderer.js\"></script>\n  <script src=\"assets/nova-runtime.js\"></script>")
 	assertArtifactFile(t, files, "build/web/index.html", "assets/styles/src/App.css")
 	assertArtifactFile(t, files, "build/web/assets/styles/src/App.css", ".app { color: red; }")
 	assertArtifactFile(t, files, "build/web/assets/nova-scheduler.js", "window.NovaScheduler")
+	assertArtifactFile(t, files, "build/web/assets/nova-renderer.js", "NovaRenderer")
 	assertArtifactFile(t, files, "build/web/assets/nova-runtime.js", "window.NovaRuntime")
 	assertArtifactFile(t, files, "build/web/app.bundle.js", "window.__NOVA_APP__")
 	assertArtifactFile(t, files, "build/web/app.nova-ir.json", "\"viewIR\"")
@@ -69,6 +71,88 @@ func TestGenerateWebArtifactIncludesRuntimeViewIRAndMetadata(t *testing.T) {
 	metadata := mustJSONFile[map[string]any](t, files, "build/web/metadata.json")
 	if metadata["target"] != "web" || metadata["entryCapability"] != "src/App.nova" {
 		t.Fatalf("metadata = %+v", metadata)
+	}
+}
+
+func TestGenerateWebArtifactIncludesRendererExtensionAdapter(t *testing.T) {
+	source := parseNova(t, `<template target <- web>
+  <sparkline data <- [1, 2, 3] /|
+/|`)
+	manifest := project.Manifest{
+		Project: project.Project{Name: "charts", Version: "0.1.0", Entry: "src/App.nova"},
+		Renderer: project.RendererConfig{
+			ExtensionPackages: []project.RendererPackageRef{{Name: "@acme/charts", Constraint: "*"}},
+		},
+	}
+	targetManifest := build.WebTargetManifest()
+	plan := build.Resolve(build.ResolutionInput{
+		Project:        manifest,
+		Target:         "web",
+		Sources:        []build.SourceFile{{Path: "src/App.nova", File: source}},
+		TargetManifest: targetManifest,
+		PackageGraph: packages.ResolvedGraph{RendererExtensions: []packages.ResolvedRendererPackage{{
+			Name:                 "@acme/charts",
+			Version:              "1.0.0",
+			TargetAdapter:        "platform/web/register.web.js",
+			TargetAdapterContent: `export function register(NovaRenderer) { NovaRenderer.definePrimitive("sparkline", { mount() { return document.createElement("canvas"); } }); }`,
+			Primitives: []packages.RendererPrimitive{{
+				Package: "@acme/charts",
+				Kind:    "sparkline",
+				Props:   []packages.RendererField{{Name: "data", Type: "unknown"}},
+				Targets: map[string]packages.RendererTarget{"web": {Strategy: "adapter"}},
+			}},
+		}}},
+	})
+	if len(plan.Diagnostics) != 0 {
+		t.Fatalf("unexpected build diagnostics: %+v", plan.Diagnostics)
+	}
+
+	files, diagnostics := Generate(GenerateInput{
+		Project:        manifest,
+		Plan:           plan.Plan,
+		Sources:        []build.SourceFile{{Path: "src/App.nova", File: source}},
+		TargetManifest: targetManifest,
+	})
+	if len(diagnostics) != 0 {
+		t.Fatalf("unexpected diagnostics: %+v", diagnostics)
+	}
+
+	assertArtifactFile(t, files, "build/web/index.html", "assets/renderer-extensions.js")
+	assertArtifactFile(t, files, "build/web/assets/renderer-extensions.js", `NovaRenderer.definePrimitive("sparkline"`)
+	assertArtifactFile(t, files, "build/web/app.nova-ir.json", `"renderer"`)
+}
+
+func TestGenerateWebArtifactAllowsUnknownKindWithWarningPolicy(t *testing.T) {
+	source := parseNova(t, `<template target <- web>
+  <custom_widget /|
+/|`)
+	manifest := project.Manifest{
+		Project:  project.Project{Name: "custom", Version: "0.1.0", Entry: "src/App.nova"},
+		Renderer: project.RendererConfig{UnknownKind: project.RendererUnknownKindWarn},
+	}
+	targetManifest := build.WebTargetManifest()
+	plan := build.Resolve(build.ResolutionInput{
+		Project:        manifest,
+		Target:         "web",
+		Sources:        []build.SourceFile{{Path: "src/App.nova", File: source}},
+		TargetManifest: targetManifest,
+	})
+	if len(plan.Diagnostics) != 0 {
+		t.Fatalf("unexpected build diagnostics: %+v", plan.Diagnostics)
+	}
+
+	files, diagnostics := Generate(GenerateInput{
+		Project:        manifest,
+		Plan:           plan.Plan,
+		Sources:        []build.SourceFile{{Path: "src/App.nova", File: source}},
+		TargetManifest: targetManifest,
+	})
+	if len(files) == 0 {
+		t.Fatal("expected files despite warning")
+	}
+	assertArtifactDiagnostic(t, diagnostics, "unknown view kind custom_widget")
+	if diagnostics[0].Code != "NVA-RENDER-002" {
+		t.Fatalf("diagnostic = %+v, want NVA-RENDER-002", diagnostics)
 	}
 }
 

@@ -3,6 +3,8 @@ package lsp
 import (
 	"strings"
 	"testing"
+
+	"github.com/dwlhm/nova/internal/packages"
 )
 
 func TestAnalyzeDocumentPublishesSemanticDiagnosticsWithRanges(t *testing.T) {
@@ -108,6 +110,30 @@ func TestBuiltInCapabilityHover(t *testing.T) {
 	hover := primitiveHover(primitive)
 	if !strings.Contains(hover, "on_press") || !strings.Contains(hover, "label?: string") {
 		t.Fatalf("hover = %q, want button event and prop details", hover)
+	}
+}
+
+func TestPrimitiveIndexMergesRendererPackageGraph(t *testing.T) {
+	index := builtinsFromPackageGraph(packages.ResolvedGraph{RendererExtensions: []packages.ResolvedRendererPackage{{
+		Name: "@acme/charts",
+		Primitives: []packages.RendererPrimitive{{
+			Kind:        "sparkline",
+			Description: "Mini chart",
+			Props:       []packages.RendererField{{Name: "data", Type: "unknown"}},
+			Events:      []packages.RendererEvent{{Name: "on_press", Payload: "void"}},
+		}},
+	}}})
+
+	primitive, ok := index.primitive("sparkline")
+	if !ok {
+		t.Fatal("expected renderer package primitive")
+	}
+	if primitive.Package != "@acme/charts" || len(primitive.Props) != 1 || primitive.Props[0].Name != "data" {
+		t.Fatalf("primitive = %+v", primitive)
+	}
+	items := index.attributeCompletions("sparkline")
+	if !hasCompletion(items, "data <- ") || !hasCompletion(items, "on_press -> ") {
+		t.Fatalf("sparkline completions = %+v", completionLabels(items))
 	}
 }
 

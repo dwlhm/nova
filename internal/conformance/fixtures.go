@@ -12,6 +12,7 @@ import (
 	"github.com/dwlhm/nova/internal/build"
 	"github.com/dwlhm/nova/internal/diagnostic"
 	"github.com/dwlhm/nova/internal/lexer"
+	"github.com/dwlhm/nova/internal/packageio"
 	"github.com/dwlhm/nova/internal/parser"
 	"github.com/dwlhm/nova/internal/project"
 	"github.com/dwlhm/nova/internal/routing"
@@ -140,12 +141,17 @@ func evaluateFixture(root string, targetID string) (fixtureActual, []Diagnostic)
 	if semanticDiagnostics := validateFixtureSources(sources); len(semanticDiagnostics) > 0 {
 		return fixtureActual{}, semanticDiagnostics
 	}
+	packageGraph, packageDiagnostics := packageio.ResolveProjectGraph(root, targetID, manifest)
+	if len(packageDiagnostics) > 0 {
+		return fixtureActual{}, packageDiagnostics
+	}
 
 	resolution := build.Resolve(build.ResolutionInput{
 		Project:        manifest,
 		Target:         targetID,
 		Sources:        sources,
 		TargetManifest: targetManifest,
+		PackageGraph:   packageGraph,
 	})
 	if len(resolution.Diagnostics) > 0 {
 		return fixtureActual{}, buildDiagnostics(resolution.Diagnostics)

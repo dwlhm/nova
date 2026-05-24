@@ -8,15 +8,25 @@ import (
 func ParseManifest(input string) (Manifest, []Diagnostic) {
 	manifest := Manifest{
 		Targets:          make(map[string]Target),
+		Renderer:         RendererConfig{UnknownKind: RendererUnknownKindError},
 		Permissions:      make(PermissionMap),
 		PermissionScopes: make(map[string][]string),
 	}
 	diagnostics := make([]Diagnostic, 0)
 	section := ""
+	dictionaryIndex := -1
 
 	for lineNumber, raw := range strings.Split(input, "\n") {
 		line := strings.TrimSpace(stripComment(raw))
 		if line == "" {
+			continue
+		}
+		if strings.HasPrefix(line, "[[") && strings.HasSuffix(line, "]]") {
+			section = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(line, "[["), "]]"))
+			if section == "renderer.dictionary" {
+				manifest.Renderer.Dictionary = append(manifest.Renderer.Dictionary, RendererPrimitive{Targets: make(map[string]RendererTarget)})
+				dictionaryIndex = len(manifest.Renderer.Dictionary) - 1
+			}
 			continue
 		}
 		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
@@ -34,15 +44,27 @@ func ParseManifest(input string) (Manifest, []Diagnostic) {
 		}
 		key = strings.TrimSpace(key)
 		value = strings.TrimSpace(value)
-		manifest = assignManifestValue(manifest, section, key, value, &diagnostics, lineNumber+1)
+		manifest = assignManifestValue(manifest, section, dictionaryIndex, key, value, &diagnostics, lineNumber+1)
 	}
 
 	return manifest, diagnostics
 }
-func assignManifestValue(manifest Manifest, section string, key string, value string, diagnostics *[]Diagnostic, lineNumber int) Manifest {
+func assignManifestValue(manifest Manifest, section string, dictionaryIndex int, key string, value string, diagnostics *[]Diagnostic, lineNumber int) Manifest {
 	switch section {
 	case "project":
 		assignProjectValue(&manifest.Project, key, value, diagnostics, lineNumber)
+	case "renderer":
+		if key == "unknown_kind" {
+			manifest.Renderer.UnknownKind = parseRendererUnknownKind(value, diagnostics, lineNumber)
+		}
+	case "renderer.extensions":
+		if key == "packages" {
+			manifest.Renderer.ExtensionPackages = parseRendererPackages(value, diagnostics, lineNumber)
+		}
+	case "renderer.dictionary":
+		if dictionaryIndex >= 0 && dictionaryIndex < len(manifest.Renderer.Dictionary) {
+			assignRendererDictionaryValue(&manifest.Renderer.Dictionary[dictionaryIndex], key, value, diagnostics, lineNumber)
+		}
 	case "permissions":
 		allowed, ok := parseBool(value)
 		if !ok {
@@ -89,6 +111,11 @@ func assignManifestValue(manifest Manifest, section string, key string, value st
 				target.Options[key] = parseScalar(value, diagnostics, lineNumber)
 			}
 			manifest.Targets[targetID] = target
+		}
+		if target, ok := strings.CutPrefix(section, "renderer.dictionary."); ok {
+			if dictionaryIndex >= 0 && dictionaryIndex < len(manifest.Renderer.Dictionary) {
+				assignRendererDictionaryTarget(&manifest.Renderer.Dictionary[dictionaryIndex], target, key, value, diagnostics, lineNumber)
+			}
 		}
 	}
 	return manifest

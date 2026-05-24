@@ -15,6 +15,13 @@ sedangkan dokumen ini menjawab "bagaimana menulis perubahan berikutnya".
 
 - Package name singkat, lowercase, dan sesuai direktori.
 - API exported hanya ketika dipakai lintas package atau menjadi kontrak test/conformance.
+- Jaga batas antar package `internal`: package hanya boleh mengenal kontrak exported package lain,
+  bukan detail implementasi, layout file, helper private, atau lifecycle internal milik package itu.
+- Jika dua package perlu berbagi data atau flow, pindahkan kontraknya ke package pemilik domain atau
+  buat package baru dengan responsibility sempit. Jangan menaruh glue lintas domain di package edge
+  seperti `internal/cli` atau `internal/conformance` hanya karena mudah dijangkau.
+- Hindari package "utils" serbaguna. Package baru harus punya ownership yang jelas, arah dependency
+  eksplisit, dan tidak membuat package lain tahu bagaimana ia bekerja di dalam.
 - Struct dipakai sebagai data contract eksplisit; jangan menyembunyikan state penting di closure
   jika data itu perlu diuji atau diserialisasi.
 - Fungsi pure lebih disukai di core compiler/runtime. Terima input sebagai value dan kembalikan
@@ -33,8 +40,9 @@ Kode yang menyentuh filesystem, process, network, atau device host harus tetap d
 - `internal/cli`
 - `internal/bundler`
 - `internal/conformance`
+- `internal/packageio`
 
-Package lain menerima data, port, atau snapshot yang sudah dibaca oleh edge package. Ini menjaga
+Package lain menerima data atau snapshot yang sudah dibaca oleh edge package. Ini menjaga
 lexer, parser, validator, target resolution, runtime semantic, dan artifact generation tetap mudah
 ditest.
 

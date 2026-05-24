@@ -4,6 +4,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/dwlhm/nova/internal/packages"
 	"github.com/dwlhm/nova/internal/standard"
 )
 
@@ -17,7 +18,14 @@ type builtinIndex struct {
 }
 
 func builtins() builtinIndex {
-	primitives := standard.RendererPrimitives()
+	return builtinIndexFromPrimitives(standard.RendererPrimitives())
+}
+
+func builtinsFromPackageGraph(graph packages.ResolvedGraph) builtinIndex {
+	return builtinIndexFromPrimitives(standard.RendererPrimitivesFromPackages(graph))
+}
+
+func builtinIndexFromPrimitives(primitives []standard.RendererPrimitive) builtinIndex {
 	byName := make(map[string]standard.RendererPrimitive, len(primitives))
 	for _, primitive := range primitives {
 		byName[primitive.Name] = primitive

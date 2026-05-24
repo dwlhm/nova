@@ -293,6 +293,11 @@ window.NovaRuntime = (() => {
     const binding = props[prop];
     if (!binding) return;
     const value = evaluate(bindingExpression(binding, runtime.app), runtime.state, {});
+    const custom = rendererPrimitive(runtime, nodeKind(node));
+    if (custom && typeof custom.update === "function") {
+      custom.update(target, { prop, value, node, runtime });
+      return;
+    }
     if (target.nodeType === Node.TEXT_NODE) {
       target.textContent = String(value);
       return;
@@ -372,6 +377,10 @@ window.NovaRuntime = (() => {
       updateNodeBinding(text, node, "value", runtime);
       return text;
     }
+    const custom = rendererPrimitive(runtime, kind);
+    if (custom) {
+      return renderCustomNode(custom, node, props, events, children, runtime, path);
+    }
     const element = document.createElement(tagFor(kind));
     runtime.refs.set(pathKey(path), element);
     element.dataset.novaKind = kind;
@@ -382,6 +391,42 @@ window.NovaRuntime = (() => {
       updateNodeBinding(element, node, "value", runtime);
     }
     return element;
+  }
+
+  function rendererPrimitive(runtime, kind) {
+    const renderer = runtime.renderer || window.NovaRenderer;
+    return renderer && typeof renderer.primitive === "function" ? renderer.primitive(kind) : null;
+  }
+
+  function renderCustomNode(primitive, node, props, events, children, runtime, path) {
+    const context = {
+      document,
+      node,
+      props: evaluatedProps(props, runtime),
+      events,
+      children,
+      renderChildren: () => renderNodes(children, runtime, path),
+      dispatch: (event, args) => dispatch(runtime, event, args || []),
+      runtime
+    };
+    const mounted = typeof primitive.mount === "function" ? primitive.mount(context) : null;
+    const element = mounted instanceof Node ? mounted : document.createElement(tagFor(nodeKind(node)));
+    runtime.refs.set(pathKey(path), element);
+    if (element.dataset) element.dataset.novaKind = nodeKind(node);
+    if (typeof primitive.applyProps === "function") primitive.applyProps(element, context.props, context);
+    else applyProps(element, props, runtime);
+    if (typeof primitive.applyEvents === "function") primitive.applyEvents(element, events, context);
+    else applyEvents(element, events, runtime);
+    if (!element.childNodes.length) element.append(...context.renderChildren());
+    return element;
+  }
+
+  function evaluatedProps(props, runtime) {
+    const out = {};
+    for (const [name, binding] of Object.entries(props || {})) {
+      out[name] = evaluate(bindingExpression(binding, runtime.app), runtime.state, {});
+    }
+    return out;
   }
 
   function renderPage(node, props, children, runtime, path, active) {
@@ -730,7 +775,7 @@ window.NovaRuntime = (() => {
     if (!window.NovaScheduler) {
       throw new Error("NovaScheduler module is required before NovaRuntime");
     }
-    const runtime = { app, root, state: initialState(app) };
+    const runtime = { app, root, state: initialState(app), renderer: window.NovaRenderer };
     runtime.scheduler = window.NovaScheduler.create(schedulerHost(runtime));
     window.__NOVA_RUNTIME__ = runtime;
     setupNavigation(runtime);

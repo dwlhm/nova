@@ -1,0 +1,10 @@
+[project]
+name = "renderer-extension-happy-path"
+version = "0.1.0"
+entry = "src/App.nova"
+
+[renderer.extensions]
+packages = ["@acme/charts"]
+
+[targets.web]
+renderer = "@nova/web"

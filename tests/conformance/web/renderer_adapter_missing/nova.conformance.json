@@ -1,0 +1,6 @@
+{
+  "target": "web",
+  "expected": {
+    "diagnosticCodes": ["NVA-RENDER-004"]
+  }
+}

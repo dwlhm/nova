@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/dwlhm/nova/internal/packages"
 	"github.com/dwlhm/nova/internal/parser"
 	"github.com/dwlhm/nova/internal/project"
 	"github.com/dwlhm/nova/internal/security"
@@ -62,6 +63,7 @@ type ResolutionInput struct {
 	Target         string
 	Sources        []SourceFile
 	TargetManifest TargetManifest
+	PackageGraph   packages.ResolvedGraph
 }
 
 type ResolutionResult struct {
@@ -76,6 +78,7 @@ type BuildPlan struct {
 	Template           TemplateRef
 	ExternalOperations []ResolvedExternalOperation
 	Permissions        []security.Permission
+	Renderer           RendererPlan
 	Artifact           ArtifactMetadata
 }
 
@@ -104,6 +107,50 @@ type ArtifactMetadata struct {
 	Entry       string
 	Modules     []string
 	Permissions []security.Permission
+}
+
+type RendererPlan struct {
+	UnknownKind string
+	Primitives  []RendererPrimitive
+	Extensions  []RendererExtension
+}
+
+type RendererPrimitive struct {
+	Package       string
+	Kind          string
+	Description   string
+	Props         []RendererField
+	Events        []RendererEvent
+	AllowOverride bool
+	Targets       map[string]RendererTarget
+}
+
+type RendererField struct {
+	Name        string
+	Type        string
+	Optional    bool
+	Description string
+}
+
+type RendererEvent struct {
+	Name        string
+	Payload     string
+	Description string
+}
+
+type RendererTarget struct {
+	Strategy string
+	Adapter  string
+	Tag      string
+	Delegate string
+}
+
+type RendererExtension struct {
+	Package        string
+	Version        string
+	AdapterPath    string
+	AdapterContent string
+	Primitives     []string
 }
 
 type Diagnostic struct {
@@ -139,6 +186,10 @@ func Resolve(input ResolutionInput) ResolutionResult {
 
 	securityDiagnostics := auditPermissions(input.Project.Permissions, input.TargetManifest.PermissionMappings, external)
 	diagnostics = append(diagnostics, securityDiagnostics...)
+
+	renderer, rendererDiagnostics := resolveRendererPlan(input.Project.Renderer, input.PackageGraph, target)
+	diagnostics = append(diagnostics, rendererDiagnostics...)
+	plan.Renderer = renderer
 
 	plan.Artifact = ArtifactMetadata{
 		Target:      target,

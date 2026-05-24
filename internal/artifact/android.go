@@ -523,6 +523,7 @@ func androidNativeMainActivity(bundle irBundle, config androidTargetConfig, styl
 	builder.WriteString("    private final Map<String, View> views = new LinkedHashMap<>();\n")
 	builder.WriteString("    private final List<Object> routeBackStack = new ArrayList<>();\n")
 	builder.WriteString("    private final NovaScheduler scheduler = new NovaScheduler(this);\n")
+	builder.WriteString("    private final NovaPrimitiveRegistry primitiveRegistry = NovaRendererExtensions.register(new NovaPrimitiveRegistry());\n")
 	builder.WriteString("    private boolean applyingSystemBack = false;\n\n")
 	builder.WriteString("    @Override\n")
 	builder.WriteString("    protected void onCreate(Bundle savedInstanceState) {\n")
