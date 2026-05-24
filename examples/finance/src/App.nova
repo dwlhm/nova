@@ -1,0 +1,303 @@
+<import state draftCategory, draftAmount, feeAmount, fromAccount, toAccount, note from "./FinanceStore.nova" /|
+<import state transactionCount, netTotal, expenseTotal, incomeTotal, transferTotal, feeTotal from "./FinanceStore.nova" /|
+<import state statusMessage, filterTitle, visibleLine1, visibleLine2, visibleLine3, visibleLine4, exportJson from "./FinanceStore.nova" /|
+<import state expenseTabLabel, incomeTabLabel, transferTabLabel, inputTabLabel, historyTabLabel from "./FinanceStore.nova" /|
+<import state filterAllLabel, filterExpenseLabel, filterIncomeLabel, filterTransferLabel from "./FinanceStore.nova" /|
+<import state incomeBarClass, expenseBarClass, transferBarClass from "./FinanceStore.nova" /|
+<import state pieIncomeClass, pieExpenseClass, pieTransferClass from "./FinanceStore.nova" /|
+<import state pieIncomeLabel, pieExpenseLabel, pieTransferLabel from "./FinanceStore.nova" /|
+
+<import event @open_history, @open_input from "./FinanceStore.nova" /|
+<import event @choose_expense, @choose_income, @choose_transfer from "./FinanceStore.nova" /|
+<import event @set_category, @set_amount, @set_fee from "./FinanceStore.nova" /|
+<import event @set_from_account, @set_to_account, @set_note from "./FinanceStore.nova" /|
+<import event @save_expense, @save_income, @save_transfer from "./FinancePersistence.nova" /|
+<import event @filter_all, @filter_expense, @filter_income, @filter_transfer from "./FinanceStore.nova" /|
+
+<import state incomeBarVisual, expenseBarVisual, transferBarVisual from "./FinanceStore.nova" /|
+
+<import event @restore from "./FinanceStore.nova" /|
+
+<template>
+  <surface class <- "finance-shell">
+    <row class <- "tab-bar">
+      <button class <- "tab-button" label <- "Buka halaman input" on_press -> @open_input>
+        <text value <- inputTabLabel /|
+      /|
+      <button class <- "tab-button" label <- "Buka halaman riwayat" on_press -> @open_history>
+        <text value <- historyTabLabel /|
+      /|
+    /|
+
+    <page path <- "/expense">
+      <scroll class <- "page-scroll">
+        <column class <- "page-stack">
+          <column class <- "summary-panel">
+            <row class <- "summary-head">
+              <column>
+                <text class <- "eyebrow" value <- "Pencatatan transaksi" /|
+                <text class <- "summary-title" value <- "Rp " + netTotal /|
+              /|
+              <column class <- "count-pill">
+                <text class <- "count-value" value <- transactionCount /|
+                <text class <- "count-label" value <- "Transaksi" /|
+              /|
+            /|
+            <text class <- "summary-copy" value <- statusMessage /|
+          /|
+
+          <row class <- "stat-grid">
+            <column class <- "stat-card stat-income">
+              <text class <- "stat-label" value <- "Masuk" /|
+              <text class <- "stat-value" value <- "Rp " + incomeTotal /|
+            /|
+            <column class <- "stat-card stat-expense">
+              <text class <- "stat-label" value <- "Keluar" /|
+              <text class <- "stat-value" value <- "Rp " + expenseTotal /|
+            /|
+            <column class <- "stat-card stat-fee">
+              <text class <- "stat-label" value <- "Fee" /|
+              <text class <- "stat-value" value <- "Rp " + feeTotal /|
+            /|
+          /|
+
+          <column class <- "form-section">
+            <text class <- "section-title" value <- "Tipe transaksi" /|
+            <row class <- "segmented-row">
+              <button class <- "type-button expense-action" label <- "Pilih pengeluaran" on_press -> @choose_expense>
+                <text value <- expenseTabLabel /|
+              /|
+              <button class <- "type-button income-action" label <- "Pilih pemasukan" on_press -> @choose_income>
+                <text value <- incomeTabLabel /|
+              /|
+              <button class <- "type-button transfer-action" label <- "Pilih transfer" on_press -> @choose_transfer>
+                <text value <- transferTabLabel /|
+              /|
+            /|
+          /|
+
+          <column class <- "form-section">
+            <text class <- "section-title" value <- "Form pengeluaran" /|
+            <text class <- "form-hint" value <- "Catat uang keluar: kategori, nominal, akun sumber, dan catatan." /|
+            <number_input class <- "amount-field" value <- draftAmount min <- 0 placeholder <- "Nominal pengeluaran" on_change -> @set_amount(value) /|
+            <text_input class <- "edit-field" value <- draftCategory placeholder <- "Kategori, contoh: makan, transport, tagihan" on_change -> @set_category(value) /|
+            <text_input class <- "edit-field" value <- fromAccount placeholder <- "Akun sumber / dompet / rekening" on_change -> @set_from_account(value) /|
+            <text_input class <- "edit-field" value <- note placeholder <- "Catatan opsional" on_change -> @set_note(value) /|
+            <button class <- "save-button expense-action" label <- "Simpan pengeluaran" on_press -> @save_expense>
+              <text value <- "Simpan pengeluaran" /|
+            /|
+          /|
+        /|
+      /|
+    /|
+
+    <page path <- "/income">
+      <scroll class <- "page-scroll">
+        <column class <- "page-stack">
+          <column class <- "summary-panel">
+            <row class <- "summary-head">
+              <column>
+                <text class <- "eyebrow" value <- "Pencatatan transaksi" /|
+                <text class <- "summary-title" value <- "Rp " + netTotal /|
+              /|
+              <column class <- "count-pill">
+                <text class <- "count-value" value <- transactionCount /|
+                <text class <- "count-label" value <- "Transaksi" /|
+              /|
+            /|
+            <text class <- "summary-copy" value <- statusMessage /|
+          /|
+
+          <column class <- "form-section">
+            <text class <- "section-title" value <- "Tipe transaksi" /|
+            <row class <- "segmented-row">
+              <button class <- "type-button expense-action" label <- "Pilih pengeluaran" on_press -> @choose_expense>
+                <text value <- expenseTabLabel /|
+              /|
+              <button class <- "type-button income-action" label <- "Pilih pemasukan" on_press -> @choose_income>
+                <text value <- incomeTabLabel /|
+              /|
+              <button class <- "type-button transfer-action" label <- "Pilih transfer" on_press -> @choose_transfer>
+                <text value <- transferTabLabel /|
+              /|
+            /|
+          /|
+
+          <column class <- "form-section">
+            <text class <- "section-title" value <- "Form pemasukan" /|
+            <text class <- "form-hint" value <- "Catat uang masuk: sumber pendapatan, nominal, akun tujuan, dan catatan." /|
+            <number_input class <- "amount-field" value <- draftAmount min <- 0 placeholder <- "Nominal pemasukan" on_change -> @set_amount(value) /|
+            <text_input class <- "edit-field" value <- draftCategory placeholder <- "Sumber pendapatan, contoh: gaji, bonus, freelance" on_change -> @set_category(value) /|
+            <text_input class <- "edit-field" value <- toAccount placeholder <- "Akun tujuan / rekening penerima" on_change -> @set_to_account(value) /|
+            <text_input class <- "edit-field" value <- note placeholder <- "Catatan opsional" on_change -> @set_note(value) /|
+            <button class <- "save-button income-action" label <- "Simpan pemasukan" on_press -> @save_income>
+              <text value <- "Simpan pemasukan" /|
+            /|
+          /|
+        /|
+      /|
+    /|
+
+    <page path <- "/transfer">
+      <scroll class <- "page-scroll">
+        <column class <- "page-stack">
+          <column class <- "summary-panel">
+            <row class <- "summary-head">
+              <column>
+                <text class <- "eyebrow" value <- "Pencatatan transaksi" /|
+                <text class <- "summary-title" value <- "Rp " + netTotal /|
+              /|
+              <column class <- "count-pill">
+                <text class <- "count-value" value <- transactionCount /|
+                <text class <- "count-label" value <- "Transaksi" /|
+              /|
+            /|
+            <text class <- "summary-copy" value <- statusMessage /|
+          /|
+
+          <column class <- "form-section">
+            <text class <- "section-title" value <- "Tipe transaksi" /|
+            <row class <- "segmented-row">
+              <button class <- "type-button expense-action" label <- "Pilih pengeluaran" on_press -> @choose_expense>
+                <text value <- expenseTabLabel /|
+              /|
+              <button class <- "type-button income-action" label <- "Pilih pemasukan" on_press -> @choose_income>
+                <text value <- incomeTabLabel /|
+              /|
+              <button class <- "type-button transfer-action" label <- "Pilih transfer" on_press -> @choose_transfer>
+                <text value <- transferTabLabel /|
+              /|
+            /|
+          /|
+
+          <column class <- "form-section">
+            <text class <- "section-title" value <- "Form transfer" /|
+            <text class <- "form-hint" value <- "Pindahkan saldo antar akun. Transfer tidak mengubah arus kas, kecuali fee." /|
+            <row class <- "two-field-grid">
+              <text_input class <- "edit-field" value <- fromAccount placeholder <- "Akun sumber" on_change -> @set_from_account(value) /|
+              <text_input class <- "edit-field" value <- toAccount placeholder <- "Akun tujuan" on_change -> @set_to_account(value) /|
+            /|
+            <number_input class <- "amount-field" value <- draftAmount min <- 0 placeholder <- "Nominal transfer" on_change -> @set_amount(value) /|
+            <number_input class <- "edit-field" value <- feeAmount min <- 0 placeholder <- "Biaya admin / fee transfer" on_change -> @set_fee(value) /|
+            <text_input class <- "edit-field" value <- note placeholder <- "Catatan opsional" on_change -> @set_note(value) /|
+            <button class <- "save-button transfer-action" label <- "Simpan transfer" on_press -> @save_transfer>
+              <text value <- "Simpan transfer" /|
+            /|
+          /|
+        /|
+      /|
+    /|
+
+    <page path <- "/transactions">
+      <scroll class <- "page-scroll">
+        <column class <- "page-stack">
+          <column class <- "history-head">
+            <row class <- "summary-head">
+              <column>
+                <text class <- "eyebrow" value <- "Riwayat dan export" /|
+                <text class <- "history-title" value <- filterTitle /|
+              /|
+              <column class <- "count-pill">
+                <text class <- "count-value" value <- transactionCount /|
+                <text class <- "count-label" value <- "Item" /|
+              /|
+            /|
+          /|
+
+          <column class <- "filter-section">
+            <text class <- "section-title" value <- "Filter riwayat" /|
+            <row class <- "filter-row">
+              <button class <- "filter-button" label <- "Tampilkan semua transaksi" on_press -> @filter_all>
+                <text value <- filterAllLabel /|
+              /|
+              <button class <- "filter-button" label <- "Tampilkan pengeluaran" on_press -> @filter_expense>
+                <text value <- filterExpenseLabel /|
+              /|
+            /|
+            <row class <- "filter-row">
+              <button class <- "filter-button" label <- "Tampilkan pemasukan" on_press -> @filter_income>
+                <text value <- filterIncomeLabel /|
+              /|
+              <button class <- "filter-button" label <- "Tampilkan transfer" on_press -> @filter_transfer>
+                <text value <- filterTransferLabel /|
+              /|
+            /|
+          /|
+
+          <column class <- "chart-panel">
+            <text class <- "section-title" value <- "Pie chart komposisi" /|
+            <row class <- "pie-chart">
+              <column class <- pieIncomeClass>
+                <text class <- "pie-segment-label" value <- pieIncomeLabel /|
+              /|
+              <column class <- pieExpenseClass>
+                <text class <- "pie-segment-label" value <- pieExpenseLabel /|
+              /|
+              <column class <- pieTransferClass>
+                <text class <- "pie-segment-label" value <- pieTransferLabel /|
+              /|
+            /|
+            <row class <- "pie-legend">
+              <text class <- "legend-item legend-income" value <- "Masuk " + pieIncomeLabel /|
+              <text class <- "legend-item legend-expense" value <- "Keluar " + pieExpenseLabel /|
+              <text class <- "legend-item legend-transfer" value <- "Transfer " + pieTransferLabel /|
+            /|
+          /|
+
+          <column class <- "chart-panel">
+            <text class <- "section-title" value <- "Bar chart per tipe" /|
+            <row class <- "bar-chart">
+              <column class <- "bar-column">
+                <column class <- "bar-track">
+                  <column class <- incomeBarClass /|
+                /|
+                <text class <- "bar-visual" value <- incomeBarVisual /|
+                <text class <- "bar-caption" value <- "Masuk" /|
+                <text class <- "bar-value" value <- "Rp " + incomeTotal /|
+              /|
+              <column class <- "bar-column">
+                <column class <- "bar-track">
+                  <column class <- expenseBarClass /|
+                /|
+                <text class <- "bar-visual" value <- expenseBarVisual /|
+                <text class <- "bar-caption" value <- "Keluar" /|
+                <text class <- "bar-value" value <- "Rp " + expenseTotal /|
+              /|
+              <column class <- "bar-column">
+                <column class <- "bar-track">
+                  <column class <- transferBarClass /|
+                /|
+                <text class <- "bar-visual" value <- transferBarVisual /|
+                <text class <- "bar-caption" value <- "Transfer" /|
+                <text class <- "bar-value" value <- "Rp " + transferTotal /|
+              /|
+            /|
+          /|
+
+          <column class <- "transaction-list">
+            <column class <- "transaction-card">
+              <text class <- "transaction-text" value <- visibleLine1 /|
+            /|
+            <column class <- "transaction-card">
+              <text class <- "transaction-text" value <- visibleLine2 /|
+            /|
+            <column class <- "transaction-card">
+              <text class <- "transaction-text" value <- visibleLine3 /|
+            /|
+            <column class <- "transaction-card">
+              <text class <- "transaction-text" value <- visibleLine4 /|
+            /|
+          /|
+
+          <column class <- "export-panel">
+            <row class <- "export-head">
+              <text class <- "section-title" value <- "Export JSON" /|
+              <text class <- "export-badge" value <- "Penyimpanan lokal" /|
+            /|
+            <text class <- "json-output" value <- exportJson /|
+          /|
+        /|
+      /|
+    /|
+  /|
+/|

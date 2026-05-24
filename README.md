@@ -9,7 +9,7 @@ Target production yang didukung: `web` (JavaScript/DOM) dan `android` (Java/Andr
 - Target `web` menghasilkan aplikasi static browser.
 - Target `android` menghasilkan project Gradle Java dengan renderer `@nova/android`.
 - External capability (`@env/*`) langsung ke adapter platform.
-- Example: `examples/counter`, `examples/multipage`.
+- Example: `examples/counter`, `examples/multipage`, `examples/finance`.
 - ADR: [docs/adr/README.md](docs/adr/README.md) (indeks lengkap; baseline: [adr_000](docs/adr/adr_000_production_baseline.md)).
 
 ## Struktur Penting
@@ -23,6 +23,7 @@ internal/parser/          parser Nova
 internal/validator/       semantic validation
 examples/counter/         example app counter
 examples/multipage/       example route state dan page projection
+examples/finance/         example pencatatan keuangan Android-first
 tests/conformance/        fixture conformance resmi
 docs/adr/                 ADR desain Nova
 ```
@@ -154,6 +155,40 @@ go run ../../cmd/nova build --target android --bundle=false
 SDK version, `gradle_plugin`, `theme`, `theme_parent`, `java_version`, dan `label`.
 Renderer `@nova/android` tidak membutuhkan dependency UI eksternal.
 Lihat `examples/*/nova.toml` untuk contoh lengkap.
+
+## Example Finance Ledger
+
+Source utama:
+
+```txt
+examples/finance/src/App.nova
+examples/finance/src/FinanceStore.nova
+examples/finance/src/FinancePersistence.nova
+```
+
+Example ini memodelkan aplikasi pencatatan keuangan dengan tiga halaman input terpisah
+(`/expense`, `/income`, `/transfer`) dan halaman riwayat (`/transactions`). Transaksi
+disimpan ke penyimpanan lokal lewat `@env/storage`, bukan hanya variabel sesi.
+
+`FinanceStore.nova` berisi kontrak state, fungsi murni, dan event. `FinancePersistence.nova`
+menangani lifecycle load/save storage. `App.nova` hanya berisi template UI.
+
+Form input berbeda per tipe: pengeluaran (kategori + akun sumber), pemasukan (sumber
+pendapatan + akun tujuan), transfer (akun sumber/tujuan + fee). Tab dan filter aktif
+ditandai dengan label `●`. Halaman riwayat menampilkan pie chart komposisi, bar chart
+per tipe, daftar transaksi, dan export JSON persisten.
+
+```bash
+cd examples/finance
+go run ../../cmd/nova build --target web
+```
+
+Target Android memakai source yang sama:
+
+```bash
+cd examples/finance
+go run ../../cmd/nova build --target android --bundle=false
+```
 
 ## Build Android
 

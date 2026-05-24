@@ -1,0 +1,41 @@
+<import external storage from "@env/storage">
+  operation load {
+    input {
+      key: string;
+    }
+
+    output unknown;
+  }
+
+  operation set {
+    input {
+      key: string;
+      value: unknown;
+    }
+
+    output void;
+  }
+/|
+
+<import state exportJson from "./FinanceStore.nova" /|
+<import event @restore, @save_expense, @save_income, @save_transfer from "./FinanceStore.nova" /|
+
+<lifecycle mount>
+  void -> @restore;
+/|
+
+<lifecycle after @restore>
+  "finance_ledger_export" |> storage.load key <- "finance_ledger_export";
+/|
+
+<lifecycle after @save_expense>
+  exportJson |> storage.set key <- "finance_ledger_export" value <- exportJson;
+/|
+
+<lifecycle after @save_income>
+  exportJson |> storage.set key <- "finance_ledger_export" value <- exportJson;
+/|
+
+<lifecycle after @save_transfer>
+  exportJson |> storage.set key <- "finance_ledger_export" value <- exportJson;
+/|

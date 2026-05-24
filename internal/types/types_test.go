@@ -66,6 +66,9 @@ func TestAssignableAndInferExpressionArePureDataRelations(t *testing.T) {
 	if env.Assignable(stringLiteral, numberType) {
 		t.Fatal("string literal should not be assignable to number")
 	}
+	if !env.Assignable(Type{Kind: KindUnknown}, numberType) {
+		t.Fatal("unknown should be assignable across module boundaries")
+	}
 
 	nullType, ok := env.InferExpression(nil, lexer.Tokenize("null")[:1])
 	if !ok || !env.Assignable(nullType, nullableNumber) {

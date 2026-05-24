@@ -692,6 +692,55 @@ func TestGenerateAndroidArtifactWrapsRowsForDenseNavigation(t *testing.T) {
 	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "TextView")
 }
 
+func TestGenerateAndroidArtifactSupportsScrollAndInputs(t *testing.T) {
+	source := parseNova(t, `<contract state FormState>
+  name: string <- "Makan" {
+    @set_name(value: string) -> value;
+  };
+
+  amount: number <- 1000 {
+    @set_amount(value: number) -> value;
+  };
+/|
+<template target <- android>
+  <scroll>
+    <text_input value <- name placeholder <- "Kategori" on_change -> @set_name(value) /|
+    <number_input value <- amount placeholder <- "Nominal" on_change -> @set_amount(value) /|
+  /|
+/|`)
+	manifest := project.Manifest{
+		Project: project.Project{Name: "forms", Version: "0.1.0", Entry: "src/App.nova"},
+		Targets: map[string]project.Target{"android": testAndroidTarget("dev.example.forms")},
+	}
+	targetManifest := build.AndroidTargetManifest()
+	plan := build.Resolve(build.ResolutionInput{
+		Project:        manifest,
+		Target:         "android",
+		Sources:        []build.SourceFile{{Path: "src/App.nova", File: source}},
+		TargetManifest: targetManifest,
+	})
+	if len(plan.Diagnostics) != 0 {
+		t.Fatalf("unexpected build diagnostics: %+v", plan.Diagnostics)
+	}
+
+	files, diagnostics := Generate(GenerateInput{
+		Project:        manifest,
+		Plan:           plan.Plan,
+		Sources:        []build.SourceFile{{Path: "src/App.nova", File: source}},
+		TargetManifest: targetManifest,
+	})
+	if len(diagnostics) != 0 {
+		t.Fatalf("unexpected diagnostics: %+v", diagnostics)
+	}
+
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "ScrollView")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "EditText")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "TextWatcher")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "InputType.TYPE_CLASS_NUMBER")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "dispatch(\"@set_name\", Arrays.<Object>asList(editable.toString()))")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "dispatch(\"@set_amount\", Arrays.<Object>asList(inputNumber(editable.toString())))")
+}
+
 func TestExpressionToJSCompilesRecordLiterals(t *testing.T) {
 	tokens := lexer.Tokenize(`{ path <- "/settings"; title <- currentTitle; }`)
 	expression := expressionToJS(tokens[:len(tokens)-1], map[string]bool{"currentTitle": true}, nil)

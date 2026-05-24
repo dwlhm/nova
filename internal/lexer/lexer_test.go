@@ -179,6 +179,16 @@ func TestTokenizeADRTypesRecordsAndAccess(t *testing.T) {
 	assertTokens(t, input, tests)
 }
 
+func TestTokenizeDecodesEscapedStrings(t *testing.T) {
+	tokens := Tokenize(`"{\"type\":\"expense\"}" "line\nbreak"`)
+	if tokens[0].Type != STRING || tokens[0].Literal != `{"type":"expense"}` {
+		t.Fatalf("first string = (%s, %q), want decoded JSON text", tokens[0].Type, tokens[0].Literal)
+	}
+	if tokens[1].Type != STRING || tokens[1].Literal != "line\nbreak" {
+		t.Fatalf("second string = (%s, %q), want decoded newline", tokens[1].Type, tokens[1].Literal)
+	}
+}
+
 func TestTokenizeExampleFileHasNoIllegalTokens(t *testing.T) {
 	path := filepath.Join("..", "..", "docs", "example", "audiolab.nova")
 	input, err := os.ReadFile(path)

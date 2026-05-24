@@ -384,6 +384,8 @@ window.NovaRuntime = (() => {
     const element = document.createElement(tagFor(kind));
     runtime.refs.set(pathKey(path), element);
     element.dataset.novaKind = kind;
+    if (kind === "text_input") element.setAttribute("type", "text");
+    if (kind === "number_input") element.setAttribute("type", "number");
     applyProps(element, props, runtime);
     applyEvents(element, events, runtime);
     element.append(...renderNodes(children, runtime, path));
@@ -726,15 +728,17 @@ window.NovaRuntime = (() => {
   function tagFor(kind) {
     if (kind === "surface") return "section";
     if (kind === "row" || kind === "column" || kind === "stack") return "div";
+    if (kind === "scroll") return "div";
     if (kind === "text") return "span";
     if (kind === "button") return "button";
+    if (kind === "text_input" || kind === "number_input") return "input";
     if (/^[a-z][a-z0-9-]*$/.test(kind)) return kind;
     return "div";
   }
 
   function applyProps(element, props, runtime) {
     for (const [name, binding] of Object.entries(props || {})) {
-      if (name === "value") continue;
+      if (name === "value" && !("value" in element)) continue;
       const value = evaluate(bindingExpression(binding, runtime.app), runtime.state, {});
       applyPropValue(element, name, value);
     }
@@ -754,6 +758,15 @@ window.NovaRuntime = (() => {
       else element.removeAttribute("disabled");
       return;
     }
+    if (name === "disabled") {
+      if (value === true) element.setAttribute("disabled", "");
+      else element.removeAttribute("disabled");
+      return;
+    }
+    if (name === "value" && "value" in element) {
+      element.value = value == null ? "" : String(value);
+      return;
+    }
     element.setAttribute(name.replaceAll("_", "-"), String(value));
   }
 
@@ -767,7 +780,39 @@ window.NovaRuntime = (() => {
           dispatch(runtime, eventName, values);
         });
       }
+      if (slot === "on_change") {
+        element.addEventListener("input", () => {
+          const current = inputEventValue(element);
+          const values = args.length
+            ? args.map((arg) => implicitValueArg(arg) ? current : evaluate(bindingExpression(arg, runtime.app), runtime.state, {}))
+            : [current];
+          dispatch(runtime, eventName, values);
+        });
+      }
+      if (slot === "on_submit") {
+        element.addEventListener("keydown", (event) => {
+          if (event.key !== "Enter") return;
+          const current = inputEventValue(element);
+          const values = args.length
+            ? args.map((arg) => implicitValueArg(arg) ? current : evaluate(bindingExpression(arg, runtime.app), runtime.state, {}))
+            : [current];
+          dispatch(runtime, eventName, values);
+        });
+      }
     }
+  }
+
+  function inputEventValue(element) {
+    if (element && element.getAttribute("type") === "number") {
+      const value = Number(element.value);
+      return Number.isFinite(value) ? value : 0;
+    }
+    return element && "value" in element ? element.value : "";
+  }
+
+  function implicitValueArg(binding) {
+    const tokens = pick(binding, "tokens", "Tokens", []) || [];
+    return tokens.length === 1 && tokenLiteral(tokens[0]) === "value";
   }
 
   function mount(app) {

@@ -205,7 +205,7 @@ public final class NovaRuntime {
         if (expression.startsWith("payload.")) return payload.get(expression.substring("payload.".length()));
         if (expression.startsWith("state.")) return state.get(expression.substring("state.".length()));
         if (expression.startsWith("\"") && expression.endsWith("\"") && expression.length() >= 2) {
-            return expression.substring(1, expression.length() - 1);
+            return unescapeStringLiteral(expression.substring(1, expression.length() - 1));
         }
         try {
             if (!expression.isEmpty()) return Double.parseDouble(expression);
@@ -214,6 +214,33 @@ public final class NovaRuntime {
         if ("false".equals(expression)) return Boolean.FALSE;
         if ("null".equals(expression) || "undefined".equals(expression) || expression.isEmpty()) return null;
         return expression;
+    }
+
+    private static String unescapeStringLiteral(String value) {
+        StringBuilder out = new StringBuilder();
+        boolean escaped = false;
+        for (int index = 0; index < value.length(); index++) {
+            char ch = value.charAt(index);
+            if (escaped) {
+                switch (ch) {
+                    case 'n': out.append('\n'); break;
+                    case 'r': out.append('\r'); break;
+                    case 't': out.append('\t'); break;
+                    case '"': out.append('"'); break;
+                    case '\\': out.append('\\'); break;
+                    default: out.append(ch); break;
+                }
+                escaped = false;
+                continue;
+            }
+            if (ch == '\\') {
+                escaped = true;
+                continue;
+            }
+            out.append(ch);
+        }
+        if (escaped) out.append('\\');
+        return out.toString();
     }
 
     private static Map<String, Object> evaluateRecord(String expression, Map<String, Object> state, Map<String, Object> payload) {
@@ -501,14 +528,19 @@ func androidNativeMainActivity(bundle irBundle, config androidTargetConfig, styl
 	builder.WriteString("import android.graphics.Typeface;\n")
 	builder.WriteString("import android.graphics.drawable.GradientDrawable;\n")
 	builder.WriteString("import android.os.Bundle;\n")
+	builder.WriteString("import android.text.Editable;\n")
+	builder.WriteString("import android.text.InputType;\n")
+	builder.WriteString("import android.text.TextWatcher;\n")
 	builder.WriteString("import android.util.TypedValue;\n")
 	builder.WriteString("import android.view.Gravity;\n")
 	builder.WriteString("import android.view.View;\n")
 	builder.WriteString("import android.view.ViewGroup;\n")
 	builder.WriteString("import android.widget.Button;\n")
+	builder.WriteString("import android.widget.EditText;\n")
 	builder.WriteString("import android.widget.FrameLayout;\n")
 	builder.WriteString("import android.widget.GridLayout;\n")
 	builder.WriteString("import android.widget.LinearLayout;\n")
+	builder.WriteString("import android.widget.ScrollView;\n")
 	builder.WriteString("import android.widget.TextView;\n")
 	builder.WriteString("import java.util.ArrayList;\n")
 	builder.WriteString("import java.util.Arrays;\n")
@@ -628,6 +660,7 @@ func androidNativeMainActivity(bundle irBundle, config androidTargetConfig, styl
 	builder.WriteString("        return false;\n")
 	builder.WriteString("    }\n\n")
 	builder.WriteString("    private boolean booleanValue(Object value) { return Boolean.TRUE.equals(value) || \"true\".equals(String.valueOf(value)); }\n\n")
+	builder.WriteString("    private double inputNumber(String value) { try { return Double.parseDouble(value); } catch (NumberFormatException ignored) { return 0.0; } }\n\n")
 	builder.WriteString("    private int dp(int value) { return (int) (value * getResources().getDisplayMetrics().density); }\n")
 	builder.WriteString("}\n")
 	return builder.String()
@@ -669,13 +702,73 @@ func (renderer androidJavaViewRenderer) renderBuildNode(node view.Node, parent s
 		return builder.String()
 	case "button":
 		return renderer.renderJavaButton(node, parent, indent, path, key, name)
+	case "text_input":
+		return renderer.renderJavaInput(node, parent, indent, path, key, name, false)
+	case "number_input":
+		return renderer.renderJavaInput(node, parent, indent, path, key, name, true)
 	case "row":
 		return renderer.renderJavaRow(node, parent, indent, path, key, name)
+	case "scroll":
+		return renderer.renderJavaScroll(node, parent, indent, path, key, name)
 	case "stack":
 		return renderer.renderJavaContainer(node, parent, indent, path, key, name, "FrameLayout", "")
 	default:
 		return renderer.renderJavaContainer(node, parent, indent, path, key, name, "LinearLayout", "LinearLayout.VERTICAL")
 	}
+}
+
+func (renderer androidJavaViewRenderer) renderJavaInput(node view.Node, parent string, indent string, path []int, key string, name string, number bool) string {
+	value := quoteCodeString("")
+	if binding, ok := node.Props["value"]; ok {
+		if expression, ok := androidJavaStringExpression(binding.Tokens, renderer.stateNames); ok {
+			value = "textValue(" + expression + ")"
+		}
+	}
+	hint := quoteCodeString("")
+	if binding, ok := node.Props["placeholder"]; ok {
+		if expression, ok := androidJavaStringExpression(binding.Tokens, renderer.stateNames); ok {
+			hint = "textValue(" + expression + ")"
+		}
+	}
+	var builder strings.Builder
+	builder.WriteString(indent + "EditText " + name + " = new EditText(this);\n")
+	builder.WriteString(indent + name + ".setSingleLine(true);\n")
+	if number {
+		builder.WriteString(indent + name + ".setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);\n")
+	}
+	builder.WriteString(indent + name + ".setText(" + value + ");\n")
+	builder.WriteString(indent + name + ".setHint(" + hint + ");\n")
+	if route, ok := node.Events["on_change"]; ok {
+		builder.WriteString(indent + name + ".addTextChangedListener(new TextWatcher() {\n")
+		builder.WriteString(indent + "    @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}\n")
+		builder.WriteString(indent + "    @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}\n")
+		builder.WriteString(indent + "    @Override public void afterTextChanged(Editable editable) {\n")
+		if number {
+			builder.WriteString(indent + "        dispatch(" + quoteCodeString(string(route.Event)) + ", Arrays.<Object>asList(inputNumber(editable.toString())));\n")
+		} else {
+			builder.WriteString(indent + "        dispatch(" + quoteCodeString(string(route.Event)) + ", Arrays.<Object>asList(editable.toString()));\n")
+		}
+		builder.WriteString(indent + "    }\n")
+		builder.WriteString(indent + "});\n")
+	}
+	builder.WriteString(renderer.renderStaticStyles(node, name, indent))
+	builder.WriteString(indent + "views.put(" + quoteCodeString(key) + ", " + name + ");\n")
+	builder.WriteString(indent + parent + ".addView(" + name + ");\n")
+	return builder.String()
+}
+
+func (renderer androidJavaViewRenderer) renderJavaScroll(node view.Node, parent string, indent string, path []int, key string, name string) string {
+	contentName := name + "Content"
+	var builder strings.Builder
+	builder.WriteString(indent + "ScrollView " + name + " = new ScrollView(this);\n")
+	builder.WriteString(indent + "LinearLayout " + contentName + " = new LinearLayout(this);\n")
+	builder.WriteString(indent + contentName + ".setOrientation(LinearLayout.VERTICAL);\n")
+	builder.WriteString(renderer.renderStaticStyles(node, name, indent))
+	builder.WriteString(indent + "views.put(" + quoteCodeString(key) + ", " + name + ");\n")
+	builder.WriteString(indent + parent + ".addView(" + name + ");\n")
+	builder.WriteString(indent + name + ".addView(" + contentName + ");\n")
+	builder.WriteString(renderer.renderBuildNodes(node.Children, contentName, indent, path))
+	return builder.String()
 }
 
 func (renderer androidJavaViewRenderer) renderJavaContainer(node view.Node, parent string, indent string, path []int, key string, name string, className string, orientation string) string {
@@ -784,7 +877,7 @@ func androidJavaStyleApplication(target string, nodeKind string, style androidRe
 }
 
 func androidJavaTextStyleTarget(kind string) bool {
-	return kind == "text" || kind == "#text" || kind == "button"
+	return kind == "text" || kind == "#text" || kind == "button" || kind == "text_input" || kind == "number_input"
 }
 
 func androidJavaLinearStyleTarget(kind string) bool {
@@ -955,7 +1048,7 @@ func androidJavaInitialValue(expression string) string {
 		return androidJavaInitialRecord(expression)
 	}
 	if strings.HasPrefix(expression, "\"") && strings.HasSuffix(expression, "\"") {
-		return quoteCodeString(strings.Trim(expression, "\""))
+		return quoteCodeString(androidJavaStringLiteralValue(expression))
 	}
 	if _, err := strconv.ParseFloat(expression, 64); err == nil {
 		if strings.Contains(expression, ".") {
@@ -973,6 +1066,14 @@ func androidJavaInitialValue(expression string) string {
 	default:
 		return "null"
 	}
+}
+
+func androidJavaStringLiteralValue(expression string) string {
+	value, err := strconv.Unquote(expression)
+	if err != nil {
+		return strings.Trim(expression, "\"")
+	}
+	return value
 }
 
 func androidJavaInitialRecord(expression string) string {

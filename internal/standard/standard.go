@@ -158,6 +158,7 @@ func RendererPrimitives() []RendererPrimitive {
 			Description: "Numeric entry primitive.",
 			Props: []PrimitiveField{
 				{Name: "value", Type: "number", Optional: true, Description: "Current numeric value."},
+				{Name: "placeholder", Type: "string", Optional: true, Description: "Placeholder text."},
 				{Name: "min", Type: "number", Optional: true, Description: "Minimum allowed value."},
 				{Name: "max", Type: "number", Optional: true, Description: "Maximum allowed value."},
 				{Name: "disabled", Type: "boolean", Optional: true, Description: "Disables editing."},

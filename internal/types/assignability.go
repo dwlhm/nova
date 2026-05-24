@@ -7,6 +7,9 @@ func (env Environment) Assignable(source Type, target Type) bool {
 	if target.Kind == KindUnknown {
 		return true
 	}
+	if source.Kind == KindUnknown {
+		return true
+	}
 	if source.Kind == KindInvalid || target.Kind == KindInvalid {
 		return false
 	}

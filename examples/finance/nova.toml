@@ -1,0 +1,28 @@
+[project]
+name = "Nova Finance Ledger"
+version = "0.1.0"
+entry = "src/App.nova"
+
+[permissions.storage]
+read = true
+write = true
+
+[targets.web]
+renderer = "@nova/web"
+styles = ["src/Finance.css"]
+
+[targets.android]
+renderer = "@nova/android"
+styles = ["src/Finance.css"]
+application_id = "dev.nova.example.finance"
+namespace = "nova.generated.finance"
+compile_sdk = 35
+min_sdk = 23
+target_sdk = 35
+version_code = 1
+version_name = "0.1.0"
+gradle_plugin = "8.12.3"
+theme = "Theme.Nova"
+theme_parent = "android:style/Theme.DeviceDefault.Light.NoActionBar"
+java_version = "17"
+label = "Nova Finance"

@@ -1,6 +1,9 @@
 package lexer
 
-import "strings"
+import (
+	"strconv"
+	"strings"
+)
 
 var keywords = map[string]TokenType{
 	"from":       FROM,
@@ -181,12 +184,20 @@ func readString(s scanner) (Token, scanner) {
 			continue
 		}
 		if s.input[pos] == '"' {
-			return advanceN(s, STRING, s.input[start:pos], pos-s.pos+1)
+			return advanceN(s, STRING, decodeStringLiteral(s.input[start:pos]), pos-s.pos+1)
 		}
 		pos++
 	}
 
 	return advanceN(s, ILLEGAL, s.input[start-1:], len(s.input)-s.pos)
+}
+
+func decodeStringLiteral(raw string) string {
+	decoded, err := strconv.Unquote(`"` + raw + `"`)
+	if err != nil {
+		return raw
+	}
+	return decoded
 }
 
 func readSignal(s scanner) (Token, scanner) {

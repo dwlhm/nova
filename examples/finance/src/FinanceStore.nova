@@ -1,0 +1,420 @@
+<contract type Route>
+  path: string;
+  params?: unknown;
+  query?: unknown;
+  fragment?: string;
+/|
+
+<contract type HistoryFilter>
+  "all" | "expense" | "income" | "transfer";
+/|
+
+<func formatCurrency amount: number returns string>
+  "Rp " + amount
+/|
+
+<func tabLabel kind: string path: string returns string>
+  path == kind ? "● " + kind : kind
+/|
+
+<func filterLabel kind: string filter: HistoryFilter returns string>
+  filter == kind ? "● " + kind : kind
+/|
+
+<func chartMax income: number expense: number transfer: number returns number>
+  income > expense ? income > transfer ? income : transfer : expense > transfer ? expense : transfer
+/|
+
+<func barVisual value: number maxValue: number returns string>
+  value == 0 ? "▁▁▁▁▁" : value * 100 / maxValue >= 90 ? "█████████" : value * 100 / maxValue >= 80 ? "████████" : value * 100 / maxValue >= 70 ? "███████" : value * 100 / maxValue >= 60 ? "██████" : value * 100 / maxValue >= 50 ? "█████" : value * 100 / maxValue >= 40 ? "████" : value * 100 / maxValue >= 30 ? "███" : value * 100 / maxValue >= 20 ? "██" : value * 100 / maxValue >= 10 ? "█" : "▂"
+/|
+
+<func barHeightClass value: number maxValue: number returns string>
+  value == 0 ? "bar-fill bar-h-0" : value * 100 / maxValue >= 90 ? "bar-fill bar-h-90" : value * 100 / maxValue >= 80 ? "bar-fill bar-h-80" : value * 100 / maxValue >= 70 ? "bar-fill bar-h-70" : value * 100 / maxValue >= 60 ? "bar-fill bar-h-60" : value * 100 / maxValue >= 50 ? "bar-fill bar-h-50" : value * 100 / maxValue >= 40 ? "bar-fill bar-h-40" : value * 100 / maxValue >= 30 ? "bar-fill bar-h-30" : value * 100 / maxValue >= 20 ? "bar-fill bar-h-20" : value * 100 / maxValue >= 10 ? "bar-fill bar-h-10" : "bar-fill bar-h-5"
+/|
+
+<func pieWidthClass value: number total: number returns string>
+  total == 0 ? "pie-w-0" : value * 100 / total >= 66 ? "pie-w-66" : value * 100 / total >= 33 ? "pie-w-33" : value * 100 / total >= 20 ? "pie-w-20" : value * 100 / total >= 10 ? "pie-w-10" : value * 100 / total > 0 ? "pie-w-5" : "pie-w-0"
+/|
+
+<func pieIncomeClassFor value: number total: number returns string>
+  "pie-segment pie-income " + pieWidthClass value total
+/|
+
+<func pieExpenseClassFor value: number total: number returns string>
+  "pie-segment pie-expense " + pieWidthClass value total
+/|
+
+<func pieTransferClassFor value: number total: number returns string>
+  "pie-segment pie-transfer " + pieWidthClass value total
+/|
+
+<func piePercent value: number total: number returns string>
+  total == 0 ? "0%" : value * 100 / total + "%"
+/|
+
+<func expenseSummary category: string amount: number account: string note: string returns string>
+  "Pengeluaran | " + category + " | Rp " + amount + " | akun " + account + " | " + note
+/|
+
+<func incomeSummary category: string amount: number account: string note: string returns string>
+  "Pemasukan | " + category + " | Rp " + amount + " | diterima di " + account + " | " + note
+/|
+
+<func transferSummary fromAccount: string toAccount: string amount: number fee: number note: string returns string>
+  "Transfer | " + fromAccount + " -> " + toAccount + " | Rp " + amount + " | fee Rp " + fee + " | " + note
+/|
+
+<contract state FinanceLedger>
+  route: Route <- {
+    path <- "/expense";
+  } {
+    @route_changed(next: Route) -> next;
+    @choose_expense -> { path <- "/expense"; };
+    @choose_income -> { path <- "/income"; };
+    @choose_transfer -> { path <- "/transfer"; };
+    @open_history -> { path <- "/transactions"; };
+    @open_input -> { path <- "/expense"; };
+    @restore -> route;
+  };
+
+  historyFilter: HistoryFilter <- "all" {
+    @filter_all -> "all";
+    @filter_expense -> "expense";
+    @filter_income -> "income";
+    @filter_transfer -> "transfer";
+  };
+
+  expenseTabLabel: string <- "● Pengeluaran" {
+    @route_changed(next: Route) -> tabLabel "/expense" next.path;
+    @choose_expense -> "● Pengeluaran";
+    @choose_income -> "Pengeluaran";
+    @choose_transfer -> "Pengeluaran";
+    @open_history -> expenseTabLabel;
+    @open_input -> "● Pengeluaran";
+  };
+
+  incomeTabLabel: string <- "Pemasukan" {
+    @route_changed(next: Route) -> tabLabel "/income" next.path;
+    @choose_expense -> "Pemasukan";
+    @choose_income -> "● Pemasukan";
+    @choose_transfer -> "Pemasukan";
+    @open_history -> incomeTabLabel;
+    @open_input -> "Pemasukan";
+  };
+
+  transferTabLabel: string <- "Transfer" {
+    @route_changed(next: Route) -> tabLabel "/transfer" next.path;
+    @choose_expense -> "Transfer";
+    @choose_income -> "Transfer";
+    @choose_transfer -> "● Transfer";
+    @open_history -> transferTabLabel;
+    @open_input -> "Transfer";
+  };
+
+  inputTabLabel: string <- "● Input" {
+    @open_history -> "Input";
+    @open_input -> "● Input";
+    @route_changed(next: Route) -> next.path == "/transactions" ? "Input" : "● Input";
+  };
+
+  historyTabLabel: string <- "Riwayat" {
+    @open_history -> "● Riwayat";
+    @open_input -> "Riwayat";
+    @route_changed(next: Route) -> next.path == "/transactions" ? "● Riwayat" : "Riwayat";
+  };
+
+  filterAllLabel: string <- "● Semua" {
+    @filter_all -> "● Semua";
+    @filter_expense -> "Semua";
+    @filter_income -> "Semua";
+    @filter_transfer -> "Semua";
+    @loaded(value: string) -> filterLabel "Semua" historyFilter;
+  };
+
+  filterExpenseLabel: string <- "Keluar" {
+    @filter_expense -> "● Keluar";
+    @filter_all -> "Keluar";
+    @filter_income -> "Keluar";
+    @filter_transfer -> "Keluar";
+    @loaded(value: string) -> filterLabel "Keluar" historyFilter;
+  };
+
+  filterIncomeLabel: string <- "Masuk" {
+    @filter_income -> "● Masuk";
+    @filter_all -> "Masuk";
+    @filter_expense -> "Masuk";
+    @filter_transfer -> "Masuk";
+    @loaded(value: string) -> filterLabel "Masuk" historyFilter;
+  };
+
+  filterTransferLabel: string <- "Transfer" {
+    @filter_transfer -> "● Transfer";
+    @filter_all -> "Transfer";
+    @filter_expense -> "Transfer";
+    @filter_income -> "Transfer";
+    @loaded(value: string) -> filterLabel "Transfer" historyFilter;
+  };
+
+  draftCategory: string <- "" {
+    @set_category(value: string) -> value;
+    @save_expense -> "";
+    @save_income -> "";
+  };
+
+  draftAmount: number <- 0 {
+    @set_amount(value: number) -> value;
+    @save_expense -> 0;
+    @save_income -> 0;
+    @save_transfer -> 0;
+  };
+
+  feeAmount: number <- 0 {
+    @set_fee(value: number) -> value;
+    @save_transfer -> 0;
+  };
+
+  fromAccount: string <- "" {
+    @set_from_account(value: string) -> value;
+    @save_expense -> "";
+    @save_transfer -> "";
+  };
+
+  toAccount: string <- "" {
+    @set_to_account(value: string) -> value;
+    @save_income -> "";
+    @save_transfer -> "";
+  };
+
+  note: string <- "" {
+    @set_note(value: string) -> value;
+    @save_expense -> "";
+    @save_income -> "";
+    @save_transfer -> "";
+  };
+
+  transactionCount: number <- 0 {
+    @save_expense -> transactionCount + 1;
+    @save_income -> transactionCount + 1;
+    @save_transfer -> transactionCount + 1;
+  };
+
+  netTotal: number <- 0 {
+    @save_expense -> netTotal - draftAmount;
+    @save_income -> netTotal + draftAmount;
+    @save_transfer -> netTotal - feeAmount;
+  };
+
+  expenseTotal: number <- 0 {
+    @save_expense -> expenseTotal + draftAmount;
+  };
+
+  incomeTotal: number <- 0 {
+    @save_income -> incomeTotal + draftAmount;
+  };
+
+  transferTotal: number <- 0 {
+    @save_transfer -> transferTotal + draftAmount;
+  };
+
+  feeTotal: number <- 0 {
+    @save_transfer -> feeTotal + feeAmount;
+  };
+
+  statusMessage: string <- "Memuat ledger tersimpan..." {
+    @loaded(value: string) -> "Ledger dimuat dari penyimpanan lokal.";
+    @load_failed(message: string) -> "Gagal memuat ledger: " + message;
+    @save_expense -> "Pengeluaran tersimpan ke penyimpanan lokal.";
+    @save_income -> "Pemasukan tersimpan ke penyimpanan lokal.";
+    @save_transfer -> "Transfer tersimpan ke penyimpanan lokal.";
+  };
+
+  allLine1: string <- "Belum ada transaksi." {
+    @save_expense -> expenseSummary draftCategory draftAmount fromAccount note;
+    @save_income -> incomeSummary draftCategory draftAmount toAccount note;
+    @save_transfer -> transferSummary fromAccount toAccount draftAmount feeAmount note;
+  };
+
+  allLine2: string <- "Transaksi terbaru akan muncul di sini." {
+    @save_expense -> allLine1;
+    @save_income -> allLine1;
+    @save_transfer -> allLine1;
+  };
+
+  allLine3: string <- "Export JSON ikut diperbarui setiap simpan." {
+    @save_expense -> allLine2;
+    @save_income -> allLine2;
+    @save_transfer -> allLine2;
+  };
+
+  allLine4: string <- "Gunakan filter di halaman riwayat." {
+    @save_expense -> allLine3;
+    @save_income -> allLine3;
+    @save_transfer -> allLine3;
+  };
+
+  expenseLine1: string <- "Belum ada pengeluaran." {
+    @save_expense -> expenseSummary draftCategory draftAmount fromAccount note;
+  };
+
+  expenseLine2: string <- "Pengeluaran yang dicatat akan muncul di sini." {
+    @save_expense -> expenseLine1;
+  };
+
+  incomeLine1: string <- "Belum ada pemasukan." {
+    @save_income -> incomeSummary draftCategory draftAmount toAccount note;
+  };
+
+  incomeLine2: string <- "Pemasukan yang dicatat akan muncul di sini." {
+    @save_income -> incomeLine1;
+  };
+
+  transferLine1: string <- "Belum ada transfer." {
+    @save_transfer -> transferSummary fromAccount toAccount draftAmount feeAmount note;
+  };
+
+  transferLine2: string <- "Transfer yang dicatat akan muncul di sini." {
+    @save_transfer -> transferLine1;
+  };
+
+  filterTitle: string <- "Semua transaksi" {
+    @filter_all -> "Semua transaksi";
+    @filter_expense -> "Pengeluaran";
+    @filter_income -> "Pemasukan";
+    @filter_transfer -> "Transfer";
+    @save_expense -> "Semua transaksi";
+    @save_income -> "Semua transaksi";
+    @save_transfer -> "Semua transaksi";
+  };
+
+  visibleLine1: string <- "Belum ada transaksi." {
+    @save_expense -> expenseSummary draftCategory draftAmount fromAccount note;
+    @save_income -> incomeSummary draftCategory draftAmount toAccount note;
+    @save_transfer -> transferSummary fromAccount toAccount draftAmount feeAmount note;
+    @filter_all -> allLine1;
+    @filter_expense -> expenseLine1;
+    @filter_income -> incomeLine1;
+    @filter_transfer -> transferLine1;
+  };
+
+  visibleLine2: string <- "Transaksi terbaru akan muncul di sini." {
+    @save_expense -> visibleLine1;
+    @save_income -> visibleLine1;
+    @save_transfer -> visibleLine1;
+    @filter_all -> allLine2;
+    @filter_expense -> expenseLine2;
+    @filter_income -> incomeLine2;
+    @filter_transfer -> transferLine2;
+  };
+
+  visibleLine3: string <- "Export JSON ikut diperbarui setiap simpan." {
+    @save_expense -> visibleLine2;
+    @save_income -> visibleLine2;
+    @save_transfer -> visibleLine2;
+    @filter_all -> allLine3;
+    @filter_expense -> "Hanya dua pengeluaran terakhir yang ditampilkan.";
+    @filter_income -> "Hanya dua pemasukan terakhir yang ditampilkan.";
+    @filter_transfer -> "Hanya dua transfer terakhir yang ditampilkan.";
+  };
+
+  visibleLine4: string <- "Gunakan filter di halaman riwayat." {
+    @save_expense -> visibleLine3;
+    @save_income -> visibleLine3;
+    @save_transfer -> visibleLine3;
+    @filter_all -> allLine4;
+    @filter_expense -> "Filter ini tetap menjaga export JSON penuh.";
+    @filter_income -> "Filter ini tetap menjaga export JSON penuh.";
+    @filter_transfer -> "Filter ini tetap menjaga export JSON penuh.";
+  };
+
+  chartMaxValue: number <- 1 {
+    @save_expense -> chartMax incomeTotal expenseTotal + draftAmount transferTotal;
+    @save_income -> chartMax incomeTotal + draftAmount expenseTotal transferTotal;
+    @save_transfer -> chartMax incomeTotal expenseTotal transferTotal + draftAmount;
+  };
+
+  incomeBarVisual: string <- "▁▁▁▁▁" {
+    @save_expense -> barVisual incomeTotal chartMax incomeTotal expenseTotal + draftAmount transferTotal;
+    @save_income -> barVisual incomeTotal + draftAmount chartMax incomeTotal + draftAmount expenseTotal transferTotal;
+    @save_transfer -> barVisual incomeTotal chartMax incomeTotal expenseTotal transferTotal + draftAmount;
+  };
+
+  expenseBarVisual: string <- "▁▁▁▁▁" {
+    @save_expense -> barVisual expenseTotal + draftAmount chartMax incomeTotal expenseTotal + draftAmount transferTotal;
+    @save_income -> barVisual expenseTotal chartMax incomeTotal + draftAmount expenseTotal transferTotal;
+    @save_transfer -> barVisual expenseTotal chartMax incomeTotal expenseTotal transferTotal + draftAmount;
+  };
+
+  transferBarVisual: string <- "▁▁▁▁▁" {
+    @save_expense -> barVisual transferTotal chartMax incomeTotal expenseTotal + draftAmount transferTotal;
+    @save_income -> barVisual transferTotal chartMax incomeTotal + draftAmount expenseTotal transferTotal;
+    @save_transfer -> barVisual transferTotal + draftAmount chartMax incomeTotal expenseTotal transferTotal + draftAmount;
+  };
+
+  incomeBarClass: string <- "bar-fill bar-h-0" {
+    @save_expense -> barHeightClass incomeTotal chartMax incomeTotal expenseTotal + draftAmount transferTotal;
+    @save_income -> barHeightClass incomeTotal + draftAmount chartMax incomeTotal + draftAmount expenseTotal transferTotal;
+    @save_transfer -> barHeightClass incomeTotal chartMax incomeTotal expenseTotal transferTotal + draftAmount;
+  };
+
+  expenseBarClass: string <- "bar-fill bar-h-0" {
+    @save_expense -> barHeightClass expenseTotal + draftAmount chartMax incomeTotal expenseTotal + draftAmount transferTotal;
+    @save_income -> barHeightClass expenseTotal chartMax incomeTotal + draftAmount expenseTotal transferTotal;
+    @save_transfer -> barHeightClass expenseTotal chartMax incomeTotal expenseTotal transferTotal + draftAmount;
+  };
+
+  transferBarClass: string <- "bar-fill bar-h-0" {
+    @save_expense -> barHeightClass transferTotal chartMax incomeTotal expenseTotal + draftAmount transferTotal;
+    @save_income -> barHeightClass transferTotal chartMax incomeTotal + draftAmount expenseTotal transferTotal;
+    @save_transfer -> barHeightClass transferTotal + draftAmount chartMax incomeTotal expenseTotal transferTotal + draftAmount;
+  };
+
+  pieIncomeClass: string <- "pie-segment pie-income pie-w-0" {
+    @save_expense -> pieIncomeClassFor incomeTotal incomeTotal + expenseTotal + draftAmount + transferTotal;
+    @save_income -> pieIncomeClassFor incomeTotal + draftAmount incomeTotal + draftAmount + expenseTotal + transferTotal;
+    @save_transfer -> pieIncomeClassFor incomeTotal incomeTotal + expenseTotal + transferTotal + draftAmount;
+  };
+
+  pieExpenseClass: string <- "pie-segment pie-expense pie-w-0" {
+    @save_expense -> pieExpenseClassFor expenseTotal + draftAmount incomeTotal + expenseTotal + draftAmount + transferTotal;
+    @save_income -> pieExpenseClassFor expenseTotal incomeTotal + draftAmount + expenseTotal + transferTotal;
+    @save_transfer -> pieExpenseClassFor expenseTotal incomeTotal + expenseTotal + transferTotal + draftAmount;
+  };
+
+  pieTransferClass: string <- "pie-segment pie-transfer pie-w-0" {
+    @save_expense -> pieTransferClassFor transferTotal incomeTotal + expenseTotal + draftAmount + transferTotal;
+    @save_income -> pieTransferClassFor transferTotal incomeTotal + draftAmount + expenseTotal + transferTotal;
+    @save_transfer -> pieTransferClassFor transferTotal + draftAmount incomeTotal + expenseTotal + transferTotal + draftAmount;
+  };
+
+  pieIncomeLabel: string <- "0%" {
+    @save_expense -> piePercent incomeTotal incomeTotal + expenseTotal + draftAmount + transferTotal;
+    @save_income -> piePercent incomeTotal + draftAmount incomeTotal + draftAmount + expenseTotal + transferTotal;
+    @save_transfer -> piePercent incomeTotal incomeTotal + expenseTotal + transferTotal + draftAmount;
+  };
+
+  pieExpenseLabel: string <- "0%" {
+    @save_expense -> piePercent expenseTotal + draftAmount incomeTotal + expenseTotal + draftAmount + transferTotal;
+    @save_income -> piePercent expenseTotal incomeTotal + draftAmount + expenseTotal + transferTotal;
+    @save_transfer -> piePercent expenseTotal incomeTotal + expenseTotal + transferTotal + draftAmount;
+  };
+
+  pieTransferLabel: string <- "0%" {
+    @save_expense -> piePercent transferTotal incomeTotal + expenseTotal + draftAmount + transferTotal;
+    @save_income -> piePercent transferTotal incomeTotal + draftAmount + expenseTotal + transferTotal;
+    @save_transfer -> piePercent transferTotal + draftAmount incomeTotal + expenseTotal + transferTotal + draftAmount;
+  };
+
+  jsonSuffix: string <- "" {
+    @save_expense -> ",{\"type\":\"expense\",\"category\":\"" + draftCategory + "\",\"amount\":" + draftAmount + ",\"account\":\"" + fromAccount + "\",\"note\":\"" + note + "\"}" + jsonSuffix;
+    @save_income -> ",{\"type\":\"income\",\"category\":\"" + draftCategory + "\",\"amount\":" + draftAmount + ",\"account\":\"" + toAccount + "\",\"note\":\"" + note + "\"}" + jsonSuffix;
+    @save_transfer -> ",{\"type\":\"transfer\",\"from\":\"" + fromAccount + "\",\"to\":\"" + toAccount + "\",\"amount\":" + draftAmount + ",\"fee\":" + feeAmount + ",\"note\":\"" + note + "\"}" + jsonSuffix;
+  };
+
+  exportJson: string <- "{\"transactions\":[]}" {
+    @loaded(value: string) -> value;
+    @save_expense -> "{\"transactions\":[{\"type\":\"expense\",\"category\":\"" + draftCategory + "\",\"amount\":" + draftAmount + ",\"account\":\"" + fromAccount + "\",\"note\":\"" + note + "\"}" + jsonSuffix + "]}";
+    @save_income -> "{\"transactions\":[{\"type\":\"income\",\"category\":\"" + draftCategory + "\",\"amount\":" + draftAmount + ",\"account\":\"" + toAccount + "\",\"note\":\"" + note + "\"}" + jsonSuffix + "]}";
+    @save_transfer -> "{\"transactions\":[{\"type\":\"transfer\",\"from\":\"" + fromAccount + "\",\"to\":\"" + toAccount + "\",\"amount\":" + draftAmount + ",\"fee\":" + feeAmount + ",\"note\":\"" + note + "\"}" + jsonSuffix + "]}";
+  };
+/|
