@@ -78,6 +78,7 @@ func allowedInternalImports() map[string]map[string]bool {
 		"internal/artifact": set(
 			"internal/build",
 			"internal/capability",
+			"internal/contract",
 			"internal/diagnostic",
 			"internal/lexer",
 			"internal/parser",
@@ -90,6 +91,7 @@ func allowedInternalImports() map[string]map[string]bool {
 			"runtime/nova-scheduler-java",
 			"runtime/nova-scheduler-js",
 		),
+		"internal/contract": set(),
 		"internal/build":       set("internal/packages", "internal/parser", "internal/project", "internal/security", "internal/standard"),
 		"internal/bundler":     set(),
 		"internal/capability":  set("internal/parser"),

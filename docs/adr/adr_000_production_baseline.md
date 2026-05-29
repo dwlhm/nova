@@ -31,7 +31,7 @@ tambahan di luar primitive Nova.
 ```txt
 .nova
   -> Go: parse, validate, ViewIR, artifact
-  -> ABI JSON (state IR, ViewIR, permissions, routes, provider bindings)
+  -> app contract JSON (v1) + build.manifest (dev)
   -> Nova runtime native (JS / Java)
   -> provider: render, listen, effect ports
   -> @env/* -> API platform

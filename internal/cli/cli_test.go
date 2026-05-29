@@ -73,7 +73,7 @@ label = "demo"
 	assertFileContains(t, cwd, "build/web/index.html", "demo")
 	assertFileContains(t, cwd, "build/web/index.html", "assets/styles/src/App.css")
 	assertFileContains(t, cwd, "build/web/assets/styles/src/App.css", ".counter-shell")
-	assertFileContains(t, cwd, "build/web/app.nova-ir.json", "\"target\": \"web\"")
+	assertFileContains(t, cwd, "build/web/app.contract.json", "\"target\": \"web\"")
 	assertFileContains(t, cwd, "build/web/app.bundle.js", "@increment")
 	assertFileContains(t, cwd, "build/web/bundle-manifest.json", "\"format\": \"static-web\"")
 

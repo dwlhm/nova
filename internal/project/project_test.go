@@ -144,7 +144,7 @@ func TestValidateLayoutAllowsRecommendedProjectShape(t *testing.T) {
 		{Path: "platform/web/storage.web.js"},
 		{Path: "tests/fixtures/valid/counter.nova"},
 		{Path: "docs/adr/adr_001_language_specification.md"},
-		{Path: "build/web/metadata.json"},
+		{Path: "build/web/build.manifest.json"},
 	}
 
 	diagnostics := ValidateLayout(manifest, files)

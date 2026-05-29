@@ -175,6 +175,9 @@ window.NovaRuntime = (() => {
 
   function bindingExpression(binding, app) {
     if (!binding) return "\"\"";
+    if (typeof binding === "string") return binding;
+    const expr = pick(binding, "expr", "Expr", "");
+    if (expr) return expr;
     const tokens = pick(binding, "tokens", "Tokens", []);
     if (tokens.length) return tokenExpression(tokens, stateNameSet(app));
     const text = pick(binding, "text", "Text", "");
@@ -218,7 +221,7 @@ window.NovaRuntime = (() => {
   function render(runtime) {
     const root = runtime.root;
     runtime.refs = new Map();
-    root.replaceChildren(...renderNodes(pick(runtime.app.viewIR, "nodes", "Nodes", []), runtime, []));
+    root.replaceChildren(...renderNodes(viewNodes(runtime.app), runtime, []));
     update(runtime, null);
   }
 
@@ -229,7 +232,7 @@ window.NovaRuntime = (() => {
     }
     if (invalidations && !invalidations.size) return;
     updateBindings(runtime, invalidations);
-    updatePages(runtime, pick(runtime.app.viewIR, "nodes", "Nodes", []), []);
+    updatePages(runtime, viewNodes(runtime.app), []);
   }
 
   function renderNodes(nodes, runtime, parentPath) {
@@ -266,7 +269,7 @@ window.NovaRuntime = (() => {
       const prop = pick(ref, "prop", "Prop", "");
       if (prop === "key" || prop.includes("#arg")) continue;
       if (!shouldApplyBinding(states, invalidations)) continue;
-      const path = pick(ref, "nodePath", "NodePath", []) || [];
+      const path = pick(ref, "at", "nodePath", "NodePath", []) || [];
       const target = runtime.refs.get(pathKey(path));
       if (!target) continue;
       const node = nodeAtPath(runtime.app, path);
@@ -309,10 +312,14 @@ window.NovaRuntime = (() => {
     applyPropValue(target, prop, value);
   }
 
+  function viewNodes(app) {
+    const view = pick(app, "view", "viewIR", "ViewIR", {}) || {};
+    return pick(view, "nodes", "Nodes", []) || [];
+  }
+
   function metadataBindings(app) {
-    const viewIR = pick(app, "viewIR", "ViewIR", {}) || {};
-    const metadata = pick(viewIR, "metadata", "Metadata", {}) || {};
-    return pick(metadata, "bindings", "Bindings", []) || [];
+    const view = pick(app, "view", "viewIR", "ViewIR", {}) || {};
+    return pick(view, "bindings", "Bindings", []) || pick(pick(view, "metadata", "Metadata", {}) || {}, "bindings", "Bindings", []) || [];
   }
 
   function shouldApplyBinding(states, invalidations) {
@@ -321,7 +328,7 @@ window.NovaRuntime = (() => {
   }
 
   function nodeAtPath(app, path) {
-    let list = pick(pick(app, "viewIR", "ViewIR", {}) || {}, "nodes", "Nodes", []) || [];
+    let list = viewNodes(app);
     let node = null;
     for (const index of path || []) {
       node = list[index];
@@ -645,7 +652,7 @@ window.NovaRuntime = (() => {
 
   function collectPagePatterns(runtime) {
     const patterns = [];
-    collectPagePatternsFromNodes(pick(runtime.app.viewIR, "nodes", "Nodes", []), runtime, patterns);
+    collectPagePatternsFromNodes(viewNodes(runtime.app), runtime, patterns);
     return patterns;
   }
 
@@ -772,7 +779,7 @@ window.NovaRuntime = (() => {
 
   function applyEvents(element, events, runtime) {
     for (const [slot, route] of Object.entries(events || {})) {
-      const eventName = pick(route, "event", "Event", "");
+      const eventName = pick(route, "name", "event", "Event", "");
       const args = pick(route, "args", "Args", []) || [];
       if (slot === "on_press") {
         element.addEventListener("click", () => {
@@ -811,6 +818,7 @@ window.NovaRuntime = (() => {
   }
 
   function implicitValueArg(binding) {
+    if (binding === "$value") return true;
     const tokens = pick(binding, "tokens", "Tokens", []) || [];
     return tokens.length === 1 && tokenLiteral(tokens[0]) === "value";
   }
@@ -833,9 +841,9 @@ window.NovaRuntime = (() => {
 `
 }
 
-func webBundle(bundle irBundle) string {
+func webBundle(app any) string {
 	return `"use strict";
-window.__NOVA_APP__ = ` + mustJSON(bundle) + `;
+window.__NOVA_APP__ = ` + mustJSON(app) + `;
 if (window.NovaRuntime) {
   window.NovaRuntime.mount(window.__NOVA_APP__);
 }

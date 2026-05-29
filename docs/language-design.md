@@ -2,7 +2,8 @@
 
 Panduan normatif untuk menulis `.nova`. Arah arsitektur:
 [design-philosophy.md](design-philosophy.md). Spesifikasi mengikat ringkas:
-[adr_001_language_specification.md](adr/adr_001_language_specification.md).
+[adr_001_language_specification.md](adr/adr_001_language_specification.md). Kontrak runtime bundle:
+[contract.md](contract.md).
 
 ---
 

@@ -63,14 +63,13 @@ func TestGenerateWebArtifactIncludesRuntimeViewIRAndMetadata(t *testing.T) {
 	assertArtifactFile(t, files, "build/web/assets/nova-renderer.js", "NovaRenderer")
 	assertArtifactFile(t, files, "build/web/assets/nova-runtime.js", "window.NovaRuntime")
 	assertArtifactFile(t, files, "build/web/app.bundle.js", "window.__NOVA_APP__")
-	assertArtifactFile(t, files, "build/web/app.nova-ir.json", "\"viewIR\"")
-	assertArtifactFile(t, files, "build/web/app.source-map.json", "src/App.nova")
-	assertArtifactFile(t, files, "build/web/permissions.json", "storage.read")
-	assertArtifactFile(t, files, "build/web/target-manifest.json", "\"id\": \"web\"")
+	assertArtifactFile(t, files, "build/web/app.contract.json", "\"view\"")
+	assertArtifactFile(t, files, "build/web/build.manifest.json", "src/App.nova")
+	assertArtifactFile(t, files, "build/web/build.manifest.json", "storage.read")
 
-	metadata := mustJSONFile[map[string]any](t, files, "build/web/metadata.json")
-	if metadata["target"] != "web" || metadata["entryCapability"] != "src/App.nova" {
-		t.Fatalf("metadata = %+v", metadata)
+	buildDoc := mustJSONFile[map[string]any](t, files, "build/web/build.manifest.json")
+	if buildDoc["target"] != "web" || buildDoc["entry"] != "src/App.nova" {
+		t.Fatalf("build.manifest = %+v", buildDoc)
 	}
 }
 
@@ -119,7 +118,7 @@ func TestGenerateWebArtifactIncludesRendererExtensionAdapter(t *testing.T) {
 
 	assertArtifactFile(t, files, "build/web/index.html", "assets/renderer-extensions.js")
 	assertArtifactFile(t, files, "build/web/assets/renderer-extensions.js", `NovaRenderer.definePrimitive("sparkline"`)
-	assertArtifactFile(t, files, "build/web/app.nova-ir.json", `"renderer"`)
+	assertArtifactFile(t, files, "build/web/app.contract.json", `"v": 1`)
 }
 
 func TestGenerateWebArtifactAllowsUnknownKindWithWarningPolicy(t *testing.T) {
@@ -321,10 +320,8 @@ func TestGenerateAndroidArtifactIncludesGradleAndGeneratedBindings(t *testing.T)
 	assertArtifactFile(t, files, "build/android/nova-scheduler/src/main/java/nova/scheduler/NovaTransition.java", "public final class NovaTransition")
 	assertArtifactFile(t, files, "build/android/generated/NovaApp.java", "public final class NovaApp")
 	assertArtifactFile(t, files, "build/android/generated/NovaExternalBindings.java", "NovaExternalBindings")
-	assertArtifactFile(t, files, "build/android/nova-ir/app.nova-ir.json", "\"viewIR\"")
-	assertArtifactFile(t, files, "build/android/nova-ir/permissions.json", "\"permissions\": []")
-	assertArtifactFile(t, files, "build/android/nova-ir/target-manifest.json", "\"id\": \"android\"")
-	assertArtifactFile(t, files, "build/android/nova-ir/target-manifest.json", "platform/android/storage.android.java")
+	assertArtifactFile(t, files, "build/android/nova-ir/app.contract.json", "\"view\"")
+	assertArtifactFile(t, files, "build/android/nova-ir/build.manifest.json", "\"target\": \"android\"")
 }
 
 func TestGenerateAndroidArtifactRequiresUserTargetConfig(t *testing.T) {
@@ -440,7 +437,7 @@ func TestGenerateWebArtifactSupportsMultiPageRouteProjection(t *testing.T) {
 	assertArtifactFile(t, files, "build/web/assets/nova-runtime.js", "window.addEventListener(\"popstate\"")
 	assertArtifactFile(t, files, "build/web/assets/nova-runtime.js", "window.history[method]")
 	assertArtifactFile(t, files, "build/web/assets/nova-runtime.js", "ROUTE_CHANGED_EVENT")
-	assertArtifactFile(t, files, "build/web/app.nova-ir.json", "\"Pages\"")
+	assertArtifactFile(t, files, "build/web/app.contract.json", "\"kind\": \"page\"")
 	assertArtifactFile(t, files, "build/web/app.bundle.js", `"initial": "({ path: \"/\" })"`)
 }
 
@@ -497,9 +494,7 @@ func TestGenerateWebArtifactSupportsProductionRouteMatching(t *testing.T) {
 		t.Fatalf("unexpected diagnostics: %+v", diagnostics)
 	}
 
-	assertArtifactFile(t, files, "build/web/app.nova-ir.json", `"pattern": "/users/:id"`)
-	assertArtifactFile(t, files, "build/web/app.nova-ir.json", `"id"`)
-	assertArtifactFile(t, files, "build/web/app.nova-ir.json", `"fallback": true`)
+	assertArtifactFile(t, files, "build/web/app.contract.json", `"kind": "page"`)
 	assertArtifactFile(t, files, "build/web/assets/nova-runtime.js", "function selectedPageNodes")
 	assertArtifactFile(t, files, "build/web/assets/nova-runtime.js", "function routeMatch(pattern, path)")
 	assertArtifactFile(t, files, "build/web/assets/nova-runtime.js", "function routeValueForShape(route, shape, runtime)")

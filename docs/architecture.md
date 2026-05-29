@@ -7,6 +7,7 @@ Dokumen ini adalah peta kerja untuk implementasi Go Nova.
 | [design-philosophy.md](design-philosophy.md) | Visi produk (di luar detail `.nova`; sumber arah) |
 | [language-design.md](language-design.md) | Prinsip bahasa ringkas (normatif untuk `.nova`) |
 | [adr/README.md](adr/README.md) | Indeks ADR & jalur baca per topik |
+| [contract.md](contract.md) | Kontrak runtime bundle (`App` v1) |
 
 **Mulai baca:** [language-design.md](language-design.md) → [adr_000](adr/adr_000_production_baseline.md) →
 [adr/README.md](adr/README.md) (indeks ADR 000–011).

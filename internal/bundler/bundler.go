@@ -244,10 +244,8 @@ func collectAndroidOutputs(artifactDir string, outputPath string) ([]bundleOutpu
 		filepath.Join(artifactDir, "generated", "NovaApp.java"),
 		filepath.Join(artifactDir, "generated", "NovaRoutes.java"),
 		filepath.Join(artifactDir, "generated", "NovaExternalBindings.java"),
-		filepath.Join(artifactDir, "nova-ir", "app.nova-ir.json"),
-		filepath.Join(artifactDir, "nova-ir", "metadata.json"),
-		filepath.Join(artifactDir, "nova-ir", "permissions.json"),
-		filepath.Join(artifactDir, "nova-ir", "target-manifest.json"),
+		filepath.Join(artifactDir, "nova-ir", "app.contract.json"),
+		filepath.Join(artifactDir, "nova-ir", "build.manifest.json"),
 	}
 	outputs := make([]bundleOutput, 0, len(candidates))
 	seen := make(map[string]bool, len(candidates))

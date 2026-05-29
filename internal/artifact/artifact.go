@@ -197,18 +197,21 @@ func cloneIntPath(values []int) []int {
 func webFiles(input GenerateInput, bundle irBundle, metadata target.ArtifactMetadata) []File {
 	styles := webStyleBundle(input.StyleAssets)
 	extensions := webRendererExtensions(input.Plan.Renderer.Extensions)
+	app := buildAppContract(bundle, input.Plan.Permissions)
+	manifest := buildManifest(input, bundle, contractBuildVersions{
+		LanguageVersion:  metadata.LanguageVersion,
+		SchedulerVersion: metadata.SchedulerVersion,
+		RuntimeVersion:   metadata.RuntimeVersion,
+	})
 	files := []File{
 		{Path: "build/web/index.html", Content: webIndex(input.Project.Project.Name, webStyleHrefs(styles.Files), styles.RootScope, extensions.Enabled)},
 		{Path: "build/web/assets/nova-runtime.css", Content: webCSS()},
 		{Path: "build/web/assets/nova-scheduler.js", Content: webSchedulerModule()},
 		{Path: "build/web/assets/nova-renderer.js", Content: webRendererModule()},
 		{Path: "build/web/assets/nova-runtime.js", Content: webRuntime()},
-		{Path: "build/web/app.bundle.js", Content: webBundle(bundle)},
-		{Path: "build/web/app.nova-ir.json", Content: mustJSON(bundle)},
-		{Path: "build/web/app.source-map.json", Content: mustJSON(sourceMapSummary(input.Plan, bundle))},
-		{Path: "build/web/permissions.json", Content: mustJSON(permissionSummary(input.Plan.Permissions))},
-		{Path: "build/web/target-manifest.json", Content: mustJSON(targetManifestSummary(input.TargetManifest))},
-		{Path: "build/web/metadata.json", Content: mustJSON(metadataSummary(metadata))},
+		{Path: "build/web/app.bundle.js", Content: webBundle(app)},
+		{Path: "build/web/app.contract.json", Content: mustJSON(app)},
+		{Path: "build/web/build.manifest.json", Content: mustJSON(manifest)},
 		{Path: "build/web/style-manifest.json", Content: mustJSON(styles.Manifest)},
 	}
 	if extensions.Enabled {
@@ -223,12 +226,15 @@ func androidFiles(input GenerateInput, bundle irBundle, metadata target.Artifact
 		return nil, []Diagnostic{errorDiagnostic("NVA-TARGET-019", "android scheduler library: "+err.Error())}
 	}
 
+	app := buildAppContract(bundle, input.Plan.Permissions)
+	manifest := buildManifest(input, bundle, contractBuildVersions{
+		LanguageVersion:  metadata.LanguageVersion,
+		SchedulerVersion: metadata.SchedulerVersion,
+		RuntimeVersion:   metadata.RuntimeVersion,
+	})
 	files := []File{
-		{Path: "build/android/nova-ir/app.nova-ir.json", Content: mustJSON(bundle)},
-		{Path: "build/android/nova-ir/app.source-map.json", Content: mustJSON(sourceMapSummary(input.Plan, bundle))},
-		{Path: "build/android/nova-ir/permissions.json", Content: mustJSON(permissionSummary(input.Plan.Permissions))},
-		{Path: "build/android/nova-ir/target-manifest.json", Content: mustJSON(targetManifestSummary(input.TargetManifest))},
-		{Path: "build/android/nova-ir/metadata.json", Content: mustJSON(metadataSummary(metadata))},
+		{Path: "build/android/nova-ir/app.contract.json", Content: mustJSON(app)},
+		{Path: "build/android/nova-ir/build.manifest.json", Content: mustJSON(manifest)},
 		{Path: "build/android/settings.gradle.kts", Content: androidSettings(input.Project.Project.Name, config)},
 		{Path: "build/android/gradle.properties", Content: androidGradleProperties(config)},
 		{Path: "build/android/build.gradle.kts", Content: androidGradle(input.Project.Project.Name, config)},
@@ -333,54 +339,6 @@ func externalOperationNames(operations []build.ResolvedExternalOperation) []stri
 	}
 	sort.Strings(names)
 	return names
-}
-
-func sourceMapSummary(plan build.BuildPlan, bundle irBundle) map[string]any {
-	return map[string]any{
-		"entry":         plan.Entry,
-		"modules":       bundle.Modules,
-		"templateFile":  plan.Template.SourceFile,
-		"templateIndex": plan.Template.Index,
-		"target":        plan.Target,
-	}
-}
-
-func permissionSummary(permissions []security.Permission) map[string]any {
-	if permissions == nil {
-		permissions = []security.Permission{}
-	}
-	return map[string]any{"permissions": permissions}
-}
-
-func targetManifestSummary(manifest build.TargetManifest) map[string]any {
-	return map[string]any{
-		"id":                   manifest.ID,
-		"families":             manifest.Families,
-		"externalCapabilities": manifest.ExternalCapabilities,
-		"permissionMappings":   manifest.PermissionMappings,
-	}
-}
-
-func metadataSummary(metadata target.ArtifactMetadata) map[string]any {
-	permissions := metadata.Permissions
-	if permissions == nil {
-		permissions = []security.Permission{}
-	}
-	operations := metadata.ExternalOperations
-	if operations == nil {
-		operations = []string{}
-	}
-	return map[string]any{
-		"target":             metadata.Target,
-		"entryCapability":    metadata.EntryCapability,
-		"languageVersion":    metadata.LanguageVersion,
-		"abiVersion":         metadata.ABIVersion,
-		"schedulerVersion":   metadata.SchedulerVersion,
-		"viewIrVersion":      metadata.ViewIRVersion,
-		"runtimeVersion":     metadata.RuntimeVersion,
-		"permissions":        permissions,
-		"externalOperations": operations,
-	}
 }
 
 func runtimeContract(targetID string) (target.RuntimeContract, bool) {
