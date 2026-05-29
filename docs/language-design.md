@@ -1,142 +1,255 @@
 # Nova Language Design
 
-Panduan normatif untuk menulis `.nova`. Arah produk (di luar detail bahasa):
-[design-philosophy.md](design-philosophy.md). Grammar lengkap:
-`docs/adr/adr_001_language_specification.md`.
+Panduan normatif untuk menulis `.nova`. Arah arsitektur:
+[design-philosophy.md](design-philosophy.md). Spesifikasi mengikat ringkas:
+[adr_001_language_specification.md](adr/adr_001_language_specification.md).
+
+---
 
 ## Apa itu Nova
 
-Nova adalah **bahasa framework multiplatform** untuk mendeklarasikan aplikasi: state di
-`<contract state>`, UI di `<template>`, efek di `<lifecycle>`. Bukan bahasa general-purpose.
+Bahasa deklarasi aplikasi multi-surface — bukan general-purpose. Kamu mendeklarasikan:
 
-Pemisahan pure/effect **eksplisit di syntax**, supaya terbaca natural — state dan view seperti
-kode aplikasi biasa; efek tidak “bocor” ke template atau func. Di belakang, runtime memakai
-scheduler untuk menjaga urutan lintas target (detail di ADR-002); itu kontrak implementasi, bukan
-hal yang harus kamu rancang manual tiap fitur.
+- **keadaan** (`<contract state>`) dan aturan perubahannya (`@event`),
+- **tampilan** (`<template>`),
+- **efek ke luar** (`<lifecycle>`, `<import external>`, `@env/*`).
 
-## Enam prinsip (ingat ini dulu)
+Satu file `.nova` = satu **capability** (unit kompilasi, dependency, audit izin).
 
-| # | Prinsip | Artinya singkat |
-| --- | --- | --- |
-| 1 | **Explicit zones** | State/UI di construct pure; efek hanya di lifecycle/external — batas terlihat, alur tetap natural. |
-| 2 | **Pure by default** | `contract`, `func`, `template` tidak boleh side effect. |
-| 3 | **Events, not hidden actions** | Perilaku aplikasi lewat `@event` + handler state; bukan API imperative tersebar. |
-| 4 | **File = capability** | Satu `.nova` = satu unit kompilasi, dependency, dan audit keamanan. |
-| 5 | **Import is inert** | Import hanya menambah edge di graph; tidak menjalankan kode. |
-| 6 | **Serializable boundaries** | Data antar core, ABI, adapter, dan persistence harus serializable — tanpa handle platform di core. |
+---
 
-Prinsip 1–6 mengikat ADR-001–011. Urutan runtime lintas platform dijamin scheduler
-(ADR-002) — jangan menambah construct baru hanya untuk “memanggil scheduler”; gunakan event,
-state, dan lifecycle yang sudah ada.
-
-## Model mental (yang terasa saat menulis)
+## Loop yang harus kamu pegang
 
 ```txt
-Interaksi user / platform
-  -> @event (dari template atau host)
-  -> handler di <contract state> (ubah state, pure)
-  -> bila perlu efek: <lifecycle> (storage, navigasi, external, …)
-  -> template ter-render ulang dari snapshot state
+snapshot state
+  -> render (template + provider)
+  -> user/platform input
+  -> @event
+  -> transisi pure di <contract state>
+  -> commit snapshot
+  -> <lifecycle> bila perlu (storage, network, …)
+  -> render lagi
 ```
 
-Template **hanya** membaca state/props dan emit `@event` — tidak memanggil API platform.
+**State** = penanda akibat interaksi. **Event** = pemicu, bukan lapisan terpisah. Urutan
+commit dan lifecycle dijamin runtime (ADR-002); tidak perlu construct khusus untuk scheduler.
 
-### Di bawah hood (untuk runtime / conformance)
+---
 
-Setelah `@event`, runtime menjalankan transisi, **commit** atomik, lifecycle, lalu invalidasi
-render sesuai ADR-002. Penulis `.nova` tidak perlu menyebut langkah commit/queue; cukup model di
-atas.
+## Enam prinsip
 
-## Tujuh construct — tidak ada yang kedelapan
-
-Nova sengaja memakai **hanya** construct berikut. Semua pola lain dipetakan ke sini, bukan
-ditambah sebagai syntax baru.
-
-| Construct | Peran | Zona |
+| # | Prinsip | Praktik |
 | --- | --- | --- |
-| `<import>` / `<import external>` | Dependency dan kontrak operasi luar | Deklarasi (inert / contract) |
-| `<contract type>` | Bentuk data | Pure |
-| `<contract state>` | State + handler event (`@...`) | Pure (transition) |
-| `<contract capability>` | Props + event yang di-emit UI | Pure (deklarasi) |
-| `<func>` | Transform data | Pure |
-| `<template>` | Deklarasi view + routing event UI | Pure |
-| `<lifecycle>` | Efek samping userland | Effect |
+| 1 | **Zona eksplisit** | Pure di contract/func/template; effect hanya lifecycle & external |
+| 2 | **Pure by default** | Tanpa side effect di func/template/transisi |
+| 3 | **Event, bukan aksi tersembunyi** | Perilaku lewat `@event` + handler state |
+| 4 | **File = capability** | Satu concern utama per file |
+| 5 | **Import inert** | Import hanya graph dependency; tidak menjalankan lifecycle |
+| 6 | **Serializable** | Payload state/event/ABI tanpa handle platform |
 
-### Yang sengaja tidak ada
+---
 
-| Bukan di Nova | Sebagai gantinya |
-| --- | --- |
-| `<state>` global | `<contract state>` per capability |
-| `<action>` / `<effect>` | `@event` + transition; dirty di `<lifecycle>` |
-| `<dirty>` | Lifecycle **adalah** dirty zone |
-| `use` / `bind` hook | `import` symbol, state, atau event |
-| Router / widget native di bahasa | State `route` + `<page>` di template (ADR-005); provider platform |
+## Tujuh construct
 
-Menolak construct tambahan menjaga compiler, formatter, dan conformance tetap kecil.
+| Construct | Zona | Fungsi |
+| --- | --- | --- |
+| `<import>` / `<import external>` | deklarasi | dependency; kontrak operasi luar |
+| `<contract type>` | pure | bentuk data |
+| `<contract state>` | pure | state + `@event → hasil` |
+| `<contract capability>` | pure | props + event yang di-emit komponen |
+| `<func>` | pure | transform data (`\|>`) |
+| `<template>` | pure | view + routing event ke `@event` |
+| `<lifecycle>` | effect | listen event, panggil external/`@env` |
 
-## Tiga zona
+Tidak ada `<state>`, `<action>`, `<effect>`, `<dirty>`, `use`, `bind`. Router native tidak
+ada di bahasa — pakai state `route` + `<page>` (ADR-005).
+
+---
+
+## Zona di source
 
 ```txt
-┌─────────────────────────────────────────┐
-│ Pure core                               │
-│  contract type | state | capability     │
-│  func | template                        │
-└─────────────────┬───────────────────────┘
-                  │ snapshot + @events
-┌─────────────────▼───────────────────────┐
-│ Lifecycle (satu dirty zone userland)    │
-└─────────────────┬───────────────────────┘
-                  │ ports
-┌─────────────────▼───────────────────────┐
-│ Adapters (scheduler, @env/*, renderer)  │
-└─────────────────────────────────────────┘
+┌──────────────────────────────────────┐
+│ Pure: type, state, capability,       │
+│       func, template                 │
+└──────────────────┬───────────────────┘
+                   │ snapshot, @event
+┌──────────────────▼───────────────────┐
+│ Effect: <lifecycle>                  │
+└──────────────────┬───────────────────┘
+                   │ ports
+┌──────────────────▼───────────────────┐
+│ Provider + @env/* (render, IO)       │
+└──────────────────────────────────────┘
 ```
 
-## Aturan penulisan (checklist)
+---
 
-Saat menulis atau men-review `.nova`:
+## Menulis per construct
 
-1. Satu concern utama per file capability.
-2. Semua perubahan state lewat handler di `<contract state>`, bukan assignment di lifecycle.
-3. Event publik memakai prefix `@`; tanpa payload → `void`.
-4. Template: binding dan event saja — tidak ada pemanggilan external di template.
-5. Storage, network, device, navigasi programmatic → lifecycle (atau framework package
-   `@nova/*` yang sudah memodelkan event yang sama).
-6. Platform API → `<import external>` / `@env/*`, bukan inline di func/template.
-7. Cross-capability: import event/state yang diperlukan; jangan duplikasi state global.
+### Import
 
-## Konvensi nama (konsisten)
+```nova
+<import Counter from "./Counter.nova" /|
+<import state count from "./Counter.nova" /|
+<import event @increment from "./Counter.nova" /|
+<import button from "@nova/ui" /|
+```
+
+External = dirty; hanya dipanggil dari lifecycle:
+
+```nova
+<import external storage from "@env/storage">
+  operation set {
+    input { key: string; value: unknown; }
+    output void;
+  }
+/|
+```
+
+### Type
+
+```nova
+<contract type Route>
+  path: string;
+  params?: unknown;
+/|
+```
+
+Tipe field: `name: string;` — nilai default: `name <- "x";`
+
+### State
+
+```nova
+<contract state Counter>
+  count: number <- 0 {
+    @increment -> count + 1;
+    @decrement -> count - 1;
+    @reset -> 0;
+  };
+/|
+```
+
+- Transisi hanya di sini, bukan di lifecycle/template.
+- Satu `@event` boleh mengubah beberapa field.
+- Tanpa payload: `@tick: void` — emit `void -> @tick;` di lifecycle.
+
+### Func
+
+```nova
+<func add value: number amount: number returns number>
+  value + amount
+/|
+```
+
+Pipeline: `count |> add 1`. Func tidak baca state, tidak dispatch event, tidak panggil external.
+
+### Template
+
+```nova
+<template>
+  <button on_press -> @increment>
+    <text value <- "+" /|
+  /|
+/|
+```
+
+- Binding: `attr <- expr`
+- Event: `on_press -> @event` atau `-> @event(payload)`
+- Baca state/props; jangan panggil external.
+
+**Routing** — state `route` + `<page>`:
+
+```nova
+<page path <- "/settings">
+  <text value <- "Settings" /|
+/|
+```
+
+Perubahan route lewat transisi, mis. `@route_changed(next: Route) -> next`.
+
+### Capability (komponen)
+
+```nova
+<contract capability Button>
+  props { label: string; disabled?: boolean; }
+  emits { @pressed: void; }
+/|
+
+<template>
+  <button disabled <- disabled on_press -> @pressed>
+    <text value <- label /|
+  /|
+/|
+```
+
+Pemakaian: `<Button label <- "Save" @pressed -> @save /|`
+
+### Lifecycle
+
+```nova
+<import event @restore from "./Store.nova" /|
+<import state exportJson from "./Store.nova" /|
+
+<lifecycle mount>
+  void -> @restore;
+/|
+
+<lifecycle after @save>
+  exportJson |> storage.set key <- "ledger" value <- exportJson;
+/|
+```
+
+Fase: `mount`, `dispose`, `before @event`, `after @event`, `error`. Lifecycle tidak callable
+dan tidak menulis state langsung.
+
+---
+
+## Checklist review
+
+1. Satu concern utama per file.
+2. Semua perubahan state di `<contract state>`.
+3. Event publik: prefix `@`; tanpa payload → `void`.
+4. Template: bind + emit saja.
+5. Storage/network/device → lifecycle atau `@nova/*` yang sudah memodelkan event sama.
+6. Platform API → `<import external>` / `@env/*`.
+7. Import state/event lintas capability; hindari state global duplikat.
+
+---
+
+## Konvensi nama
 
 | Konsep | Konvensi | Contoh |
 | --- | --- | --- |
-| Scheduler event | `@snake_case` | `@increment`, `@route_changed` |
-| State contract | `PascalCase` | `Counter`, `Router` |
-| Type contract | `PascalCase` | `Route`, `Money` |
-| Capability file | `PascalCase.nova` | `Counter.nova` |
-| Route state (v1) | field `route` | ADR-005 |
+| Event | `@snake_case` | `@increment`, `@route_changed` |
+| State / type contract | `PascalCase` | `Counter`, `Route` |
+| File capability | `PascalCase.nova` | `Counter.nova` |
+| Route (v1) | field `route` | lihat ADR-005 |
 
-## Kapan membaca ADR mana
+---
+
+## ADR terkait
 
 | Pertanyaan | ADR |
 | --- | --- |
-| Grammar & construct | 001 |
-| Runtime, lifecycle, route, persistence | 002 |
-| Module, layout, package, provider binding | 003 |
-| Tipe & serializable | 004 |
-| ViewIR, routing, renderer | 005 |
-| External & permission | 006 |
-| Build & target | 007 |
-| Diagnostics | 008 |
-| Web & Android target | 009 |
+| Spec mengikat & edge grammar | 001 |
+| Runtime, lifecycle, persistence | 002 |
+| Module, layout, package | 003 |
+| Tipe | 004 |
+| ViewIR, `<page>`, renderer | 005 |
+| External, permission | 006 |
+| Build | 007 |
+| Diagnostic codes | 008 |
+| Target web/Android | 009 |
 | `@nova/*`, `@env/*` | 010 |
-| CLI, test, conformance | 011 |
+| CLI, conformance | 011 |
 
-## Menambah fitur bahasa
+---
 
-Sebelum menambah syntax atau construct:
+## Menambah construct atau syntax
 
-1. Buktikan tidak bisa diekspresikan dengan tujuh construct + package/adapter.
-2. Update dokumen ini dan ADR-001; tambahkan conformance fixture.
-3. Pertahankan pure/effect split; jangan buka dirty zone baru di userland tanpa ADR eksplisit.
+1. Pastikan tidak bisa diekspresikan dengan tujuh construct + package/provider.
+2. Update dokumen ini dan ADR-001; tambah fixture conformance.
+3. Jangan buka dirty zone userland baru tanpa ADR.
 
-Lihat juga [architecture.md](architecture.md) § Adding A Feature.
+Lihat [architecture.md](architecture.md) untuk ownership paket Go.
