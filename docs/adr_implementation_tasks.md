@@ -1,7 +1,20 @@
 # ADR Implementation Tasks
 
-Dokumen ini merangkum gap implementasi ADR berdasarkan audit terhadap `docs/adr/` dan paket
-`internal/`. Format ini sengaja dibuat sebagai checklist kerja, bukan ADR baru.
+Checklist gap implementasi (bukan ADR). ADR aktif: **000–011** di `docs/adr/README.md`.
+
+| ADR lama (dihapus) | ADR baru |
+| --- | --- |
+| 002 scheduler, 005 effect, 014 framework, 018 nav, 019 persistence | **002** runtime |
+| 003 capability, 007 platform, 012 layout, 022 packages, 026 modular | **003** modules |
+| 006 template, 008 lowering, 023 routing, 024 style, 025 APK, 027 primitives | **005** view |
+| 009 external, 013 security | **006** |
+| 010 build | **007** |
+| 011 diagnostics | **008** |
+| 016 web, 017 android | **009** |
+| 015 standard packages | **010** |
+| 020 test, 021 tooling | **011** |
+
+Bagian di bawah masih memakai nomor lama di judul; arti tugas sama, lihat map di atas.
 
 Status awal:
 

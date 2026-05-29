@@ -1,9 +1,15 @@
 # Architecture
 
-Dokumen ini adalah peta kerja untuk implementasi Go Nova. ADR di `docs/adr/` tetap menjadi sumber keputusan desain. Indeks lengkap:
-[docs/adr/README.md](adr/README.md). Mulai dari `docs/adr/adr_000_production_baseline.md`;
-untuk modularitas baca `docs/adr/adr_026_modular_system_architecture.md`, lalu ADR-003, ADR-012,
-ADR-022. ADR operasional: 011, 014, 017, 020, 024, 025.
+Dokumen ini adalah peta kerja untuk implementasi Go Nova.
+
+| Dokumen | Peran |
+| --- | --- |
+| [design-philosophy.md](design-philosophy.md) | Visi produk (di luar detail `.nova`; sumber arah) |
+| [language-design.md](language-design.md) | Prinsip bahasa ringkas (normatif untuk `.nova`) |
+| [adr/README.md](adr/README.md) | Indeks ADR & jalur baca per topik |
+
+**Mulai baca:** [language-design.md](language-design.md) → [adr_000](adr/adr_000_production_baseline.md) →
+[adr/README.md](adr/README.md) (indeks ADR 000–011).
 
 ## Pipeline
 
@@ -82,7 +88,7 @@ mengambil dependency ke CLI, bundler, atau filesystem host.
 | `internal/view` | Projection template menjadi ViewIR dan dependency metadata. |
 | `internal/capability` | Manifest capability dari source/parser contract. |
 | `internal/artifact` | Generate file web/android dari build plan dan IR, tanpa menulis disk. |
-| `internal/standard` | Katalog built-in `@nova/ui` dan merge primitive renderer package untuk LSP/tooling (ADR-027). |
+| `internal/standard` | Katalog built-in `@nova/ui` dan merge primitive renderer (ADR-010, ADR-005). |
 | `internal/bundler` | Validasi artifact target, manifest bundle, Gradle/process execution. |
 | `internal/dev` | Planning dev cycle yang pure dan mudah diuji. |
 | `internal/tooling` | Helper tooling kecil yang tidak masuk pipeline utama. |
@@ -119,7 +125,7 @@ Rule ini diperiksa oleh test arsitektur di `internal/architecture`.
 
 ### Syntax Or Language Semantics
 
-1. Update ADR atau dokumen spec yang relevan.
+1. Update [language-design.md](language-design.md) bila prinsip ringkas berubah; update ADR-001 dan ADR terkait untuk detail.
 2. Ubah lexer/parser AST.
 3. Tambahkan semantic validation/type behavior.
 4. Update formatter bila bentuk source berubah.
@@ -140,7 +146,7 @@ Rule ini diperiksa oleh test arsitektur di `internal/architecture`.
 
 ### Diagnostics
 
-1. Pilih prefix code dari ADR-011.
+1. Pilih prefix code dari ADR-008.
 2. Pastikan ordering deterministic.
 3. Update unit test dan conformance expected jika diagnostic menjadi contract.
 

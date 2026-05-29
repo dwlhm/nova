@@ -1,6 +1,6 @@
 # @nova/scheduler
 
-Production scheduler for Nova web targets. Implements [ADR-002](../../docs/adr/adr_002_scheduler_runtime_semantics.md) queue, envelope, and state commit semantics.
+Production scheduler for Nova web targets. Implements [ADR-002](../../docs/adr/adr_002_runtime.md) queue, envelope, and state commit semantics.
 
 The host runtime (`nova-web-runtime`) supplies evaluation, route shaping, and view updates through a `host` object passed to `NovaScheduler.create(host)`.
 

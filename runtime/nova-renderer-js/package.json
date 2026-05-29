@@ -1,7 +1,7 @@
 {
   "name": "@nova/renderer",
   "version": "0.1.0",
-  "description": "Nova production renderer primitive registry for browser runtimes (ADR-027)",
+  "description": "Nova production renderer primitive registry for browser runtimes (ADR-005)",
   "license": "MIT",
   "type": "commonjs",
   "main": "src/nova-renderer.js",

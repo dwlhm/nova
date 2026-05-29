@@ -1,6 +1,6 @@
 # nova-scheduler-java
 
-Production scheduler library for Nova Android targets. Implements [ADR-002](../../docs/adr/adr_002_scheduler_runtime_semantics.md) queue, envelope, and state commit semantics.
+Production scheduler library for Nova Android targets. Implements [ADR-002](../../docs/adr/adr_002_runtime.md) queue, envelope, and state commit semantics.
 
 The generated `MainActivity` implements `NovaScheduler.Host` and delegates evaluation, route shaping, and view updates to app-specific code.
 

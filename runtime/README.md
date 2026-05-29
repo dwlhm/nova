@@ -10,6 +10,6 @@ also depend on them directly when building custom host runtimes.
 | [nova-renderer-js](nova-renderer-js/) | Web (browser) | `npm install @nova/renderer` |
 | [nova-scheduler-java](nova-scheduler-java/) | Android (JVM) | Gradle `implementation(project(":nova-scheduler"))` |
 
-Semantic contract: [ADR-002](../docs/adr/adr_002_scheduler_runtime_semantics.md).
+Semantic contract: [ADR-002](../docs/adr/adr_002_runtime.md).
 
 Go reference scheduler (conformance only): `internal/scheduler`.

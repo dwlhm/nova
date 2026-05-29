@@ -1,66 +1,61 @@
 # Architecture Decision Records
 
-Nova memakai ADR untuk keputusan desain yang mengikat implementasi. Mulai transisi production, baca [adr_000_production_baseline.md](adr_000_production_baseline.md).
-Untuk sistem modular (capability, package, platform), baca [adr_026_modular_system_architecture.md](adr_026_modular_system_architecture.md).
-Untuk primitive di luar `@nova/ui`, baca [adr_027_renderer_primitive_extension_dictionary.md](adr_027_renderer_primitive_extension_dictionary.md).
+ADR mencatat keputusan yang mengikat implementasi. Ringkas; detail operasional di kode dan
+`internal/`.
 
-## Terminologi
+| Dokumen | Peran |
+| --- | --- |
+| [design-philosophy.md](../design-philosophy.md) | Arah produk |
+| [language-design.md](../language-design.md) | Normatif untuk menulis `.nova` |
+| ADR di folder ini | Spesifikasi per area |
+
+## Mulai di sini
+
+1. [language-design.md](../language-design.md)
+2. [adr_000](adr_000_production_baseline.md)
+3. ADR sesuai area di bawah
+
+## Indeks
+
+| ADR | Topik |
+| --- | --- |
+| [000](adr_000_production_baseline.md) | Baseline production, pipeline |
+| [001](adr_001_language_specification.md) | Bahasa: construct, purity, syntax |
+| [002](adr_002_runtime.md) | Scheduler, lifecycle, route, persistence |
+| [003](adr_003_modules.md) | Capability, layout, package, provider binding |
+| [004](adr_004_type_system.md) | Types, serializable |
+| [005](adr_005_view.md) | ViewIR, routing, renderer, primitives |
+| [006](adr_006_external_security.md) | External, `@env`, permission |
+| [007](adr_007_build.md) | Build, target resolution |
+| [008](adr_008_diagnostics.md) | Diagnostic codes |
+| [009](adr_009_targets.md) | Web & Android runtime |
+| [010](adr_010_packages.md) | `@nova/*`, `@env/*` |
+| [011](adr_011_tooling.md) | CLI, test, conformance, dev |
+
+## Istilah
 
 | Istilah | Arti |
 | --- | --- |
-| **production** / **production v1** | Perilaku dan target yang didukung hari ini (`web`, `@nova/android`) |
-| **v1** | Ruang lingkup fitur yang sengaja dibatasi; bukan "belum selesai" |
-| **Out of production v1 scope** | Sengaja ditunda; bukan keputusan final menolak fitur |
+| **production v1** | Target `web` + `@nova/android` yang didukung hari ini |
+| **Nova runtime** | Scheduler + transisi di device (JS/Java) |
+| **Provider** | Render, listen, effect ports; bisa bawaan atau custom |
 
-Semua ADR di bawah ini telah dirapikan dari istilah "MVP" ke terminologi di atas, kecuali
-adr_000 yang merujuk fase eksperimen secara historis.
-
-## Indeks ADR
-
-| ADR | Topik | Status |
-| --- | --- | --- |
-| [000](adr_000_production_baseline.md) | Production baseline, layer trimming | Accepted |
-| [026](adr_026_modular_system_architecture.md) | **Modular system overview** + user `platform/` JS/Java adapters | Accepted |
-| [001](adr_001_language_specification.md) | Bahasa Nova | Implemented / Accepted |
-| [002](adr_002_scheduler_runtime_semantics.md) | Scheduler semantics | Implemented / Accepted |
-| [003](adr_003_capability_module_system.md) | Capability & module graph | Implemented / Accepted |
-| [004](adr_004_type_system.md) | Type system | Implemented / Accepted |
-| [005](adr_005_effect_lifecycle_model.md) | Effect & lifecycle | Implemented / Accepted |
-| [006](adr_006_template_view_model.md) | Template & ViewIR | Implemented / Accepted |
-| [007](adr_007_platform_capability_model.md) | Platform capability | Implemented / Accepted |
-| [008](adr_008_renderer_lowering_pipeline.md) | Renderer lowering | Implemented / Accepted |
-| [009](adr_009_external_interop_model.md) | External interop & @env | Implemented / Accepted |
-| [010](adr_010_build_target_resolution.md) | Build & target resolution | Implemented / Accepted |
-| [011](adr_011_error_handling_diagnostics.md) | Diagnostics | Implemented / Accepted |
-| [012](adr_012_project_layout_package_convention.md) | Project layout | Implemented / Accepted |
-| [013](adr_013_security_permission_model.md) | Security & permissions | Implemented / Accepted |
-| [014](adr_014_framework_runtime_architecture.md) | Framework architecture | Implemented / Accepted |
-| [015](adr_015_standard_package_surface.md) | Standard packages `@nova/*` | Implemented / Accepted |
-| [016](adr_016_web_target_runtime.md) | Web target | Implemented / Accepted |
-| [017](adr_017_android_target_runtime.md) | Android target (Java default) | Implemented / Accepted |
-| [018](adr_018_app_lifecycle_navigation_model.md) | Lifecycle & navigation | Implemented / Accepted |
-| [019](adr_019_state_persistence_hydration_model.md) | Persistence & hydration | Implemented / Accepted |
-| [020](adr_020_testing_conformance_strategy.md) | Testing & conformance | Implemented / Accepted |
-| [021](adr_021_developer_tooling_hot_reload.md) | CLI, dev, hot reload | Implemented / Accepted |
-| [022](adr_022_package_distribution_versioning.md) | Package distribution | Implemented / Accepted |
-| [023](adr_023_page_projection_routing.md) | Page projection & routing | Implemented / Accepted |
-| [024](adr_024_style_asset_injection.md) | Style asset injection | Implemented / Accepted |
-| [025](adr_025_android_apk_size_renderer_strategy.md) | Android APK size & renderer | Accepted |
-| [027](adr_027_renderer_primitive_extension_dictionary.md) | **Primitive extensions** via `renderer-package` + `nova.toml` package list | Accepted (design) |
-
-## Renderer defaults (production)
+## Renderer default
 
 ```toml
 [targets.web]
 renderer = "@nova/web"
 
 [targets.android]
-renderer = "@nova/android"   # Java native View
+renderer = "@nova/android"
 ```
 
-## Menambah ADR baru
+## ADR baru
 
-1. Salin struktur ADR yang ada (Status, Context, Decision, Consequences).
-2. Gunakan **Accepted** atau **Implemented / Accepted** bila sudah diimplementasi.
-3. Hindari "MVP" sebagai label target akhir; gunakan **production v1** atau **Out of production v1 scope**.
-4. Perubahan ABI/scheduler/ViewIR wajib update conformance fixture terkait.
+Salin [TEMPLATE.md](TEMPLATE.md). Link ADR terkait; jangan duplikasi panjang. Update conformance
+jika mengubah scheduler, ViewIR, atau permission.
+
+## ADR lama (dihapus)
+
+ADR 012–027 dan file terpisah untuk scheduler/view/build/tooling telah digabung ke indeks di
+atas. Referensi historis di git history.

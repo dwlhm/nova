@@ -5,9 +5,10 @@ Keputusan desain yang lebih panjang tetap berada di `docs/adr/`.
 
 ## Before Changing Code
 
-1. Baca [docs/architecture.md](docs/architecture.md) untuk batas package dan ownership.
-2. Baca [docs/code-style.md](docs/code-style.md) untuk gaya Go, source `.nova`, diagnostic, dan test.
-3. Jika perubahan mengubah kontrak bahasa, ABI, runtime target, permission, atau layout project, tambahkan atau update ADR.
+1. Baca [docs/language-design.md](docs/language-design.md) jika menyentuh source `.nova` atau semantic bahasa.
+2. Baca [docs/architecture.md](docs/architecture.md) untuk batas package dan ownership.
+3. Baca [docs/code-style.md](docs/code-style.md) untuk gaya Go, source `.nova`, diagnostic, dan test.
+4. Jika perubahan mengubah kontrak bahasa, ABI, runtime target, permission, atau layout project, tambahkan atau update ADR (ikuti [docs/adr/TEMPLATE.md](docs/adr/TEMPLATE.md)).
 
 ## Local Checks
 

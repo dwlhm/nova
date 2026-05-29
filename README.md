@@ -10,7 +10,7 @@ Target production yang didukung: `web` (JavaScript/DOM) dan `android` (Java/Andr
 - Target `android` menghasilkan project Gradle Java dengan renderer `@nova/android`.
 - External capability (`@env/*`) langsung ke adapter platform.
 - Example: `examples/counter`, `examples/multipage`, `examples/finance`.
-- ADR: [docs/adr/README.md](docs/adr/README.md) (indeks lengkap; baseline: [adr_000](docs/adr/adr_000_production_baseline.md)).
+- Desain: [language-design](docs/language-design.md), [design-philosophy](docs/design-philosophy.md), [ADR](docs/adr/README.md).
 
 ## Struktur Penting
 
@@ -30,9 +30,12 @@ docs/adr/                 ADR desain Nova
 
 ## Dokumentasi Proyek
 
-- [docs/architecture.md](docs/architecture.md) menjelaskan layer, ownership package, dan aturan dependency.
-- [docs/code-style.md](docs/code-style.md) menjelaskan gaya Go, `.nova`, diagnostic, test, dan generated output.
-- [CONTRIBUTING.md](CONTRIBUTING.md) merangkum alur kontribusi dan command verifikasi lokal.
+- [docs/language-design.md](docs/language-design.md) — prinsip bahasa ringkas (enam prinsip, tujuh construct).
+- [docs/design-philosophy.md](docs/design-philosophy.md) — visi produk (tanpa detail bahasa `.nova`).
+- [docs/architecture.md](docs/architecture.md) — layer, ownership package, dan aturan dependency.
+- [docs/code-style.md](docs/code-style.md) — gaya Go, `.nova`, diagnostic, test, dan generated output.
+- [docs/adr/README.md](docs/adr/README.md) — keputusan desain detail (ADR).
+- [CONTRIBUTING.md](CONTRIBUTING.md) — alur kontribusi dan command verifikasi lokal.
 
 ## Commands
 
@@ -101,8 +104,7 @@ File CSS web disalin ke artifact web dan di-link setelah runtime base CSS. `scop
 diprefix ke root app web (`#nova-root[data-nova-style-scope~="app"]`) dan dicatat di
 `build/web/style-manifest.json`. Target Android memakai subset class CSS statis untuk native View
 styling dasar seperti warna, font, padding, border, background, dan min-height. Detail CSS module
-dan style per capability masih area lanjutan; lihat
-`docs/adr/adr_024_style_asset_injection.md`.
+dan style per capability masih area lanjutan; lihat ADR-005 (style di artifact/provider).
 
 ## Dev Web
 
