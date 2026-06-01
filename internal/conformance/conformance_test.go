@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/dwlhm/nova/internal/scheduler"
+	"github.com/dwlhm/nova/internal/core/scheduler"
 )
 
 func TestTraceSchedulerResultsCapturesEventsCommitsAndExternalCalls(t *testing.T) {

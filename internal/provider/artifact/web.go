@@ -71,121 +71,15 @@ func webRuntime() string {
 window.NovaRuntime = (() => {
   const ROUTE_CHANGED_EVENT = "@route_changed";
 
-  function pick(value, lower, upper, fallback) {
-    if (!value) return fallback;
-    if (Object.prototype.hasOwnProperty.call(value, lower)) return value[lower];
-    if (Object.prototype.hasOwnProperty.call(value, upper)) return value[upper];
-    return fallback;
-  }
-
-  function tokenExpression(tokens, stateNames) {
-    return expressionFromTokens(tokens || [], stateNames);
-  }
-
-  function expressionFromTokens(tokens, stateNames) {
-    const clean = trimExpressionTokens(tokens);
-    const record = recordExpression(clean, stateNames);
-    if (record) return record;
-    return clean.map((token) => {
-      const type = pick(token, "type", "Type", "");
-      const literal = pick(token, "literal", "Literal", "");
-      if (type === "STRING") return JSON.stringify(literal);
-      if (type === "IDENT" && stateNames.has(literal)) return "state." + literal;
-      if (type === "true" || type === "false" || type === "null") return type;
-      if (type === "void") return "undefined";
-      return literal;
-    }).filter(Boolean).join(" ");
-  }
-
-  function recordExpression(tokens, stateNames) {
-    if (tokens.length < 2 || tokenType(tokens[0]) !== "{" || tokenType(tokens[tokens.length - 1]) !== "}") {
-      return null;
-    }
-    const fields = recordFields(tokens.slice(1, -1));
-    if (!fields) return null;
-    return "({ " + fields.map((field) => propertyName(field.name) + ": " + expressionFromTokens(field.value, stateNames)).join(", ") + " })";
-  }
-
-  function recordFields(tokens) {
-    const fields = [];
-    let pos = 0;
-    while (pos < tokens.length) {
-      while (pos < tokens.length && isRecordSeparator(tokenType(tokens[pos]))) pos++;
-      if (pos >= tokens.length) break;
-
-      const name = tokenLiteral(tokens[pos]);
-      if (!name) return null;
-      pos++;
-      if (pos >= tokens.length || tokenType(tokens[pos]) !== "<-") return null;
-      pos++;
-
-      const start = pos;
-      let depth = 0;
-      while (pos < tokens.length) {
-        const type = tokenType(tokens[pos]);
-        if (depth === 0 && isRecordSeparator(type)) break;
-        depth = expressionDepth(depth, type);
-        pos++;
-      }
-      const value = trimExpressionTokens(tokens.slice(start, pos));
-      if (!value.length) return null;
-      fields.push({ name, value });
-    }
-    return fields.length ? fields : null;
-  }
-
-  function trimExpressionTokens(tokens) {
-    let start = 0;
-    while (start < tokens.length && isExpressionNoise(tokenType(tokens[start]))) start++;
-    let end = tokens.length;
-    while (end > start && isExpressionNoise(tokenType(tokens[end - 1]))) end--;
-    return tokens.slice(start, end);
-  }
-
-  function expressionDepth(depth, type) {
-    if (type === "(" || type === "[" || type === "{") return depth + 1;
-    if ((type === ")" || type === "]" || type === "}") && depth > 0) return depth - 1;
-    return depth;
-  }
-
-  function tokenType(token) {
-    return pick(token, "type", "Type", "");
-  }
-
-  function tokenLiteral(token) {
-    return pick(token, "literal", "Literal", "");
-  }
-
-  function propertyName(name) {
-    return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name) ? name : JSON.stringify(name);
-  }
-
-  function isExpressionNoise(type) {
-    return type === "EOF" || type === "//" || type === ";";
-  }
-
-  function isRecordSeparator(type) {
-    return type === ";" || type === "," || type === "//";
-  }
-
   function evaluate(expression, state, payload) {
     if (!expression || !expression.trim()) return "";
     return Function("state", "payload", "\"use strict\"; return (" + expression + ");")(state, payload || {});
   }
 
-  function bindingExpression(binding, app) {
+  function bindingExpression(binding) {
     if (!binding) return "\"\"";
     if (typeof binding === "string") return binding;
-    const expr = pick(binding, "expr", "Expr", "");
-    if (expr) return expr;
-    const tokens = pick(binding, "tokens", "Tokens", []);
-    if (tokens.length) return tokenExpression(tokens, stateNameSet(app));
-    const text = pick(binding, "text", "Text", "");
-    return JSON.stringify(text);
-  }
-
-  function stateNameSet(app) {
-    return new Set(((app.model || {}).states || []).map((state) => state.name));
+    return "\"\"";
   }
 
   function initialState(app) {
@@ -196,6 +90,66 @@ window.NovaRuntime = (() => {
     return state;
   }
 
+  function externalOperationSpec(app, effectId) {
+    return ((app.externalOperations || []).find((entry) => entry.id === effectId)) || null;
+  }
+
+  function effectPermissions(app, effectId) {
+    const spec = externalOperationSpec(app, effectId);
+    if (spec && spec.permissions) return spec.permissions;
+    const effect = ((app.effects || []).find((entry) => entry.id === effectId));
+    return (effect && effect.permissions) || [];
+  }
+
+  function hasProjectPermission(app, permission) {
+    return (app.permissions || []).includes(permission);
+  }
+
+  function validateExternalOutput(app, effectId, output) {
+    const spec = externalOperationSpec(app, effectId);
+    if (spec && spec.output === "void" && output != null) {
+      throw new Error("external operation " + effectId + " expected void output");
+    }
+    if (spec && spec.output === "string" && output != null && typeof output !== "string") {
+      throw new Error("external operation " + effectId + " expected string output");
+    }
+    return output;
+  }
+
+  function invokeExternalOperation(runtime, request, pending) {
+    const permissions = effectPermissions(runtime.app, request.effectId);
+    for (const permission of permissions) {
+      if (!hasProjectPermission(runtime.app, permission)) {
+        if (request.onFailure) {
+          runtime.scheduler.enqueue(request.owner, request.onFailure, ["permission denied: " + permission]);
+          runtime.scheduler.drain();
+        }
+        return;
+      }
+    }
+    Promise.resolve(executeExternal(runtime.app, request))
+      .then((output) => validateExternalOutput(runtime.app, request.effectId, output))
+      .then((output) => {
+        if (!request.onSuccess) return;
+        runtime.scheduler.enqueue(request.owner, request.onSuccess, output == null ? [] : [output]);
+        runtime.scheduler.drain();
+      })
+      .catch((error) => {
+        const message = error && error.message ? error.message : String(error);
+        if (request.onFailure) {
+          runtime.scheduler.enqueue(request.owner, request.onFailure, [message]);
+          runtime.scheduler.drain();
+        }
+      });
+  }
+
+  function executeExternal(app, request) {
+    if (window.NovaExternal && typeof window.NovaExternal.invoke === "function") {
+      return window.NovaExternal.invoke(request.effectId, request.input || {});
+    }
+    throw new Error("NovaExternal adapter module is required for " + request.effectId);
+  }
+
   function schedulerHost(runtime) {
     return {
       app: runtime.app,
@@ -203,14 +157,14 @@ window.NovaRuntime = (() => {
       commitState: (state) => { runtime.state = state; },
       evaluate,
       cloneState,
-      pick,
       stateInvalidations: (beforeState, afterState) => stateInvalidations(runtime, beforeState, afterState),
       hasRouteState: () => hasRouteState(runtime),
       routeKey: () => routeKey(runtime),
       routeObject,
       routeValueForShape: (route, shape) => routeValueForShape(route, shape, runtime),
       update: (invalidations) => update(runtime, invalidations),
-      reconcileNavigation: (beforeRoute, options) => reconcileNavigation(runtime, beforeRoute, options)
+      reconcileNavigation: (beforeRoute, options) => reconcileNavigation(runtime, beforeRoute, options),
+      invokeExternal: (request, pending) => invokeExternalOperation(runtime, request, pending)
     };
   }
 
@@ -248,8 +202,7 @@ window.NovaRuntime = (() => {
     let bestScore = null;
     (nodes || []).forEach((node, index) => {
       if (nodeKind(node) !== "page") return;
-      const props = pick(node, "props", "Props", {}) || {};
-      const pattern = pagePattern(props, runtime);
+      const pattern = pagePattern(node.props || {}, runtime);
       const match = routeMatch(pattern, activeRoutePath(runtime));
       if (!match.matched) return;
       if (bestScore === null || match.score > bestScore) {
@@ -265,11 +218,11 @@ window.NovaRuntime = (() => {
 
   function updateBindings(runtime, invalidations) {
     for (const ref of metadataBindings(runtime.app)) {
-      const states = pick(ref, "states", "States", []) || [];
-      const prop = pick(ref, "prop", "Prop", "");
+      const states = ref.states || [];
+      const prop = ref.prop || "";
       if (prop === "key" || prop.includes("#arg")) continue;
       if (!shouldApplyBinding(states, invalidations)) continue;
-      const path = pick(ref, "at", "nodePath", "NodePath", []) || [];
+      const path = ref.at || [];
       const target = runtime.refs.get(pathKey(path));
       if (!target) continue;
       const node = nodeAtPath(runtime.app, path);
@@ -287,15 +240,15 @@ window.NovaRuntime = (() => {
         const target = runtime.refs.get(pathKey(path));
         if (target) target.hidden = !selectedPages.has(index);
       }
-      updatePages(runtime, pick(node, "children", "Children", []) || [], path);
+      updatePages(runtime, node.children || [], path);
     });
   }
 
   function updateNodeBinding(target, node, prop, runtime) {
-    const props = pick(node, "props", "Props", {}) || {};
+    const props = node.props || {};
     const binding = props[prop];
     if (!binding) return;
-    const value = evaluate(bindingExpression(binding, runtime.app), runtime.state, {});
+    const value = evaluate(bindingExpression(binding), runtime.state, {});
     const custom = rendererPrimitive(runtime, nodeKind(node));
     if (custom && typeof custom.update === "function") {
       custom.update(target, { prop, value, node, runtime });
@@ -313,13 +266,11 @@ window.NovaRuntime = (() => {
   }
 
   function viewNodes(app) {
-    const view = pick(app, "view", "viewIR", "ViewIR", {}) || {};
-    return pick(view, "nodes", "Nodes", []) || [];
+    return ((app.view || {}).nodes) || [];
   }
 
   function metadataBindings(app) {
-    const view = pick(app, "view", "viewIR", "ViewIR", {}) || {};
-    return pick(view, "bindings", "Bindings", []) || pick(pick(view, "metadata", "Metadata", {}) || {}, "bindings", "Bindings", []) || [];
+    return ((app.view || {}).bindings) || [];
   }
 
   function shouldApplyBinding(states, invalidations) {
@@ -333,7 +284,7 @@ window.NovaRuntime = (() => {
     for (const index of path || []) {
       node = list[index];
       if (!node) return null;
-      list = pick(node, "children", "Children", []) || [];
+      list = node.children || [];
     }
     return node;
   }
@@ -367,14 +318,14 @@ window.NovaRuntime = (() => {
   }
 
   function nodeKind(node) {
-    return pick(node, "kind", "Kind", "div");
+    return node.kind || "div";
   }
 
   function renderNode(node, runtime, path, pageActive) {
-    const kind = pick(node, "kind", "Kind", "div");
-    const props = pick(node, "props", "Props", {}) || {};
-    const events = pick(node, "events", "Events", {}) || {};
-    const children = pick(node, "children", "Children", []) || [];
+    const kind = nodeKind(node);
+    const props = node.props || {};
+    const events = node.events || {};
+    const children = node.children || [];
     if (kind === "page") {
       return renderPage(node, props, children, runtime, path, pageActive);
     }
@@ -433,7 +384,7 @@ window.NovaRuntime = (() => {
   function evaluatedProps(props, runtime) {
     const out = {};
     for (const [name, binding] of Object.entries(props || {})) {
-      out[name] = evaluate(bindingExpression(binding, runtime.app), runtime.state, {});
+      out[name] = evaluate(bindingExpression(binding), runtime.state, {});
     }
     return out;
   }
@@ -448,7 +399,7 @@ window.NovaRuntime = (() => {
   }
 
   function pagePattern(props, runtime) {
-    return normalizeRoutePattern(evaluate(bindingExpression(props.path, runtime.app), runtime.state, {}));
+    return normalizeRoutePattern(evaluate(bindingExpression(props.path), runtime.state, {}));
   }
 
   function activeRoutePath(runtime) {
@@ -658,9 +609,9 @@ window.NovaRuntime = (() => {
 
   function collectPagePatternsFromNodes(nodes, runtime, patterns) {
     for (const node of nodes || []) {
-      const props = pick(node, "props", "Props", {}) || {};
+      const props = node.props || {};
       if (nodeKind(node) === "page") patterns.push(pagePattern(props, runtime));
-      collectPagePatternsFromNodes(pick(node, "children", "Children", []) || [], runtime, patterns);
+      collectPagePatternsFromNodes(node.children || [], runtime, patterns);
     }
   }
 
@@ -746,7 +697,7 @@ window.NovaRuntime = (() => {
   function applyProps(element, props, runtime) {
     for (const [name, binding] of Object.entries(props || {})) {
       if (name === "value" && !("value" in element)) continue;
-      const value = evaluate(bindingExpression(binding, runtime.app), runtime.state, {});
+      const value = evaluate(bindingExpression(binding), runtime.state, {});
       applyPropValue(element, name, value);
     }
   }
@@ -779,11 +730,11 @@ window.NovaRuntime = (() => {
 
   function applyEvents(element, events, runtime) {
     for (const [slot, route] of Object.entries(events || {})) {
-      const eventName = pick(route, "name", "event", "Event", "");
-      const args = pick(route, "args", "Args", []) || [];
+      const eventName = route.name || "";
+      const args = route.args || [];
       if (slot === "on_press") {
         element.addEventListener("click", () => {
-          const values = args.map((arg) => evaluate(bindingExpression(arg, runtime.app), runtime.state, {}));
+          const values = args.map((arg) => evaluateContractArg(arg, runtime, null));
           dispatch(runtime, eventName, values);
         });
       }
@@ -791,7 +742,7 @@ window.NovaRuntime = (() => {
         element.addEventListener("input", () => {
           const current = inputEventValue(element);
           const values = args.length
-            ? args.map((arg) => implicitValueArg(arg) ? current : evaluate(bindingExpression(arg, runtime.app), runtime.state, {}))
+            ? args.map((arg) => evaluateContractArg(arg, runtime, current))
             : [current];
           dispatch(runtime, eventName, values);
         });
@@ -801,12 +752,17 @@ window.NovaRuntime = (() => {
           if (event.key !== "Enter") return;
           const current = inputEventValue(element);
           const values = args.length
-            ? args.map((arg) => implicitValueArg(arg) ? current : evaluate(bindingExpression(arg, runtime.app), runtime.state, {}))
+            ? args.map((arg) => evaluateContractArg(arg, runtime, current))
             : [current];
           dispatch(runtime, eventName, values);
         });
       }
     }
+  }
+
+  function evaluateContractArg(arg, runtime, implicitValue) {
+    if (arg === "$value") return implicitValue;
+    return evaluate(bindingExpression(arg), runtime.state, {});
   }
 
   function inputEventValue(element) {
@@ -815,12 +771,6 @@ window.NovaRuntime = (() => {
       return Number.isFinite(value) ? value : 0;
     }
     return element && "value" in element ? element.value : "";
-  }
-
-  function implicitValueArg(binding) {
-    if (binding === "$value") return true;
-    const tokens = pick(binding, "tokens", "Tokens", []) || [];
-    return tokens.length === 1 && tokenLiteral(tokens[0]) === "value";
   }
 
   function mount(app) {
@@ -833,6 +783,10 @@ window.NovaRuntime = (() => {
     window.__NOVA_RUNTIME__ = runtime;
     setupNavigation(runtime);
     render(runtime);
+    runtime.scheduler.runLifecycle("mount", "", []);
+    window.addEventListener("beforeunload", () => {
+      runtime.scheduler.runLifecycle("dispose", "", []);
+    });
     return runtime;
   }
 

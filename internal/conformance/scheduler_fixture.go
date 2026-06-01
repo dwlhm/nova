@@ -3,17 +3,28 @@ package conformance
 import (
 	"fmt"
 
-	"github.com/dwlhm/nova/internal/build"
-	"github.com/dwlhm/nova/internal/scheduler"
+	"github.com/dwlhm/nova/internal/core/scheduler"
+	"github.com/dwlhm/nova/internal/core/security"
+	"github.com/dwlhm/nova/internal/project"
+	"github.com/dwlhm/nova/internal/provider/build"
 )
 
 type ExpectedScheduler struct {
-	Steps []SchedulerStep `json:"steps"`
-	Trace Trace           `json:"trace"`
+	Steps              []SchedulerStep       `json:"steps"`
+	CompleteExternals  bool                  `json:"completeExternals,omitempty"`
+	ExternalStub       string                `json:"externalStub,omitempty"`
+	RuntimePermissions []security.Permission `json:"runtimePermissions,omitempty"`
+	Trace              Trace                 `json:"trace"`
 }
 
 type SchedulerStep struct {
-	Enqueue *EnqueueStep `json:"enqueue,omitempty"`
+	Enqueue   *EnqueueStep   `json:"enqueue,omitempty"`
+	Lifecycle *LifecycleStep `json:"lifecycle,omitempty"`
+}
+
+type LifecycleStep struct {
+	Phase  string `json:"phase"`
+	Source string `json:"source,omitempty"`
 }
 
 type EnqueueStep struct {
@@ -22,7 +33,7 @@ type EnqueueStep struct {
 	Payload any    `json:"payload,omitempty"`
 }
 
-func runSchedulerFixture(plan build.BuildPlan, sources []build.SourceFile, expected *ExpectedScheduler) ([]Diagnostic, Trace, bool) {
+func runSchedulerFixture(plan build.BuildPlan, sources []build.SourceFile, projectPermissions project.PermissionMap, expected *ExpectedScheduler) ([]Diagnostic, Trace, bool) {
 	if expected == nil {
 		return nil, Trace{}, true
 	}
@@ -32,7 +43,23 @@ func runSchedulerFixture(plan build.BuildPlan, sources []build.SourceFile, expec
 		return diagnostics, Trace{}, false
 	}
 
+	actual := Trace{}
+	stubMode, stubErr := parseExternalStubMode(expected.ExternalStub)
+	if expected.CompleteExternals && stubErr != nil {
+		return []Diagnostic{fixtureDiagnostic("NVA-CONFORMANCE-034", stubErr.Error())}, Trace{}, false
+	}
 	for index, step := range expected.Steps {
+		if step.Lifecycle != nil {
+			source := scheduler.CapabilityRef(step.Lifecycle.Source)
+			if source == "" {
+				source = "runtime"
+			}
+			runtime, _ = scheduler.RunLifecycle(runtime, scheduler.LifecyclePhase(step.Lifecycle.Phase), source)
+			var stepTrace Trace
+			runtime, stepTrace = drainSchedulerWithOptionalExternals(runtime, plan, projectPermissions, expected.RuntimePermissions, expected.CompleteExternals, stubMode)
+			actual = mergeTrace(actual, stepTrace)
+			continue
+		}
 		if step.Enqueue == nil {
 			return []Diagnostic{fixtureDiagnostic("NVA-CONFORMANCE-031", fmt.Sprintf("scheduler step %d is empty", index))}, Trace{}, false
 		}
@@ -48,12 +75,23 @@ func runSchedulerFixture(plan build.BuildPlan, sources []build.SourceFile, expec
 		}
 	}
 
-	_, results := scheduler.Drain(runtime)
-	actual := TraceSchedulerResults(results)
+	var stepTrace Trace
+	runtime, stepTrace = drainSchedulerWithOptionalExternals(runtime, plan, projectPermissions, expected.RuntimePermissions, expected.CompleteExternals, stubMode)
+	actual = mergeTrace(actual, stepTrace)
 	if !traceSpecified(expected.Trace) {
 		return nil, actual, true
 	}
 	return CompareTrace(expected.Trace, actual), actual, true
+}
+
+func mergeTrace(left Trace, right Trace) Trace {
+	return Trace{
+		Events:         append(left.Events, right.Events...),
+		Commits:        append(left.Commits, right.Commits...),
+		LifecycleCalls: append(left.LifecycleCalls, right.LifecycleCalls...),
+		ExternalCalls:  append(left.ExternalCalls, right.ExternalCalls...),
+		Errors:         append(left.Errors, right.Errors...),
+	}
 }
 
 func traceSpecified(trace Trace) bool {

@@ -1,6 +1,6 @@
 package security
 
-import "github.com/dwlhm/nova/internal/scheduler"
+import "github.com/dwlhm/nova/internal/core/scheduler"
 
 type Permission string
 

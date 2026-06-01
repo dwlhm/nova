@@ -3,7 +3,7 @@ package view
 import (
 	"strings"
 
-	"github.com/dwlhm/nova/internal/lexer"
+	"github.com/dwlhm/nova/internal/core/lexer"
 )
 
 func isAttributeName(typ lexer.TokenType) bool {

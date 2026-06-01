@@ -99,10 +99,28 @@ func androidJavaSchedulerActivityHost() string {
         reconcileRouteBackStack(beforeRoute, afterRoute);
     }
 
-    @Override
+`
+}
+
+func androidJavaSchedulerApplyStateCommit() string {
+	return `    @Override
     public void schedulerApplyStateCommit(Set<String> invalidations) {
         applyStateCommit(invalidations);
     }
+
+`
+}
+
+func androidJavaSchedulerLifecycleStubs() string {
+	return `    @Override
+    public void schedulerBeforeEvent(String eventName, List<Object> args) {}
+
+    @Override
+    public void schedulerAfterEvent(String eventName, List<Object> args) {}
+
+    protected void schedulerMountLifecycles() {}
+
+    protected void schedulerDisposeLifecycles() {}
 
 `
 }

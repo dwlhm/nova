@@ -1,8 +1,8 @@
 package view
 
 import (
-	"github.com/dwlhm/nova/internal/lexer"
-	"github.com/dwlhm/nova/internal/scheduler"
+	"github.com/dwlhm/nova/internal/core/lexer"
+	"github.com/dwlhm/nova/internal/core/scheduler"
 )
 
 type viewParser struct {

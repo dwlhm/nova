@@ -8,17 +8,21 @@ import (
 	"reflect"
 	"sort"
 
-	"github.com/dwlhm/nova/internal/artifact"
-	"github.com/dwlhm/nova/internal/build"
-	"github.com/dwlhm/nova/internal/diagnostic"
-	"github.com/dwlhm/nova/internal/lexer"
+	"github.com/dwlhm/nova/internal/core/ast"
+	"github.com/dwlhm/nova/internal/core/compile"
+	"github.com/dwlhm/nova/internal/core/contract"
+	"github.com/dwlhm/nova/internal/core/diagnostic"
+	"github.com/dwlhm/nova/internal/core/ir"
+	"github.com/dwlhm/nova/internal/core/lexer"
+	"github.com/dwlhm/nova/internal/core/parser"
+	"github.com/dwlhm/nova/internal/core/routing"
+	"github.com/dwlhm/nova/internal/core/security"
+	"github.com/dwlhm/nova/internal/core/view"
 	"github.com/dwlhm/nova/internal/packageio"
-	"github.com/dwlhm/nova/internal/parser"
+	"github.com/dwlhm/nova/internal/packages"
 	"github.com/dwlhm/nova/internal/project"
-	"github.com/dwlhm/nova/internal/routing"
-	"github.com/dwlhm/nova/internal/security"
-	"github.com/dwlhm/nova/internal/validator"
-	"github.com/dwlhm/nova/internal/view"
+	"github.com/dwlhm/nova/internal/provider/artifact"
+	"github.com/dwlhm/nova/internal/provider/build"
 )
 
 const FixtureSpecFile = "nova.conformance.json"
@@ -31,6 +35,7 @@ type FixtureSpec struct {
 type FixtureExpected struct {
 	DiagnosticCodes []string                  `json:"diagnosticCodes"`
 	Artifact        *ExpectedArtifactMetadata `json:"artifact,omitempty"`
+	AppContract     *ExpectedAppContract      `json:"appContract,omitempty"`
 	View            *ExpectedViewMetadata     `json:"view,omitempty"`
 	Scheduler       *ExpectedScheduler        `json:"scheduler,omitempty"`
 }
@@ -97,6 +102,7 @@ func RunFixtureDir(root string) FixtureResult {
 		return FixtureResult{Name: name, Target: spec.Target, Diagnostics: diagnostics}
 	}
 	diagnostics = append(diagnostics, compareExpectedArtifact(spec.Expected.Artifact, actual.Artifact)...)
+	diagnostics = append(diagnostics, compareExpectedAppContract(spec.Expected.AppContract, actual.AppContract)...)
 	diagnostics = append(diagnostics, compareExpectedView(spec.Expected.View, actual.View)...)
 	if spec.Expected.Scheduler != nil {
 		if !traceSpecified(spec.Expected.Scheduler.Trace) {
@@ -106,7 +112,7 @@ func RunFixtureDir(root string) FixtureResult {
 				Diagnostics: []Diagnostic{fixtureDiagnostic("NVA-CONFORMANCE-033", "scheduler fixture requires non-empty expected trace")},
 			}
 		}
-		schedulerDiagnostics, _, ok := runSchedulerFixture(actual.Resolution.Plan, actual.Sources, spec.Expected.Scheduler)
+		schedulerDiagnostics, _, ok := runSchedulerFixture(actual.Resolution.Plan, actual.Sources, actual.Manifest.Permissions, spec.Expected.Scheduler)
 		if !ok {
 			return FixtureResult{Name: name, Target: spec.Target, Diagnostics: diagnostic.StableSort(append(diagnostics, schedulerDiagnostics...))}
 		}
@@ -116,10 +122,12 @@ func RunFixtureDir(root string) FixtureResult {
 }
 
 type fixtureActual struct {
-	Artifact   ExpectedArtifactMetadata
-	View       ExpectedViewMetadata
-	Resolution build.ResolutionResult
-	Sources    []build.SourceFile
+	Manifest    project.Manifest
+	Artifact    ExpectedArtifactMetadata
+	AppContract contract.App
+	View        ExpectedViewMetadata
+	Resolution  build.ResolutionResult
+	Sources     []build.SourceFile
 }
 
 func evaluateFixture(root string, targetID string) (fixtureActual, []Diagnostic) {
@@ -141,7 +149,12 @@ func evaluateFixture(root string, targetID string) (fixtureActual, []Diagnostic)
 	if semanticDiagnostics := validateFixtureSources(sources); len(semanticDiagnostics) > 0 {
 		return fixtureActual{}, semanticDiagnostics
 	}
-	packageGraph, packageDiagnostics := packageio.ResolveProjectGraph(root, targetID, manifest)
+	packageManifests, packageDiagnostics := packageio.LoadProjectManifests(root, targetID, packageio.RendererDependencies(manifest.Renderer.ExtensionPackages))
+	if len(packageDiagnostics) > 0 {
+		return fixtureActual{}, packageDiagnostics
+	}
+	packageExports := packageio.BuildExportIndex(root, packageManifests)
+	packageGraph, packageDiagnostics := packageio.ResolveProjectGraph(root, targetID, manifest, packageio.ResolveOptions{Production: false})
 	if len(packageDiagnostics) > 0 {
 		return fixtureActual{}, packageDiagnostics
 	}
@@ -152,33 +165,46 @@ func evaluateFixture(root string, targetID string) (fixtureActual, []Diagnostic)
 		Sources:        sources,
 		TargetManifest: targetManifest,
 		PackageGraph:   packageGraph,
+		PackageExports: packageExports,
 	})
 	if len(resolution.Diagnostics) > 0 {
 		return fixtureActual{}, buildDiagnostics(resolution.Diagnostics)
 	}
+	adapterContents := collectFixtureExternalAdapterContents(root, targetID, resolution.Plan.ExternalOperations, packageManifests)
+	bundle, irDiagnostics := ir.Lower(build.IRLowerInput(resolution.Plan, sources))
+	if len(irDiagnostics) > 0 {
+		return fixtureActual{}, buildDiagnostics(build.IRDiagnostics(irDiagnostics))
+	}
+	if renderDiagnostics := build.ValidateViewRenderer(resolution.Plan, bundle.ViewIR); build.HasBlockingDiagnostics(renderDiagnostics) {
+		return fixtureActual{}, buildDiagnostics(renderDiagnostics)
+	}
 	if _, artifactDiagnostics := artifact.Generate(artifact.GenerateInput{
-		Project:        manifest,
-		Plan:           resolution.Plan,
-		Sources:        sources,
-		TargetManifest: targetManifest,
+		Project:                 manifest,
+		Bundle:                  bundle,
+		Plan:                    resolution.Plan,
+		TargetManifest:          targetManifest,
+		ExternalAdapterContents: adapterContents,
 	}); len(artifactDiagnostics) > 0 {
 		return fixtureActual{}, artifactDiagnostics
 	}
+	appContract := artifact.BuildAppContract(bundle)
 
 	viewMetadata, viewDiagnostics := fixtureViewMetadata(resolution.Plan, sources)
 	if len(viewDiagnostics) > 0 {
 		return fixtureActual{}, viewDiagnostics
 	}
 	return fixtureActual{
+		Manifest: manifest,
 		Artifact: ExpectedArtifactMetadata{
 			Target:      resolution.Plan.Artifact.Target,
 			Entry:       resolution.Plan.Artifact.Entry,
 			Modules:     resolution.Plan.Artifact.Modules,
 			Permissions: resolution.Plan.Artifact.Permissions,
 		},
-		View:       viewMetadata,
-		Resolution: resolution,
-		Sources:    sources,
+		AppContract: appContract,
+		View:        viewMetadata,
+		Resolution:  resolution,
+		Sources:     sources,
 	}, nil
 }
 
@@ -216,11 +242,14 @@ func readFixtureSources(root string, entry string) ([]build.SourceFile, []Diagno
 			diagnostics = append(diagnostics, fixtureDiagnostic("NVA-LAYOUT-007", fmt.Sprintf("read %s: %s", sourcePath, err.Error())))
 			continue
 		}
-		file, parserDiagnostics := parser.Parse(lexer.Tokenize(string(content)))
-		for _, parserDiagnostic := range parserDiagnostics {
-			diagnostics = append(diagnostics, fixtureDiagnostic("NVA-PARSE-001", fmt.Sprintf("%s in %s", parserDiagnostic.Message, sourcePath)))
+		module, parseDiagnostics := compile.ParseSource(sourcePath, string(content))
+		for _, parseDiagnostic := range parseDiagnostics {
+			diagnostics = append(diagnostics, fixtureDiagnostic(parseDiagnostic.Code, fmt.Sprintf("%s in %s", parseDiagnostic.Message, sourcePath)))
 		}
-		sources = append(sources, build.SourceFile{Path: sourcePath, File: file})
+		if len(parseDiagnostics) > 0 {
+			continue
+		}
+		sources = append(sources, build.SourceFile{Path: sourcePath, File: module.File})
 	}
 	return sources, diagnostics
 }
@@ -261,11 +290,14 @@ func discoverFixtureSources(root string, entry string) ([]string, error) {
 }
 
 func validateFixtureSources(sources []build.SourceFile) []Diagnostic {
-	diagnostics := make([]Diagnostic, 0)
+	raw := make([]ast.RawModule, 0, len(sources))
 	for _, source := range sources {
-		for _, validation := range validator.Validate(source.File) {
-			diagnostics = append(diagnostics, fixtureDiagnostic("NVA-SEMANTIC-001", validation.Message))
-		}
+		raw = append(raw, ast.RawModule{Path: source.Path, File: source.File})
+	}
+	_, semanticDiagnostics := compile.CheckModules(raw)
+	diagnostics := make([]Diagnostic, 0, len(semanticDiagnostics))
+	for _, item := range semanticDiagnostics {
+		diagnostics = append(diagnostics, fixtureDiagnostic(item.Code, item.Message))
 	}
 	return diagnostics
 }
@@ -421,4 +453,15 @@ func sortedStrings(values []string) []string {
 
 func fixtureDiagnostic(code string, message string) Diagnostic {
 	return Diagnostic{Code: code, Severity: diagnostic.SeverityError, Message: message}
+}
+
+func collectFixtureExternalAdapterContents(root string, targetID string, operations []build.ResolvedExternalOperation, manifests []packages.Manifest) map[string]string {
+	requests := make([]packageio.ExternalAdapterRequest, 0, len(operations))
+	for _, operation := range operations {
+		requests = append(requests, packageio.ExternalAdapterRequest{
+			CapabilitySource: operation.CapabilitySource,
+			Path:             operation.Implementation.Path,
+		})
+	}
+	return packageio.CollectExternalAdapterContents(root, targetID, requests, manifests)
 }

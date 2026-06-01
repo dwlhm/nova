@@ -3,9 +3,9 @@ package conformance
 import (
 	"fmt"
 
-	"github.com/dwlhm/nova/internal/build"
-	"github.com/dwlhm/nova/internal/parser"
-	"github.com/dwlhm/nova/internal/scheduler"
+	"github.com/dwlhm/nova/internal/core/parser"
+	"github.com/dwlhm/nova/internal/core/scheduler"
+	"github.com/dwlhm/nova/internal/provider/build"
 )
 
 func buildSchedulerRuntime(plan build.BuildPlan, sources []build.SourceFile) (scheduler.Runtime, []Diagnostic) {
@@ -48,5 +48,5 @@ func buildSchedulerRuntime(plan build.BuildPlan, sources []build.SourceFile) (sc
 			}
 		}
 	}
-	return scheduler.NewRuntime(cells, nil), nil
+	return scheduler.NewRuntime(cells, buildSchedulerLifecycles(plan, sourceMap, stateNames)), nil
 }

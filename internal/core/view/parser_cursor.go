@@ -3,7 +3,7 @@ package view
 import (
 	"fmt"
 
-	"github.com/dwlhm/nova/internal/lexer"
+	"github.com/dwlhm/nova/internal/core/lexer"
 )
 
 func (p *viewParser) match(typ lexer.TokenType) bool {

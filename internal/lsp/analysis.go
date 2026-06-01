@@ -7,9 +7,9 @@ import (
 	"unicode/utf16"
 	"unicode/utf8"
 
-	"github.com/dwlhm/nova/internal/lexer"
-	"github.com/dwlhm/nova/internal/parser"
-	"github.com/dwlhm/nova/internal/validator"
+	"github.com/dwlhm/nova/internal/core/lexer"
+	"github.com/dwlhm/nova/internal/core/parser"
+	"github.com/dwlhm/nova/internal/core/semantic"
 )
 
 const (
@@ -82,8 +82,10 @@ func analyzeDocument(uri string, text string, version int) document {
 		diagnostics = append(diagnostics, lspDiagnostic(text, parserDiagnosticCode, item.Message, item.Token))
 	}
 	if len(parserDiagnostics) == 0 {
-		for _, item := range validator.Validate(file) {
-			diagnostics = append(diagnostics, lspDiagnostic(text, semanticDiagnosticCode, item.Message, item.Token))
+		if _, semanticDiagnostics := semantic.Analyze(file); len(semanticDiagnostics) > 0 {
+			for _, item := range semanticDiagnostics {
+				diagnostics = append(diagnostics, lspDiagnostic(text, semanticDiagnosticCode, item.Message, item.Token))
+			}
 		}
 	}
 

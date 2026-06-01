@@ -1,6 +1,6 @@
 package parser
 
-import "github.com/dwlhm/nova/internal/lexer"
+import "github.com/dwlhm/nova/internal/core/lexer"
 
 type File struct {
 	Imports              []ImportDecl

@@ -1,6 +1,6 @@
 package effect
 
-import "github.com/dwlhm/nova/internal/scheduler"
+import "github.com/dwlhm/nova/internal/core/scheduler"
 
 type ExternalCompletion struct {
 	Request scheduler.ExternalOperationRequest

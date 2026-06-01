@@ -3,8 +3,8 @@ package types
 import (
 	"testing"
 
-	"github.com/dwlhm/nova/internal/lexer"
-	"github.com/dwlhm/nova/internal/parser"
+	"github.com/dwlhm/nova/internal/core/lexer"
+	"github.com/dwlhm/nova/internal/core/parser"
 )
 
 func TestEnvironmentValidatesRecordUnionArrayAndOpaqueValues(t *testing.T) {

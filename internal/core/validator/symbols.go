@@ -3,10 +3,10 @@ package validator
 import (
 	"fmt"
 
-	"github.com/dwlhm/nova/internal/capability"
-	"github.com/dwlhm/nova/internal/lexer"
-	"github.com/dwlhm/nova/internal/parser"
-	novatypes "github.com/dwlhm/nova/internal/types"
+	"github.com/dwlhm/nova/internal/core/capability"
+	"github.com/dwlhm/nova/internal/core/lexer"
+	"github.com/dwlhm/nova/internal/core/parser"
+	novatypes "github.com/dwlhm/nova/internal/core/types"
 )
 
 const unknownEventArity = -1

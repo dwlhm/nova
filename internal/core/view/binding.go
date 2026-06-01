@@ -1,6 +1,6 @@
 package view
 
-import "github.com/dwlhm/nova/internal/lexer"
+import "github.com/dwlhm/nova/internal/core/lexer"
 
 func binding(tokens []lexer.Token) Binding {
 	tokens = trimNoise(tokens)

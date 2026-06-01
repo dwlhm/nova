@@ -4,30 +4,28 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dwlhm/nova/internal/build"
-	"github.com/dwlhm/nova/internal/contract"
-	"github.com/dwlhm/nova/internal/lexer"
+	"github.com/dwlhm/nova/internal/core/contract"
+	"github.com/dwlhm/nova/internal/core/ir"
 	"github.com/dwlhm/nova/internal/project"
-	"github.com/dwlhm/nova/internal/security"
-	"github.com/dwlhm/nova/internal/view"
+	"github.com/dwlhm/nova/internal/provider/build"
 )
 
 func TestBuildAppContractOmitsCompilerInternals(t *testing.T) {
-	bundle := irBundle{
-		Target: "web",
-		Entry:  "src/App.nova",
-		Model: appModel{States: []stateModel{{
-			Owner: "App", Name: "count", Initial: "0",
-			Transitions: []transitionModel{{Event: "@increment", Expression: "count + 1"}},
-		}}},
-		ViewIR: view.IR{
-			Nodes: []view.Node{{
+	bundle := ir.Bundle{
+		App: contract.App{
+			V:      contract.Version,
+			Target: "web",
+			Model: contract.Model{States: []contract.State{{
+				Owner: "App", Name: "count", Initial: "0",
+				Transitions: []contract.Transition{{Event: "@increment", Expression: "count + 1"}},
+			}}},
+			View: contract.View{Nodes: []contract.Node{{
 				Kind:  "text",
-				Props: map[string]view.Binding{"value": {Text: "count", Tokens: []lexer.Token{{Type: lexer.IDENT, Literal: "count"}}}},
-			}},
+				Props: map[string]string{"value": "state.count"},
+			}}},
 		},
 	}
-	app := buildAppContract(bundle, []security.Permission{"storage.read"})
+	app := BuildAppContract(bundle)
 	if app.V != contract.Version {
 		t.Fatalf("v = %d", app.V)
 	}
@@ -56,10 +54,9 @@ func TestGenerateWebUsesAppContractNotNovaIR(t *testing.T) {
 		Sources:        []build.SourceFile{{Path: "src/App.nova", File: source}},
 		TargetManifest: targetManifest,
 	})
-	files, diagnostics := Generate(GenerateInput{
-		Project: manifest, Plan: plan.Plan,
-		Sources: []build.SourceFile{{Path: "src/App.nova", File: source}}, TargetManifest: targetManifest,
-	})
+	sources := []build.SourceFile{{Path: "src/App.nova", File: source}}
+	input, _ := testGenerateInput(t, manifest, plan.Plan, sources, targetManifest)
+	files, diagnostics := Generate(input)
 	if len(diagnostics) != 0 {
 		t.Fatalf("diagnostics: %+v", diagnostics)
 	}
@@ -74,5 +71,3 @@ func TestGenerateWebUsesAppContractNotNovaIR(t *testing.T) {
 		}
 	}
 }
-
-// parseNova and assertArtifactFile are defined in artifact_test.go

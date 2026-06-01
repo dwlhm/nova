@@ -6,10 +6,12 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/dwlhm/nova/internal/core/ast"
+	"github.com/dwlhm/nova/internal/core/parser"
+	"github.com/dwlhm/nova/internal/core/plan"
+	"github.com/dwlhm/nova/internal/core/security"
 	"github.com/dwlhm/nova/internal/packages"
-	"github.com/dwlhm/nova/internal/parser"
 	"github.com/dwlhm/nova/internal/project"
-	"github.com/dwlhm/nova/internal/security"
 )
 
 type Selection string
@@ -24,46 +26,13 @@ type SourceFile struct {
 	File parser.File
 }
 
-type TargetManifest struct {
-	ID                   string
-	Families             []string
-	ExternalCapabilities []ExternalCapability
-	PermissionMappings   security.PermissionMap
-}
-
-type ExternalCapability struct {
-	Source     string
-	Operations []ExternalOperation
-}
-
-type ExternalOperation struct {
-	Name            string
-	Inputs          []Field
-	Output          string
-	Permissions     []security.Permission
-	Implementations []Implementation
-}
-
-type Field struct {
-	Name     string
-	Optional bool
-	Type     string
-}
-
-type Implementation struct {
-	Path    string
-	Target  string
-	Family  string
-	Common  bool
-	Default bool
-}
-
 type ResolutionInput struct {
 	Project        project.Manifest
 	Target         string
 	Sources        []SourceFile
 	TargetManifest TargetManifest
 	PackageGraph   packages.ResolvedGraph
+	PackageExports map[string]string
 }
 
 type ResolutionResult struct {
@@ -98,6 +67,7 @@ type ResolvedExternalOperation struct {
 	CapabilitySource string
 	CapabilityName   string
 	Operation        string
+	Output           string
 	Permissions      []security.Permission
 	Implementation   Implementation
 }
@@ -167,37 +137,89 @@ func Resolve(input ResolutionInput) ResolutionResult {
 	entry := normalizePath(input.Project.Project.Entry)
 	sourceMap := buildSourceMap(input.Sources)
 
-	plan := BuildPlan{Target: target, Entry: entry}
+	buildPlan := BuildPlan{Target: target, Entry: entry}
 	diagnostics := make([]Diagnostic, 0)
-	modules, moduleDiagnostics := resolveModuleGraph(entry, sourceMap)
-	diagnostics = append(diagnostics, moduleDiagnostics...)
-	plan.Modules = moduleRefs(modules)
 
-	if entryFile, ok := sourceMap[entry]; ok {
-		template, templateDiagnostics := selectTemplate(entry, target, entryFile.Templates)
-		plan.Template = template
-		diagnostics = append(diagnostics, templateDiagnostics...)
-	}
+	corePlan := plan.Resolve(plan.ResolveInput{
+		Profile:        target,
+		Entry:          entry,
+		Modules:        checkedModules(input.Sources),
+		PackageExports: input.PackageExports,
+	})
+	diagnostics = append(diagnostics, planDiagnostics(corePlan.Diagnostics)...)
+	buildPlan.Modules = providerModuleRefs(corePlan.Plan.Modules)
+	buildPlan.Template = providerTemplateRef(corePlan.Plan.Template)
+
+	modules := modulePathsFromRefs(corePlan.Plan.Modules)
 
 	external, externalDiagnostics := resolveExternalOperations(target, input.TargetManifest, modules, sourceMap)
-	plan.ExternalOperations = external
+	buildPlan.ExternalOperations = external
 	diagnostics = append(diagnostics, externalDiagnostics...)
-	plan.Permissions = collectPermissions(external)
+	buildPlan.Permissions = collectPermissions(external)
 
 	securityDiagnostics := auditPermissions(input.Project.Permissions, input.TargetManifest.PermissionMappings, external)
 	diagnostics = append(diagnostics, securityDiagnostics...)
 
 	renderer, rendererDiagnostics := resolveRendererPlan(input.Project.Renderer, input.PackageGraph, target)
 	diagnostics = append(diagnostics, rendererDiagnostics...)
-	plan.Renderer = renderer
+	buildPlan.Renderer = renderer
 
-	plan.Artifact = ArtifactMetadata{
+	buildPlan.Artifact = ArtifactMetadata{
 		Target:      target,
 		Entry:       entry,
-		Modules:     modulePaths(modules),
-		Permissions: clonePermissions(plan.Permissions),
+		Modules:     modules,
+		Permissions: clonePermissions(buildPlan.Permissions),
 	}
-	return ResolutionResult{Plan: plan, Diagnostics: diagnostics}
+	return ResolutionResult{Plan: buildPlan, Diagnostics: diagnostics}
+}
+
+func checkedModules(sources []SourceFile) []ast.CheckedModule {
+	modules := make([]ast.CheckedModule, 0, len(sources))
+	for _, source := range sources {
+		modules = append(modules, ast.CheckedModule{
+			Path: source.Path,
+			File: ast.CheckedFile{File: source.File},
+		})
+	}
+	return modules
+}
+
+func planDiagnostics(items []plan.Diagnostic) []Diagnostic {
+	out := make([]Diagnostic, 0, len(items))
+	for _, item := range items {
+		out = append(out, Diagnostic{
+			Code:           item.Code,
+			Message:        item.Message,
+			RequestingFile: item.RequestingFile,
+			ImportSource:   item.ImportSource,
+		})
+	}
+	return out
+}
+
+func providerModuleRefs(modules []plan.ModuleRef) []ModuleRef {
+	out := make([]ModuleRef, 0, len(modules))
+	for _, module := range modules {
+		out = append(out, ModuleRef{Path: module.Path})
+	}
+	return out
+}
+
+func providerTemplateRef(template plan.TemplateRef) TemplateRef {
+	return TemplateRef{
+		SourceFile: template.SourceFile,
+		Target:     template.Target,
+		Selection:  Selection(template.Selection),
+		Index:      template.Index,
+	}
+}
+
+func modulePathsFromRefs(modules []plan.ModuleRef) []string {
+	out := make([]string, 0, len(modules))
+	for _, module := range modules {
+		out = append(out, module.Path)
+	}
+	return out
 }
 
 func resolveTarget(input ResolutionInput) string {
@@ -205,69 +227,6 @@ func resolveTarget(input ResolutionInput) string {
 		return input.Target
 	}
 	return input.TargetManifest.ID
-}
-
-func resolveModuleGraph(entry string, sources map[string]parser.File) ([]string, []Diagnostic) {
-	visited := make(map[string]bool)
-	modules := make([]string, 0)
-	diagnostics := make([]Diagnostic, 0)
-
-	var visit func(string)
-	visit = func(modulePath string) {
-		modulePath = normalizePath(modulePath)
-		if visited[modulePath] {
-			return
-		}
-		visited[modulePath] = true
-
-		file, ok := sources[modulePath]
-		if !ok {
-			diagnostics = append(diagnostics, Diagnostic{
-				Code:           "NVA-TARGET-001",
-				RequestingFile: modulePath,
-				Message:        fmt.Sprintf("source module %s was not found", modulePath),
-			})
-			return
-		}
-		modules = append(modules, modulePath)
-		for _, decl := range file.Imports {
-			if !isLocalImport(decl.From) {
-				continue
-			}
-			visit(normalizePath(path.Join(path.Dir(modulePath), decl.From)))
-		}
-	}
-
-	visit(entry)
-	return modules, diagnostics
-}
-
-func selectTemplate(entry string, target string, templates []parser.TemplateDecl) (TemplateRef, []Diagnostic) {
-	for i, template := range templates {
-		if template.Target == target {
-			return TemplateRef{
-				SourceFile: entry,
-				Target:     template.Target,
-				Selection:  SelectionExactTarget,
-				Index:      i,
-			}, nil
-		}
-	}
-	for i, template := range templates {
-		if template.Target == "" {
-			return TemplateRef{
-				SourceFile: entry,
-				Selection:  SelectionPolymorphic,
-				Index:      i,
-			}, nil
-		}
-	}
-	return TemplateRef{}, []Diagnostic{{
-		Code:           "NVA-TEMPLATE-001",
-		Target:         target,
-		RequestingFile: entry,
-		Message:        fmt.Sprintf("no template for target %s requested by %s", target, entry),
-	}}
 }
 
 func resolveExternalOperations(target string, targetManifest TargetManifest, modules []string, sources map[string]parser.File) ([]ResolvedExternalOperation, []Diagnostic) {
@@ -328,6 +287,7 @@ func resolveExternalOperations(target string, targetManifest TargetManifest, mod
 					CapabilitySource: external.From,
 					CapabilityName:   external.Name,
 					Operation:        declaredOperation.Name,
+					Output:           targetOperation.Output,
 					Permissions:      clonePermissions(targetOperation.Permissions),
 					Implementation:   implementation,
 				})
@@ -465,20 +425,6 @@ func buildSourceMap(sources []SourceFile) map[string]parser.File {
 	for _, source := range sources {
 		out[normalizePath(source.Path)] = source.File
 	}
-	return out
-}
-
-func moduleRefs(modules []string) []ModuleRef {
-	refs := make([]ModuleRef, 0, len(modules))
-	for _, module := range modules {
-		refs = append(refs, ModuleRef{Path: module})
-	}
-	return refs
-}
-
-func modulePaths(modules []string) []string {
-	out := make([]string, len(modules))
-	copy(out, modules)
 	return out
 }
 

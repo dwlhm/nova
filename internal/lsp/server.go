@@ -10,8 +10,8 @@ import (
 	"strings"
 	"sync"
 
-	novaformat "github.com/dwlhm/nova/internal/format"
-	"github.com/dwlhm/nova/internal/lexer"
+	novaformat "github.com/dwlhm/nova/internal/core/format"
+	"github.com/dwlhm/nova/internal/core/lexer"
 )
 
 const (

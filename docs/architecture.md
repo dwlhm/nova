@@ -14,16 +14,32 @@ Dokumen ini adalah peta kerja untuk implementasi Go Nova.
 
 ## Pipeline
 
+### Core compiler (target-neutral)
+
+```txt
+Lexer
+  -> Parser
+  -> Raw AST            (internal/core/ast, internal/core/parser)
+  -> Semantic Analysis  (internal/core/semantic, internal/core/validator, internal/core/types)
+  -> Checked AST
+  -> Core IR Lowering   (internal/core/ir)
+  -> Core Nova IR       (contract.App + ViewIR bundle)
+  -> Core Build Plan    (internal/core/plan: module graph + entry template)
+```
+
+Orkestrasi per tahap: `internal/core/compile`. Provider layer menambah resolusi target,
+renderer, permission audit, dan codegen setelah core selesai.
+
+### End-to-end
+
 ```txt
 cmd/nova
   -> internal/cli
   -> project manifest and source discovery
-  -> lexer
-  -> parser
-  -> validator + types + security
-  -> build target resolution
-  -> view projection
-  -> artifact generation
+  -> internal/core/compile (parse, semantic check)
+  -> internal/provider/build (target resolution + renderer validation)
+  -> internal/core/compile.Lower + internal/core/ir (Nova IR + core plan)
+  -> internal/provider/artifact (codegen)
   -> bundler/dev/conformance
 ```
 
@@ -39,7 +55,7 @@ android -> Java di Android SDK View layer (@nova/android + runtime/nova-schedule
 
 Scheduler and renderer production code lives in `runtime/nova-scheduler-js`,
 `runtime/nova-scheduler-java`, and `runtime/nova-renderer-js` as installable libraries;
-`internal/artifact` embeds and copies them into build output.
+`internal/provider/artifact` embeds and copies them into build output.
 
 Go packages `internal/scheduler`, `internal/app`, dan sejenisnya adalah conformance reference;
 bukan runtime production userland.
@@ -50,21 +66,22 @@ bukan runtime production userland.
 Edge tooling
   cmd/nova, internal/cli, internal/bundler, internal/conformance, internal/packageio
 
-Project and target planning
-  internal/project, internal/build, internal/target, internal/packages, internal/standard
+Project and package planning
+  internal/project, internal/packages
 
-Language frontend and semantic core
-  internal/lexer, internal/parser, internal/types, internal/validator
+Core (target-neutral)
+  internal/core/lexer, internal/core/parser, internal/core/ast, internal/core/semantic
+  internal/core/types, internal/core/validator, internal/core/plan, internal/core/compile
+  internal/core/view, internal/core/capability, internal/core/contract, internal/core/ir
+  internal/core/routing, internal/core/security, internal/core/scheduler, internal/core/effect
+  internal/core/app, internal/core/persistence, internal/core/diagnostic, internal/core/format
 
-Runtime contracts
-  internal/scheduler, internal/effect, internal/app, internal/persistence, internal/security,
-  internal/routing
-
-Rendering and artifacts
-  internal/view, internal/capability, internal/artifact
+Provider (target-specific)
+  internal/provider/build, internal/provider/target, internal/provider/artifact
+  internal/provider/standard
 
 Dev helpers
-  internal/dev, internal/tooling, internal/format
+  internal/dev, internal/tooling, internal/lsp
 ```
 
 Dependency direction mengalir dari edge ke core contracts, bukan sebaliknya. Package core tidak boleh
@@ -78,30 +95,35 @@ mengambil dependency ke CLI, bundler, atau filesystem host.
 | `internal/cli` | Parse flag, baca/tulis file, orkestrasi pipeline, dev server, dan command output. |
 | `internal/packageio` | Filesystem loader untuk `nova.package.toml`, adapter package, dan package graph project. |
 | `internal/project` | Parse `nova.toml` dan validasi layout project. |
-| `internal/lexer` | Tokenisasi source `.nova`, tanpa IO. |
-| `internal/parser` | AST/data model dari token Nova. |
-| `internal/types` | Type reference parsing, assignability, dan validasi value serializable. |
-| `internal/validator` | Semantic validation lintas parser, type system, view, dan capability. |
-| `internal/build` | Module graph, template selection, external implementation, permission planning. |
-| `internal/target` | Kontrak artifact target dan validasi metadata runtime. |
-| `internal/security` | Permission audit dan validasi event host/runtime. |
-| `internal/routing` | Matching route target-neutral untuk page projection, dynamic params, wildcard, dan fallback. |
-| `internal/view` | Projection template menjadi ViewIR dan dependency metadata. |
-| `internal/capability` | Manifest capability dari source/parser contract. |
-| `internal/artifact` | Generate file web/android dari build plan dan IR, tanpa menulis disk. |
-| `internal/standard` | Katalog built-in `@nova/ui` dan merge primitive renderer (ADR-010, ADR-005). |
+| `internal/core/lexer` | Tokenisasi source `.nova`, tanpa IO. |
+| `internal/core/parser` | Parser syntax: token → raw AST (`parser.File`). |
+| `internal/core/ast` | Tipe Raw AST dan Checked AST. |
+| `internal/core/semantic` | Semantic analysis: raw AST → checked AST. |
+| `internal/core/types` | Type reference parsing, assignability, dan validasi value serializable. |
+| `internal/core/validator` | Aturan semantic (dipanggil dari `semantic`). |
+| `internal/core/plan` | Core build plan: module graph dan template entry. |
+| `internal/core/compile` | Orkestrasi pipeline core (parse → check → lower → plan). |
+| `internal/core/ir` | Core IR lowering: checked AST → Core Nova IR (`ir.NovaIR`). |
+| `internal/provider/build` | Module graph, template selection, external implementation, permission planning, renderer validation. |
+| `internal/provider/target` | Kontrak artifact target dan validasi metadata runtime. |
+| `internal/core/security` | Permission audit dan validasi event host/runtime. |
+| `internal/core/routing` | Matching route target-neutral untuk page projection, dynamic params, wildcard, dan fallback. |
+| `internal/core/view` | Projection template menjadi ViewIR dan dependency metadata. |
+| `internal/core/contract` | Kontrak runtime bundle (`App` v1, `BuildManifest`). |
+| `internal/core/capability` | Manifest capability dari source/parser contract. |
+| `internal/provider/artifact` | Generate file web/android dari build plan dan IR, tanpa menulis disk. |
+| `internal/provider/standard` | Katalog built-in `@nova/ui` dan merge primitive renderer (ADR-010, ADR-005). |
 | `internal/bundler` | Validasi artifact target, manifest bundle, Gradle/process execution. |
 | `internal/dev` | Planning dev cycle yang pure dan mudah diuji. |
 | `internal/tooling` | Helper tooling kecil yang tidak masuk pipeline utama. |
-| `internal/scheduler` | Queue, event envelope, commit, lifecycle, dan runtime scheduler semantics. |
-| `internal/effect` | Port external operation dan completion event. |
-| `internal/app` | Runtime app shell yang menghubungkan scheduler, view, effect, dan diagnostics. |
-| `internal/persistence` | Hydration/snapshot contract. |
+| `internal/core/scheduler` | Queue, event envelope, commit, lifecycle, dan runtime scheduler semantics. |
+| `internal/core/effect` | Port external operation dan completion event. |
+| `internal/core/app` | Runtime app shell yang menghubungkan scheduler, view, effect, dan diagnostics. |
+| `internal/core/persistence` | Hydration/snapshot contract. |
 | `internal/packages` | Manifest package, lockfile, target adapter, dan permission resolution. |
-| `internal/standard` | Surface package resmi `@nova/*` dan `@env/*`. |
 | `internal/conformance` | Fixture runner dan trace comparison untuk kontrak lintas target. |
-| `internal/diagnostic` | Diagnostic shape, severity, sorting, dan JSONL output. |
-| `internal/format` | Formatter source `.nova`. |
+| `internal/core/diagnostic` | Diagnostic shape, severity, sorting, dan JSONL output. |
+| `internal/core/format` | Formatter source `.nova`. |
 
 ## Dependency Rules
 
@@ -111,13 +133,17 @@ mengambil dependency ke CLI, bundler, atau filesystem host.
   mengetahui detail implementasi, format private, cara discovery, atau lifecycle internal package lain.
 - Glue lintas package harus tinggal di package dengan ownership domain yang tepat. Jika belum ada
   tempat yang sesuai, buat package baru dengan responsibility sempit dan dependency direction jelas.
-- `internal/artifact` boleh bergantung ke build/view/target contract, tetapi tidak boleh menjalankan
+- `internal/provider/artifact` boleh bergantung ke build/view/target contract, tetapi tidak boleh menjalankan
   process atau menulis filesystem.
 - `internal/bundler` boleh menjalankan process target seperti Gradle.
 - `internal/conformance` boleh membaca fixture dan memanggil pipeline untuk membandingkan expected
   contract.
 - `internal/dev` tetap pure planning; IO dev server berada di `internal/cli`.
-- Core language package (`lexer`, `parser`, `types`, `validator`) tidak boleh import package edge.
+- Package di `internal/core/*` tidak boleh import `internal/provider/*` atau package edge.
+- `internal/core/ir` menurunkan checked AST ke Core Nova IR (`contract.App` + ViewIR) tanpa detail web/android/codegen.
+- `internal/core/plan` memegang core build plan; `internal/provider/build` memperkaya dengan target, renderer, dan external resolution.
+- `internal/provider/build` + `internal/provider/target` menangani perencanaan target;
+  `internal/provider/artifact` menangani codegen.
 - Package yang mengeluarkan slice dari map atau graph harus mengurutkan hasil.
 
 Rule ini diperiksa oleh test arsitektur di `internal/architecture`.
@@ -127,15 +153,16 @@ Rule ini diperiksa oleh test arsitektur di `internal/architecture`.
 ### Syntax Or Language Semantics
 
 1. Update [language-design.md](language-design.md) bila prinsip ringkas berubah; update ADR-001 dan ADR terkait untuk detail.
-2. Ubah lexer/parser AST.
-3. Tambahkan semantic validation/type behavior.
-4. Update formatter bila bentuk source berubah.
-5. Tambahkan unit test dan conformance fixture bila surface lintas target berubah.
+2. Ubah lexer/parser (raw AST).
+3. Tambahkan semantic validation/type behavior (checked AST).
+4. Update core IR lowering atau core build plan bila kontrak turunan berubah.
+5. Update formatter bila bentuk source berubah.
+6. Tambahkan unit test dan conformance fixture bila surface lintas target berubah.
 
 ### Target Or Artifact Behavior
 
-1. Ubah target/build contract di `internal/build` atau `internal/target`.
-2. Ubah generator di `internal/artifact`.
+1. Ubah target/build contract di `internal/provider/build` atau `internal/provider/target`.
+2. Ubah generator di `internal/provider/artifact`.
 3. Ubah bundling hanya jika output final atau tool target ikut berubah.
 4. Verifikasi dengan example web/android yang relevan.
 

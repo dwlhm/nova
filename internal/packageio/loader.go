@@ -8,23 +8,33 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/dwlhm/nova/internal/diagnostic"
+	"github.com/dwlhm/nova/internal/core/diagnostic"
 	"github.com/dwlhm/nova/internal/packages"
 	"github.com/dwlhm/nova/internal/project"
-	"github.com/dwlhm/nova/internal/standard"
+	"github.com/dwlhm/nova/internal/provider/standard"
 )
 
-func ResolveProjectGraph(root string, targetID string, manifest project.Manifest) (packages.ResolvedGraph, []diagnostic.Diagnostic) {
+func ResolveProjectGraph(root string, targetID string, manifest project.Manifest, options ResolveOptions) (packages.ResolvedGraph, []diagnostic.Diagnostic) {
 	rendererDeps := rendererDependencies(manifest.Renderer.ExtensionPackages)
+	projectDeps := projectDependencies(manifest.Dependencies)
 	packageManifests, diagnostics := LoadProjectManifests(root, targetID, rendererDeps)
 	if diagnostic.HasErrors(diagnostics) {
 		return packages.ResolvedGraph{}, diagnostics
 	}
 
+	lockfile, lockDiagnostics := LoadLockfile(root, options.Production, manifest)
+	diagnostics = append(diagnostics, lockDiagnostics...)
+	if diagnostic.HasErrors(diagnostics) {
+		return packages.ResolvedGraph{}, diagnostics
+	}
+
 	graph, resolverDiagnostics := packages.Resolve(packages.ResolutionInput{
+		Roots:              projectDeps,
 		RendererExtensions: rendererDeps,
 		Packages:           packageManifests,
+		Lockfile:           lockfile,
 		Target:             targetID,
+		Production:         options.Production,
 	})
 	diagnostics = append(diagnostics, resolverDiagnostics...)
 	return graph, diagnostic.StableSort(diagnostics)
@@ -144,6 +154,10 @@ func readPackageAdapter(root string, packageDir string, adapterPath string) (str
 		return "", err
 	}
 	return string(content), nil
+}
+
+func RendererDependencies(refs []project.RendererPackageRef) []packages.Dependency {
+	return rendererDependencies(refs)
 }
 
 func rendererDependencies(refs []project.RendererPackageRef) []packages.Dependency {

@@ -1,6 +1,6 @@
 package view
 
-import "github.com/dwlhm/nova/internal/parser"
+import "github.com/dwlhm/nova/internal/core/parser"
 
 func Project(template parser.TemplateDecl, stateNames map[string]bool) (IR, []Diagnostic) {
 	p := viewParser{tokens: template.Tokens}

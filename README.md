@@ -15,17 +15,18 @@ Target production yang didukung: `web` (JavaScript/DOM) dan `android` (Java/Andr
 ## Struktur Penting
 
 ```txt
-cmd/nova/                 CLI entrypoint
-internal/artifact/        generator artifact web dan android
-internal/bundler/         proses bundling target dan integrasi Gradle
-internal/build/           target resolution
-internal/parser/          parser Nova
-internal/validator/       semantic validation
-examples/counter/         example app counter
-examples/multipage/       example route state dan page projection
-examples/finance/         example pencatatan keuangan Android-first
-tests/conformance/        fixture conformance resmi
-docs/adr/                 ADR desain Nova
+cmd/nova/                          CLI entrypoint
+internal/core/                     target-neutral compiler + runtime contracts
+  lexer, parser, ast, semantic, plan, compile, ir, types, validator, view, ...
+internal/provider/                 target-specific build + codegen
+  build, target, artifact, standard
+internal/cli/                      pipeline orchestration
+internal/bundler/                  bundling target dan integrasi Gradle
+examples/counter/                  example app counter
+examples/multipage/                example route state dan page projection
+examples/finance/                  example pencatatan keuangan Android-first
+tests/conformance/                 fixture conformance resmi
+docs/adr/                          ADR desain Nova
 ```
 
 ## Dokumentasi Proyek

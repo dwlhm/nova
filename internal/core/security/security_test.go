@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dwlhm/nova/internal/scheduler"
-	novatypes "github.com/dwlhm/nova/internal/types"
+	"github.com/dwlhm/nova/internal/core/scheduler"
+	novatypes "github.com/dwlhm/nova/internal/core/types"
 )
 
 func TestAuditPermissionsDeniesUndeclaredAndUnmappedExternalAccess(t *testing.T) {

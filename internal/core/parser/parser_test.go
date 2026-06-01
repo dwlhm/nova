@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dwlhm/nova/internal/lexer"
+	"github.com/dwlhm/nova/internal/core/lexer"
 )
 
 func TestParseADRTopLevelConstructs(t *testing.T) {
@@ -223,7 +223,7 @@ func TestParseStateRecordInitialValue(t *testing.T) {
 }
 
 func TestParseAudioLabExample(t *testing.T) {
-	path := filepath.Join("..", "..", "docs", "example", "audiolab.nova")
+	path := filepath.Join("..", "..", "..", "docs", "example", "audiolab.nova")
 	input, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read example: %v", err)
@@ -258,7 +258,7 @@ func TestParseAudioLabExample(t *testing.T) {
 }
 
 func TestParseMultiPageExample(t *testing.T) {
-	path := filepath.Join("..", "..", "examples", "multipage", "src", "App.nova")
+	path := filepath.Join("..", "..", "..", "examples", "multipage", "src", "App.nova")
 	input, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read example: %v", err)

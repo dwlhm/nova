@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/dwlhm/nova/internal/diagnostic"
-	"github.com/dwlhm/nova/internal/scheduler"
-	novatypes "github.com/dwlhm/nova/internal/types"
+	"github.com/dwlhm/nova/internal/core/diagnostic"
+	"github.com/dwlhm/nova/internal/core/scheduler"
+	novatypes "github.com/dwlhm/nova/internal/core/types"
 )
 
 type LifecycleEvent struct {

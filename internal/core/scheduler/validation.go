@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	novatypes "github.com/dwlhm/nova/internal/types"
+	novatypes "github.com/dwlhm/nova/internal/core/types"
 )
 
 func isSchedulerEvent(name SchedulerEvent) bool {

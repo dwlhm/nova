@@ -3,9 +3,9 @@ package app
 import (
 	"context"
 
-	"github.com/dwlhm/nova/internal/effect"
-	"github.com/dwlhm/nova/internal/scheduler"
-	"github.com/dwlhm/nova/internal/view"
+	"github.com/dwlhm/nova/internal/core/effect"
+	"github.com/dwlhm/nova/internal/core/scheduler"
+	"github.com/dwlhm/nova/internal/core/view"
 )
 
 type HostPort interface {

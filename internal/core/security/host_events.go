@@ -3,9 +3,9 @@ package security
 import (
 	"fmt"
 
-	"github.com/dwlhm/nova/internal/parser"
-	"github.com/dwlhm/nova/internal/scheduler"
-	novatypes "github.com/dwlhm/nova/internal/types"
+	"github.com/dwlhm/nova/internal/core/parser"
+	"github.com/dwlhm/nova/internal/core/scheduler"
+	novatypes "github.com/dwlhm/nova/internal/core/types"
 )
 
 func ValidateHostEvent(env novatypes.Environment, contracts []EventContract, event HostEvent) []Diagnostic {

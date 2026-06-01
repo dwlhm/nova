@@ -1,6 +1,6 @@
 package types
 
-import "github.com/dwlhm/nova/internal/lexer"
+import "github.com/dwlhm/nova/internal/core/lexer"
 
 func trimNoise(tokens []lexer.Token) []lexer.Token {
 	start := 0

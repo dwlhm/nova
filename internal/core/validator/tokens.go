@@ -3,8 +3,8 @@ package validator
 import (
 	"fmt"
 
-	"github.com/dwlhm/nova/internal/lexer"
-	novatypes "github.com/dwlhm/nova/internal/types"
+	"github.com/dwlhm/nova/internal/core/lexer"
+	novatypes "github.com/dwlhm/nova/internal/core/types"
 )
 
 type eventEmission struct {

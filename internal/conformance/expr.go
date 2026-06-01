@@ -5,9 +5,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dwlhm/nova/internal/lexer"
-	"github.com/dwlhm/nova/internal/parser"
-	"github.com/dwlhm/nova/internal/scheduler"
+	"github.com/dwlhm/nova/internal/core/lexer"
+	"github.com/dwlhm/nova/internal/core/parser"
+	"github.com/dwlhm/nova/internal/core/scheduler"
 )
 
 func evaluateExpression(tokens []lexer.Token, stateNames map[string]bool, paramNames map[string]bool, snapshot scheduler.Snapshot, event scheduler.EventEnvelope) (scheduler.DataValue, error) {

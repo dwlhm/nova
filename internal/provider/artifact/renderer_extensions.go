@@ -1,54 +1,14 @@
 package artifact
 
 import (
-	"fmt"
 	"strings"
 
-	"github.com/dwlhm/nova/internal/build"
-	"github.com/dwlhm/nova/internal/diagnostic"
-	"github.com/dwlhm/nova/internal/view"
+	"github.com/dwlhm/nova/internal/provider/build"
 )
 
 type webRendererExtensionBundle struct {
 	Enabled bool
 	Content string
-}
-
-func validateRendererKinds(nodes []view.Node, renderer build.RendererPlan, target string) []Diagnostic {
-	known := make(map[string]bool, len(renderer.Primitives))
-	known["#text"] = true
-	for _, primitive := range renderer.Primitives {
-		known[primitive.Kind] = true
-	}
-	diagnostics := make([]Diagnostic, 0)
-	var visit func([]view.Node)
-	visit = func(nodes []view.Node) {
-		for _, node := range nodes {
-			if !known[node.Kind] {
-				diagnostics = append(diagnostics, unknownKindDiagnostic(node.Kind, renderer.UnknownKind, target))
-			}
-			visit(node.Children)
-		}
-	}
-	visit(nodes)
-	return diagnostic.StableSort(diagnostics)
-}
-
-func unknownKindDiagnostic(kind string, policy string, target string) Diagnostic {
-	if policy == "warn" || policy == "passthrough_web" && target == "web" {
-		return Diagnostic{
-			Code:     "NVA-RENDER-002",
-			Severity: diagnostic.SeverityWarning,
-			Message:  fmt.Sprintf("unknown view kind %s is allowed by renderer.unknown_kind policy for target %s", kind, target),
-			Target:   target,
-		}
-	}
-	return Diagnostic{
-		Code:     "NVA-RENDER-001",
-		Severity: diagnostic.SeverityError,
-		Message:  fmt.Sprintf("unknown view kind %s for target %s", kind, target),
-		Target:   target,
-	}
 }
 
 func webRendererExtensions(extensions []build.RendererExtension) webRendererExtensionBundle {

@@ -3,7 +3,7 @@ package types
 import (
 	"fmt"
 
-	"github.com/dwlhm/nova/internal/lexer"
+	"github.com/dwlhm/nova/internal/core/lexer"
 )
 
 func (p *typeParser) match(typ lexer.TokenType) bool {

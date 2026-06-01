@@ -71,52 +71,204 @@ func TestHostIOImportsStayAtEdges(t *testing.T) {
 	}
 }
 
+func TestCorePackagesDoNotImportProvider(t *testing.T) {
+	importsByPackage, err := collectProductionImports(repoRoot(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	failures := make([]string, 0)
+	for importer, imports := range importsByPackage {
+		if !strings.HasPrefix(importer, "internal/core/") {
+			continue
+		}
+		for imported := range imports {
+			if strings.HasPrefix(imported, modulePath+"/internal/provider/") {
+				failures = append(failures, importer+" imports provider package "+strings.TrimPrefix(imported, modulePath+"/"))
+			}
+		}
+	}
+
+	sort.Strings(failures)
+	for _, failure := range failures {
+		t.Error(failure)
+	}
+}
+
 func allowedInternalImports() map[string]map[string]bool {
 	return map[string]map[string]bool{
-		"cmd/nova":     set("internal/cli"),
-		"internal/app": set("internal/diagnostic", "internal/effect", "internal/scheduler", "internal/types", "internal/view"),
-		"internal/artifact": set(
-			"internal/build",
-			"internal/capability",
-			"internal/contract",
-			"internal/diagnostic",
-			"internal/lexer",
-			"internal/parser",
+		"cmd/nova": set("internal/cli"),
+		"internal/core/app": set(
+			"internal/core/diagnostic",
+			"internal/core/effect",
+			"internal/core/scheduler",
+			"internal/core/types",
+			"internal/core/view",
+		),
+		"internal/core/capability": set("internal/core/parser"),
+		"internal/core/contract":   set(),
+		"internal/core/diagnostic": set(),
+		"internal/core/effect": set(
+			"internal/core/scheduler",
+			"internal/core/types",
+		),
+		"internal/core/format": set(),
+		"internal/core/ir": set(
+			"internal/core/capability",
+			"internal/core/contract",
+			"internal/core/lexer",
+			"internal/core/parser",
+			"internal/core/routing",
+			"internal/core/security",
+			"internal/core/view",
+		),
+		"internal/core/ast": set("internal/core/parser"),
+		"internal/core/compile": set(
+			"internal/core/ast",
+			"internal/core/ir",
+			"internal/core/lexer",
+			"internal/core/parser",
+			"internal/core/plan",
+			"internal/core/semantic",
+			"internal/core/security",
+		),
+		"internal/core/lexer": set(),
+		"internal/core/parser": set(
+			"internal/core/lexer",
+		),
+		"internal/core/plan": set(
+			"internal/core/ast",
+			"internal/core/capability",
+			"internal/core/parser",
 			"internal/project",
-			"internal/routing",
-			"internal/security",
-			"internal/target",
-			"internal/view",
+		),
+		"internal/core/semantic": set(
+			"internal/core/ast",
+			"internal/core/lexer",
+			"internal/core/validator",
+		),
+		"internal/core/persistence": set(
+			"internal/core/diagnostic",
+			"internal/core/scheduler",
+		),
+		"internal/core/routing": set(),
+		"internal/core/scheduler": set(
+			"internal/core/types",
+		),
+		"internal/core/security": set(
+			"internal/core/parser",
+			"internal/core/scheduler",
+			"internal/core/types",
+		),
+		"internal/core/types": set(
+			"internal/core/lexer",
+			"internal/core/parser",
+		),
+		"internal/core/validator": set(
+			"internal/core/capability",
+			"internal/core/lexer",
+			"internal/core/parser",
+			"internal/core/types",
+			"internal/core/view",
+		),
+		"internal/core/view": set(
+			"internal/core/lexer",
+			"internal/core/parser",
+			"internal/core/scheduler",
+		),
+		"internal/provider/artifact": set(
+			"internal/provider/build",
+			"internal/core/contract",
+			"internal/core/diagnostic",
+			"internal/core/ir",
+			"internal/project",
+			"internal/core/routing",
+			"internal/core/security",
+			"internal/provider/standard",
+			"internal/provider/target",
 			"runtime/nova-renderer-js",
 			"runtime/nova-scheduler-java",
 			"runtime/nova-scheduler-js",
 		),
-		"internal/contract": set(),
-		"internal/build":       set("internal/packages", "internal/parser", "internal/project", "internal/security", "internal/standard"),
-		"internal/bundler":     set(),
-		"internal/capability":  set("internal/parser"),
-		"internal/cli":         set("internal/artifact", "internal/build", "internal/bundler", "internal/conformance", "internal/dev", "internal/diagnostic", "internal/format", "internal/lexer", "internal/lsp", "internal/packageio", "internal/packages", "internal/parser", "internal/project", "internal/validator"),
-		"internal/conformance": set("internal/artifact", "internal/build", "internal/diagnostic", "internal/lexer", "internal/packageio", "internal/parser", "internal/project", "internal/routing", "internal/scheduler", "internal/security", "internal/validator", "internal/view"),
-		"internal/dev":         set(),
-		"internal/diagnostic":  set(),
-		"internal/effect":      set("internal/scheduler", "internal/types"),
-		"internal/format":      set(),
-		"internal/lexer":       set(),
-		"internal/lsp":         set("internal/format", "internal/lexer", "internal/packages", "internal/parser", "internal/standard", "internal/validator"),
-		"internal/packageio":   set("internal/diagnostic", "internal/packages", "internal/project", "internal/standard"),
-		"internal/packages":    set("internal/diagnostic", "internal/security"),
-		"internal/parser":      set("internal/lexer"),
-		"internal/persistence": set("internal/diagnostic", "internal/scheduler"),
-		"internal/project":     set(),
-		"internal/routing":     set(),
-		"internal/scheduler":   set("internal/types"),
-		"internal/security":    set("internal/parser", "internal/scheduler", "internal/types"),
-		"internal/standard":    set("internal/diagnostic", "internal/packages", "internal/security", "internal/view"),
-		"internal/target":      set("internal/diagnostic", "internal/security"),
-		"internal/tooling":     set(),
-		"internal/types":       set("internal/lexer", "internal/parser"),
-		"internal/validator":   set("internal/capability", "internal/lexer", "internal/parser", "internal/types", "internal/view"),
-		"internal/view":        set("internal/lexer", "internal/parser", "internal/scheduler"),
+		"internal/provider/build": set(
+			"internal/core/ast",
+			"internal/core/ir",
+			"internal/core/plan",
+			"internal/packages",
+			"internal/core/parser",
+			"internal/project",
+			"internal/core/security",
+			"internal/provider/standard",
+			"internal/provider/target",
+			"internal/core/view",
+		),
+		"internal/provider/standard": set(
+			"internal/core/diagnostic",
+			"internal/packages",
+			"internal/core/security",
+			"internal/core/view",
+		),
+		"internal/provider/target": set(
+			"internal/core/diagnostic",
+			"internal/core/security",
+		),
+		"internal/bundler": set(),
+		"internal/cli": set(
+			"internal/provider/artifact",
+			"internal/provider/build",
+			"internal/bundler",
+			"internal/conformance",
+			"internal/dev",
+			"internal/core/ast",
+			"internal/core/compile",
+			"internal/core/diagnostic",
+			"internal/core/format",
+			"internal/core/ir",
+			"internal/lsp",
+			"internal/packageio",
+			"internal/packages",
+			"internal/project",
+		),
+		"internal/conformance": set(
+			"internal/provider/artifact",
+			"internal/provider/build",
+			"internal/core/ast",
+			"internal/core/compile",
+			"internal/core/contract",
+			"internal/core/diagnostic",
+			"internal/core/effect",
+			"internal/core/ir",
+			"internal/core/lexer",
+			"internal/packageio",
+			"internal/packages",
+			"internal/core/parser",
+			"internal/project",
+			"internal/core/routing",
+			"internal/core/scheduler",
+			"internal/core/security",
+			"internal/core/view",
+		),
+		"internal/dev": set(),
+		"internal/lsp": set(
+			"internal/core/format",
+			"internal/core/lexer",
+			"internal/packages",
+			"internal/core/parser",
+			"internal/core/semantic",
+			"internal/provider/standard",
+		),
+		"internal/packageio": set(
+			"internal/core/diagnostic",
+			"internal/packages",
+			"internal/project",
+			"internal/provider/standard",
+		),
+		"internal/packages": set(
+			"internal/core/diagnostic",
+			"internal/core/security",
+		),
+		"internal/project": set(),
+		"internal/tooling": set(),
 	}
 }
 

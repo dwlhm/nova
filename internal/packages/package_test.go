@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dwlhm/nova/internal/security"
+	"github.com/dwlhm/nova/internal/core/security"
 )
 
 func TestValidateManifestRequiresPackageTypeAndExternalPermissions(t *testing.T) {

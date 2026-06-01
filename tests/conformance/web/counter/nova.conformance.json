@@ -8,6 +8,14 @@
       "modules": ["src/App.nova"],
       "permissions": []
     },
+    "appContract": {
+      "v": 1,
+      "target": "web",
+      "entry": "src/App.nova",
+      "stateCount": 1,
+      "bindings": 1,
+      "forbidden": ["viewIR", "Tokens", "capabilityManifests"]
+    },
     "view": {
       "bindings": 1,
       "eventRoutes": 1,

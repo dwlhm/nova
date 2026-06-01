@@ -1,8 +1,8 @@
 package packages
 
 import (
-	"github.com/dwlhm/nova/internal/diagnostic"
-	"github.com/dwlhm/nova/internal/security"
+	"github.com/dwlhm/nova/internal/core/diagnostic"
+	"github.com/dwlhm/nova/internal/core/security"
 )
 
 type PackageType string

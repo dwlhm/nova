@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/dwlhm/nova/internal/packages"
-	"github.com/dwlhm/nova/internal/standard"
+	"github.com/dwlhm/nova/internal/provider/standard"
 )
 
 const (

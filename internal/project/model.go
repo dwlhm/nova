@@ -63,8 +63,14 @@ type RendererTarget struct {
 
 type PermissionMap map[string]bool
 
+type Dependency struct {
+	Name       string
+	Constraint string
+}
+
 type Manifest struct {
 	Project          Project
+	Dependencies     []Dependency
 	Targets          map[string]Target
 	Renderer         RendererConfig
 	Permissions      PermissionMap

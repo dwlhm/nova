@@ -4,12 +4,12 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dwlhm/nova/internal/build"
-	"github.com/dwlhm/nova/internal/diagnostic"
-	"github.com/dwlhm/nova/internal/lexer"
+	"github.com/dwlhm/nova/internal/core/contract"
+	"github.com/dwlhm/nova/internal/core/diagnostic"
+	"github.com/dwlhm/nova/internal/core/security"
 	"github.com/dwlhm/nova/internal/project"
-	"github.com/dwlhm/nova/internal/routing"
-	"github.com/dwlhm/nova/internal/view"
+	"github.com/dwlhm/nova/internal/provider/build"
+	"github.com/dwlhm/nova/internal/provider/target"
 )
 
 type androidTargetConfig struct {
@@ -115,16 +115,33 @@ func androidAppGradle(config androidTargetConfig) string {
 	return "plugins {\n    id(\"com.android.application\")\n}\n\nandroid {\n    namespace = " + quoteCodeString(config.Namespace) + "\n    compileSdk = " + config.CompileSDK + "\n\n    defaultConfig {\n        applicationId = " + quoteCodeString(config.ApplicationID) + "\n        minSdk = " + config.MinSDK + "\n        targetSdk = " + config.TargetSDK + "\n        versionCode = " + config.VersionCode + "\n        versionName = " + quoteCodeString(config.VersionName) + "\n    }\n\n    compileOptions {\n        sourceCompatibility = " + javaVersion + "\n        targetCompatibility = " + javaVersion + "\n    }\n}\n\ndependencies {\n    implementation(project(\":nova-scheduler\"))\n}\n"
 }
 
-func androidManifest(config androidTargetConfig) string {
-	return "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\">\n    <application android:theme=\"@style/" + escapeXML(config.Theme) + "\" android:label=" + quoteXML(config.Label) + ">\n        <activity android:name=\"" + escapeXML(config.Namespace) + ".MainActivity\" android:exported=\"true\">\n            <intent-filter>\n                <action android:name=\"android.intent.action.MAIN\" />\n                <category android:name=\"android.intent.category.LAUNCHER\" />\n            </intent-filter>\n        </activity>\n    </application>\n</manifest>\n"
+func androidManifest(config androidTargetConfig, permissions []security.Permission) string {
+	manifestPermissions := target.AndroidManifestPermissions(permissions)
+	var usesPermissions strings.Builder
+	for _, permission := range manifestPermissions {
+		usesPermissions.WriteString("    <uses-permission android:name=\"")
+		usesPermissions.WriteString(escapeXML(permission))
+		usesPermissions.WriteString("\" />\n")
+	}
+	return "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\">\n" +
+		usesPermissions.String() +
+		"    <application android:theme=\"@style/" + escapeXML(config.Theme) + "\" android:label=" + quoteXML(config.Label) + ">\n" +
+		"        <activity android:name=\"" + escapeXML(config.Namespace) + ".MainActivity\" android:exported=\"true\">\n" +
+		"            <intent-filter>\n" +
+		"                <action android:name=\"android.intent.action.MAIN\" />\n" +
+		"                <category android:name=\"android.intent.category.LAUNCHER\" />\n" +
+		"            </intent-filter>\n" +
+		"        </activity>\n" +
+		"    </application>\n" +
+		"</manifest>\n"
 }
 
 func androidStyles(config androidTargetConfig) string {
 	return "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<resources>\n    <style name=\"" + escapeXML(config.Theme) + "\" parent=\"" + escapeXML(config.ThemeParent) + "\">\n        <item name=\"android:windowActionBar\">false</item>\n        <item name=\"android:windowNoTitle\">true</item>\n    </style>\n</resources>\n"
 }
 
-func androidMainActivity(name string, bundle irBundle, config androidTargetConfig, styles []StyleAsset) string {
-	return androidNativeMainActivity(bundle, config, styles)
+func androidMainActivity(app contract.App, config androidTargetConfig, styles []StyleAsset) string {
+	return androidMainActivityFromContract(app, config, styles)
 }
 
 func androidRuntime(config androidTargetConfig) string {
@@ -515,330 +532,6 @@ final class RouteMatch {
 `
 }
 
-func androidNativeMainActivity(bundle irBundle, config androidTargetConfig, styles []StyleAsset) string {
-	routePatterns := androidPagePaths(bundle)
-	renderer := androidJavaViewRenderer{stateNames: androidStateNames(bundle.Model), styles: newAndroidStyleSheet(styles)}
-	var builder strings.Builder
-	builder.WriteString("package " + config.Namespace + ";\n\n")
-	builder.WriteString("import static " + config.Namespace + ".NovaRuntime.*;\n\n")
-	builder.WriteString("import nova.scheduler.NovaScheduler;\n")
-	builder.WriteString("import nova.scheduler.NovaTransition;\n\n")
-	builder.WriteString("import android.app.Activity;\n")
-	builder.WriteString("import android.graphics.Color;\n")
-	builder.WriteString("import android.graphics.Typeface;\n")
-	builder.WriteString("import android.graphics.drawable.GradientDrawable;\n")
-	builder.WriteString("import android.os.Bundle;\n")
-	builder.WriteString("import android.text.Editable;\n")
-	builder.WriteString("import android.text.InputType;\n")
-	builder.WriteString("import android.text.TextWatcher;\n")
-	builder.WriteString("import android.util.TypedValue;\n")
-	builder.WriteString("import android.view.Gravity;\n")
-	builder.WriteString("import android.view.View;\n")
-	builder.WriteString("import android.view.ViewGroup;\n")
-	builder.WriteString("import android.widget.Button;\n")
-	builder.WriteString("import android.widget.EditText;\n")
-	builder.WriteString("import android.widget.FrameLayout;\n")
-	builder.WriteString("import android.widget.GridLayout;\n")
-	builder.WriteString("import android.widget.LinearLayout;\n")
-	builder.WriteString("import android.widget.ScrollView;\n")
-	builder.WriteString("import android.widget.TextView;\n")
-	builder.WriteString("import java.util.ArrayList;\n")
-	builder.WriteString("import java.util.Arrays;\n")
-	builder.WriteString("import java.util.Collections;\n")
-	builder.WriteString("import java.util.LinkedHashMap;\n")
-	builder.WriteString("import java.util.LinkedHashSet;\n")
-	builder.WriteString("import java.util.List;\n")
-	builder.WriteString("import java.util.Map;\n")
-	builder.WriteString("import java.util.Set;\n\n")
-	builder.WriteString("public final class MainActivity extends Activity implements NovaScheduler.Host {\n")
-	builder.WriteString("    private final Map<String, Object> state = new LinkedHashMap<>();\n")
-	builder.WriteString("    private final Map<String, View> views = new LinkedHashMap<>();\n")
-	builder.WriteString("    private final List<Object> routeBackStack = new ArrayList<>();\n")
-	builder.WriteString("    private final NovaScheduler scheduler = new NovaScheduler(this);\n")
-	builder.WriteString("    private final NovaPrimitiveRegistry primitiveRegistry = NovaRendererExtensions.register(new NovaPrimitiveRegistry());\n")
-	builder.WriteString("    private boolean applyingSystemBack = false;\n\n")
-	builder.WriteString("    @Override\n")
-	builder.WriteString("    protected void onCreate(Bundle savedInstanceState) {\n")
-	builder.WriteString("        super.onCreate(savedInstanceState);\n")
-	builder.WriteString("        initializeState();\n")
-	builder.WriteString("        initializeNavigationStack();\n")
-	builder.WriteString("        setContentView(buildViewTree());\n")
-	builder.WriteString("    }\n\n")
-	builder.WriteString("    @Override\n")
-	builder.WriteString("    public void onBackPressed() {\n")
-	builder.WriteString("        if (canNavigateBack()) handleSystemBack(); else super.onBackPressed();\n")
-	builder.WriteString("    }\n\n")
-	builder.WriteString("    private void initializeState() {\n")
-	builder.WriteString("        if (!state.isEmpty()) return;\n")
-	builder.WriteString(androidJavaStateInitializers(bundle.Model))
-	builder.WriteString("    }\n\n")
-	builder.WriteString("    private View buildViewTree() {\n")
-	builder.WriteString("        views.clear();\n")
-	builder.WriteString("        LinearLayout root = new LinearLayout(this);\n")
-	builder.WriteString("        root.setOrientation(LinearLayout.VERTICAL);\n")
-	builder.WriteString("        root.setGravity(Gravity.CENTER);\n")
-	builder.WriteString("        root.setPadding(dp(24), dp(24), dp(24), dp(24));\n")
-	builder.WriteString("        root.setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));\n")
-	builder.WriteString(renderer.renderBuildNodes(bundle.ViewIR.Nodes, "root", "        ", nil))
-	builder.WriteString("        applyBindings(null);\n")
-	builder.WriteString("        updatePageVisibility();\n")
-	builder.WriteString("        return root;\n")
-	builder.WriteString("    }\n\n")
-	builder.WriteString(androidJavaTransitionTable(bundle.Model))
-	builder.WriteString(androidJavaRoutePatternTable(routePatterns))
-	builder.WriteString("    private List<String> stateNames() {\n")
-	builder.WriteString("        return Arrays.asList(\n")
-	for _, state := range bundle.Model.States {
-		builder.WriteString("            " + quoteCodeString(state.Name) + ",\n")
-	}
-	builder.WriteString("            \"\"\n")
-	builder.WriteString("        );\n")
-	builder.WriteString("    }\n\n")
-	builder.WriteString(renderer.renderApplyBindings(bundle.ViewIR.Nodes, bundle.ViewIR.Metadata.Bindings))
-	builder.WriteString(renderer.renderUpdatePageVisibility(bundle.ViewIR.Nodes))
-	builder.WriteString(androidJavaSchedulerActivityHost())
-	builder.WriteString("    private void applyStateCommit(Set<String> invalidations) {\n")
-	builder.WriteString("        if (invalidations.isEmpty()) return;\n")
-	builder.WriteString("        applyBindings(invalidations);\n")
-	builder.WriteString("        updatePageVisibility();\n")
-	builder.WriteString("    }\n\n")
-	builder.WriteString("    private boolean hasRouteState() { return state.containsKey(\"route\"); }\n\n")
-	builder.WriteString("    private boolean hasTransition(String eventName) {\n")
-	builder.WriteString("        for (NovaTransition transition : transitions()) {\n")
-	builder.WriteString("            if (transition.eventName.equals(eventName)) return true;\n")
-	builder.WriteString("        }\n")
-	builder.WriteString("        return false;\n")
-	builder.WriteString("    }\n\n")
-	builder.WriteString("    private boolean canNavigateBack() { return routeBackStack.size() > 1; }\n\n")
-	builder.WriteString("    private void handleSystemBack() {\n")
-	builder.WriteString("        if (!canNavigateBack()) return;\n")
-	builder.WriteString("        Object targetRoute = cloneRoute(routeBackStack.get(routeBackStack.size() - 2));\n")
-	builder.WriteString("        Object beforeRoute = cloneRoute(state.get(\"route\"));\n")
-	builder.WriteString("        applyingSystemBack = true;\n")
-	builder.WriteString("        try {\n")
-	builder.WriteString("            if (hasTransition(\"@navigate\")) {\n")
-	builder.WriteString("                dispatch(\"@navigate\", Collections.singletonList(record(entry(\"kind\", \"back\"))));\n")
-	builder.WriteString("            } else {\n")
-	builder.WriteString("                dispatch(\"@route_changed\", Collections.singletonList(targetRoute));\n")
-	builder.WriteString("            }\n")
-	builder.WriteString("        } finally {\n")
-	builder.WriteString("            applyingSystemBack = false;\n")
-	builder.WriteString("        }\n")
-	builder.WriteString("        reconcileAfterSystemBack(beforeRoute, state.get(\"route\"), targetRoute);\n")
-	builder.WriteString("    }\n\n")
-	builder.WriteString("    private void reconcileAfterSystemBack(Object beforeRoute, Object afterRoute, Object targetRoute) {\n")
-	builder.WriteString("        if (routeKey(beforeRoute).equals(routeKey(afterRoute))) return;\n")
-	builder.WriteString("        if (routeKey(afterRoute).equals(routeKey(targetRoute))) {\n")
-	builder.WriteString("            routeBackStack.remove(routeBackStack.size() - 1);\n")
-	builder.WriteString("            return;\n")
-	builder.WriteString("        }\n")
-	builder.WriteString("        routeBackStack.remove(routeBackStack.size() - 1);\n")
-	builder.WriteString("        Object last = routeBackStack.isEmpty() ? null : routeBackStack.get(routeBackStack.size() - 1);\n")
-	builder.WriteString("        if (!routeKey(last).equals(routeKey(afterRoute))) routeBackStack.add(cloneRoute(afterRoute));\n")
-	builder.WriteString("    }\n\n")
-	builder.WriteString("    private void reconcileRouteBackStack(Object beforeRoute, Object afterRoute) {\n")
-	builder.WriteString("        if (!hasRouteState()) return;\n")
-	builder.WriteString("        if (routeBackStack.isEmpty()) {\n")
-	builder.WriteString("            routeBackStack.add(cloneRoute(afterRoute));\n")
-	builder.WriteString("            return;\n")
-	builder.WriteString("        }\n")
-	builder.WriteString("        if (routeKey(beforeRoute).equals(routeKey(afterRoute)) || applyingSystemBack) return;\n")
-	builder.WriteString("        Object last = routeBackStack.get(routeBackStack.size() - 1);\n")
-	builder.WriteString("        if (!routeKey(last).equals(routeKey(afterRoute))) routeBackStack.add(cloneRoute(afterRoute));\n")
-	builder.WriteString("    }\n\n")
-	builder.WriteString("    private void initializeNavigationStack() {\n")
-	builder.WriteString("        if (!hasRouteState() || !routeBackStack.isEmpty()) return;\n")
-	builder.WriteString("        state.put(\"route\", routeValueForShape(state.get(\"route\"), routePatterns()));\n")
-	builder.WriteString("        routeBackStack.add(cloneRoute(state.get(\"route\")));\n")
-	builder.WriteString("    }\n\n")
-	builder.WriteString("    private String activeRoutePath() { return pathOf(state.get(\"route\")); }\n\n")
-	builder.WriteString("    private boolean shouldApply(Set<String> invalidations, List<String> states) {\n")
-	builder.WriteString("        if (invalidations == null) return true;\n")
-	builder.WriteString("        for (String state : states) {\n")
-	builder.WriteString("            if (invalidations.contains(state)) return true;\n")
-	builder.WriteString("        }\n")
-	builder.WriteString("        return false;\n")
-	builder.WriteString("    }\n\n")
-	builder.WriteString("    private boolean booleanValue(Object value) { return Boolean.TRUE.equals(value) || \"true\".equals(String.valueOf(value)); }\n\n")
-	builder.WriteString("    private double inputNumber(String value) { try { return Double.parseDouble(value); } catch (NumberFormatException ignored) { return 0.0; } }\n\n")
-	builder.WriteString("    private int dp(int value) { return (int) (value * getResources().getDisplayMetrics().density); }\n")
-	builder.WriteString("}\n")
-	return builder.String()
-}
-
-type androidJavaViewRenderer struct {
-	stateNames map[string]bool
-	styles     androidStyleSheet
-}
-
-func (renderer androidJavaViewRenderer) renderBuildNodes(nodes []view.Node, parent string, indent string, path []int) string {
-	var builder strings.Builder
-	for index, node := range nodes {
-		nodePath := append(cloneIntPath(path), index)
-		builder.WriteString(renderer.renderBuildNode(node, parent, indent, nodePath))
-	}
-	return builder.String()
-}
-
-func (renderer androidJavaViewRenderer) renderBuildNode(node view.Node, parent string, indent string, path []int) string {
-	key := androidPathKey(path)
-	name := androidJavaVar("node", path)
-	switch node.Kind {
-	case "page":
-		return renderer.renderJavaContainer(node, parent, indent, path, key, name, "FrameLayout", "")
-	case "text", "#text":
-		value := quoteCodeString("")
-		if binding, ok := node.Props["value"]; ok {
-			if expression, ok := androidJavaStringExpression(binding.Tokens, renderer.stateNames); ok {
-				value = "textValue(" + expression + ")"
-			}
-		}
-		var builder strings.Builder
-		builder.WriteString(indent + "TextView " + name + " = new TextView(this);\n")
-		builder.WriteString(indent + name + ".setText(" + value + ");\n")
-		builder.WriteString(renderer.renderStaticStyles(node, name, indent))
-		builder.WriteString(indent + "views.put(" + quoteCodeString(key) + ", " + name + ");\n")
-		builder.WriteString(indent + parent + ".addView(" + name + ");\n")
-		return builder.String()
-	case "button":
-		return renderer.renderJavaButton(node, parent, indent, path, key, name)
-	case "text_input":
-		return renderer.renderJavaInput(node, parent, indent, path, key, name, false)
-	case "number_input":
-		return renderer.renderJavaInput(node, parent, indent, path, key, name, true)
-	case "row":
-		return renderer.renderJavaRow(node, parent, indent, path, key, name)
-	case "scroll":
-		return renderer.renderJavaScroll(node, parent, indent, path, key, name)
-	case "stack":
-		return renderer.renderJavaContainer(node, parent, indent, path, key, name, "FrameLayout", "")
-	default:
-		return renderer.renderJavaContainer(node, parent, indent, path, key, name, "LinearLayout", "LinearLayout.VERTICAL")
-	}
-}
-
-func (renderer androidJavaViewRenderer) renderJavaInput(node view.Node, parent string, indent string, path []int, key string, name string, number bool) string {
-	value := quoteCodeString("")
-	if binding, ok := node.Props["value"]; ok {
-		if expression, ok := androidJavaStringExpression(binding.Tokens, renderer.stateNames); ok {
-			value = "textValue(" + expression + ")"
-		}
-	}
-	hint := quoteCodeString("")
-	if binding, ok := node.Props["placeholder"]; ok {
-		if expression, ok := androidJavaStringExpression(binding.Tokens, renderer.stateNames); ok {
-			hint = "textValue(" + expression + ")"
-		}
-	}
-	var builder strings.Builder
-	builder.WriteString(indent + "EditText " + name + " = new EditText(this);\n")
-	builder.WriteString(indent + name + ".setSingleLine(true);\n")
-	if number {
-		builder.WriteString(indent + name + ".setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);\n")
-	}
-	builder.WriteString(indent + name + ".setText(" + value + ");\n")
-	builder.WriteString(indent + name + ".setHint(" + hint + ");\n")
-	if route, ok := node.Events["on_change"]; ok {
-		builder.WriteString(indent + name + ".addTextChangedListener(new TextWatcher() {\n")
-		builder.WriteString(indent + "    @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}\n")
-		builder.WriteString(indent + "    @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}\n")
-		builder.WriteString(indent + "    @Override public void afterTextChanged(Editable editable) {\n")
-		if number {
-			builder.WriteString(indent + "        dispatch(" + quoteCodeString(string(route.Event)) + ", Arrays.<Object>asList(inputNumber(editable.toString())));\n")
-		} else {
-			builder.WriteString(indent + "        dispatch(" + quoteCodeString(string(route.Event)) + ", Arrays.<Object>asList(editable.toString()));\n")
-		}
-		builder.WriteString(indent + "    }\n")
-		builder.WriteString(indent + "});\n")
-	}
-	builder.WriteString(renderer.renderStaticStyles(node, name, indent))
-	builder.WriteString(indent + "views.put(" + quoteCodeString(key) + ", " + name + ");\n")
-	builder.WriteString(indent + parent + ".addView(" + name + ");\n")
-	return builder.String()
-}
-
-func (renderer androidJavaViewRenderer) renderJavaScroll(node view.Node, parent string, indent string, path []int, key string, name string) string {
-	contentName := name + "Content"
-	var builder strings.Builder
-	builder.WriteString(indent + "ScrollView " + name + " = new ScrollView(this);\n")
-	builder.WriteString(indent + "LinearLayout " + contentName + " = new LinearLayout(this);\n")
-	builder.WriteString(indent + contentName + ".setOrientation(LinearLayout.VERTICAL);\n")
-	builder.WriteString(renderer.renderStaticStyles(node, name, indent))
-	builder.WriteString(indent + "views.put(" + quoteCodeString(key) + ", " + name + ");\n")
-	builder.WriteString(indent + parent + ".addView(" + name + ");\n")
-	builder.WriteString(indent + name + ".addView(" + contentName + ");\n")
-	builder.WriteString(renderer.renderBuildNodes(node.Children, contentName, indent, path))
-	return builder.String()
-}
-
-func (renderer androidJavaViewRenderer) renderJavaContainer(node view.Node, parent string, indent string, path []int, key string, name string, className string, orientation string) string {
-	var builder strings.Builder
-	builder.WriteString(indent + className + " " + name + " = new " + className + "(this);\n")
-	if orientation != "" {
-		builder.WriteString(indent + name + ".setOrientation(" + orientation + ");\n")
-	}
-	if node.Kind == "surface" || node.Kind == "column" || node.Kind == "page" {
-		builder.WriteString(indent + name + ".setPadding(0, dp(4), 0, dp(4));\n")
-	}
-	builder.WriteString(renderer.renderStaticStyles(node, name, indent))
-	builder.WriteString(indent + "views.put(" + quoteCodeString(key) + ", " + name + ");\n")
-	builder.WriteString(indent + parent + ".addView(" + name + ");\n")
-	builder.WriteString(renderer.renderBuildNodes(node.Children, name, indent, path))
-	return builder.String()
-}
-
-func (renderer androidJavaViewRenderer) renderJavaRow(node view.Node, parent string, indent string, path []int, key string, name string) string {
-	var builder strings.Builder
-	builder.WriteString(indent + "GridLayout " + name + " = new GridLayout(this);\n")
-	builder.WriteString(indent + name + ".setColumnCount(" + javaInt(androidRowColumnCount(node)) + ");\n")
-	builder.WriteString(renderer.renderStaticStyles(node, name, indent))
-	builder.WriteString(indent + "views.put(" + quoteCodeString(key) + ", " + name + ");\n")
-	builder.WriteString(indent + parent + ".addView(" + name + ");\n")
-	builder.WriteString(renderer.renderBuildNodes(node.Children, name, indent, path))
-	return builder.String()
-}
-
-func (renderer androidJavaViewRenderer) renderJavaButton(node view.Node, parent string, indent string, path []int, key string, name string) string {
-	var builder strings.Builder
-	builder.WriteString(indent + "Button " + name + " = new Button(this);\n")
-	builder.WriteString(indent + name + ".setAllCaps(false);\n")
-	builder.WriteString(indent + name + ".setText(" + androidJavaButtonLabel(node, renderer.stateNames) + ");\n")
-	if route, ok := node.Events["on_press"]; ok {
-		builder.WriteString(indent + name + ".setOnClickListener(view -> dispatch(" + quoteCodeString(string(route.Event)) + ", " + androidJavaEventArgs(route.Args, renderer.stateNames) + "));\n")
-	}
-	builder.WriteString(renderer.renderStaticStyles(node, name, indent))
-	builder.WriteString(indent + "views.put(" + quoteCodeString(key) + ", " + name + ");\n")
-	builder.WriteString(indent + parent + ".addView(" + name + ");\n")
-	return builder.String()
-}
-
-func androidRowColumnCount(node view.Node) int {
-	count := len(node.Children)
-	if count <= 0 {
-		return 1
-	}
-	if count > 3 {
-		return 3
-	}
-	return count
-}
-
-func (renderer androidJavaViewRenderer) renderStaticStyles(node view.Node, target string, indent string) string {
-	binding, ok := node.Props["class"]
-	if !ok {
-		return ""
-	}
-	classList, ok := staticBindingString(binding)
-	if !ok {
-		return ""
-	}
-	style := renderer.styles.StyleForClassList(classList)
-	if style.Empty() {
-		return ""
-	}
-	return androidJavaStyleApplication(target, node.Kind, style, indent)
-}
-
 func androidJavaStyleApplication(target string, nodeKind string, style androidResolvedStyle, indent string) string {
 	var builder strings.Builder
 	if androidJavaTextStyleTarget(nodeKind) {
@@ -912,113 +605,6 @@ func androidJavaBackgroundDrawable(target string, style androidResolvedStyle, in
 		builder.WriteString(indent + styleVar + ".setCornerRadius(dp(" + javaInt(radius) + "));\n")
 	}
 	builder.WriteString(indent + target + ".setBackground(" + styleVar + ");\n")
-	return builder.String()
-}
-
-func (renderer androidJavaViewRenderer) renderApplyBindings(nodes []view.Node, bindings []view.BindingRef) string {
-	var builder strings.Builder
-	builder.WriteString("    private void applyBindings(Set<String> invalidations) {\n")
-	for _, binding := range bindings {
-		if binding.Prop == "key" || strings.Contains(binding.Prop, "#arg") {
-			continue
-		}
-		node, ok := nodeAtPath(nodes, binding.NodePath)
-		if !ok {
-			continue
-		}
-		expression, ok := androidJavaBindingExpression(node, binding.Prop, renderer.stateNames)
-		if !ok {
-			continue
-		}
-		pathKey := androidPathKey(binding.NodePath)
-		states := androidJavaStringList(binding.States)
-		builder.WriteString("        if (shouldApply(invalidations, " + states + ")) {\n")
-		builder.WriteString("            View target = views.get(" + quoteCodeString(pathKey) + ");\n")
-		builder.WriteString("            if (target != null) {\n")
-		switch {
-		case binding.Prop == "value" && (node.Kind == "text" || node.Kind == "#text"):
-			builder.WriteString("                ((TextView) target).setText(textValue(" + expression + "));\n")
-		case binding.Prop == "enabled":
-			builder.WriteString("                target.setEnabled(booleanValue(" + expression + "));\n")
-		case binding.Prop == "label":
-			builder.WriteString("                target.setContentDescription(textValue(" + expression + "));\n")
-		default:
-			builder.WriteString("                target.setTag(textValue(" + expression + "));\n")
-		}
-		builder.WriteString("            }\n")
-		builder.WriteString("        }\n")
-	}
-	builder.WriteString("    }\n\n")
-	return builder.String()
-}
-
-func (renderer androidJavaViewRenderer) renderUpdatePageVisibility(nodes []view.Node) string {
-	var builder strings.Builder
-	builder.WriteString("    private void updatePageVisibility() {\n")
-	builder.WriteString("        String activePath = activeRoutePath();\n")
-	builder.WriteString("        int selectedRouteScore = bestRouteScore(routePatterns(), activePath);\n")
-	renderer.appendPageVisibility(&builder, nodes, nil)
-	builder.WriteString("    }\n\n")
-	return builder.String()
-}
-
-func (renderer androidJavaViewRenderer) appendPageVisibility(builder *strings.Builder, nodes []view.Node, path []int) {
-	for index, node := range nodes {
-		nodePath := append(cloneIntPath(path), index)
-		if node.Kind == "page" {
-			expression, ok := androidJavaValueExpression(node.Props["path"].Tokens, renderer.stateNames)
-			if !ok {
-				expression = quoteCodeString("/")
-			}
-			key := androidPathKey(nodePath)
-			scoreVar := "pageScore" + androidJavaPathSuffix(nodePath)
-			builder.WriteString("        View page" + androidJavaPathSuffix(nodePath) + " = views.get(" + quoteCodeString(key) + ");\n")
-			builder.WriteString("        int " + scoreVar + " = routeMatchScore(textValue(" + expression + "), activePath);\n")
-			builder.WriteString("        if (page" + androidJavaPathSuffix(nodePath) + " != null) page" + androidJavaPathSuffix(nodePath) + ".setVisibility(" + scoreVar + " >= 0 && " + scoreVar + " == selectedRouteScore ? View.VISIBLE : View.GONE);\n")
-		}
-		renderer.appendPageVisibility(builder, node.Children, nodePath)
-	}
-}
-
-func androidJavaBindingExpression(node view.Node, prop string, stateNames map[string]bool) (string, bool) {
-	binding, ok := node.Props[prop]
-	if !ok {
-		return "", false
-	}
-	if prop == "value" || prop == "label" {
-		return androidJavaStringExpression(binding.Tokens, stateNames)
-	}
-	return androidJavaValueExpression(binding.Tokens, stateNames)
-}
-
-func androidJavaStateInitializers(model appModel) string {
-	var builder strings.Builder
-	for _, state := range model.States {
-		builder.WriteString("        state.put(" + quoteCodeString(state.Name) + ", " + androidJavaInitialValue(state.Initial) + ");\n")
-	}
-	return builder.String()
-}
-
-func androidJavaTransitionTable(model appModel) string {
-	var builder strings.Builder
-	builder.WriteString("    private List<NovaTransition> transitions() {\n")
-	builder.WriteString("        return Arrays.asList(\n")
-	for _, state := range model.States {
-		for _, transition := range state.Transitions {
-			builder.WriteString("            new NovaTransition(")
-			builder.WriteString(quoteCodeString(state.Name))
-			builder.WriteString(", ")
-			builder.WriteString(quoteCodeString(transition.Event))
-			builder.WriteString(", ")
-			builder.WriteString(androidJavaStringList(transition.Params))
-			builder.WriteString(", ")
-			builder.WriteString(quoteCodeString(transition.Expression))
-			builder.WriteString("),\n")
-		}
-	}
-	builder.WriteString("            new NovaTransition(\"\", \"\", Collections.emptyList(), \"\")\n")
-	builder.WriteString("        );\n")
-	builder.WriteString("    }\n\n")
 	return builder.String()
 }
 
@@ -1134,105 +720,6 @@ func splitAndroidRecordFields(body string) []string {
 	}
 	fields = append(fields, strings.TrimSpace(body[start:]))
 	return fields
-}
-
-func androidJavaStringExpression(tokens []lexer.Token, stateNames map[string]bool) (string, bool) {
-	tokens = trimExpressionTokens(tokens)
-	parts := splitAndroidTopLevel(tokens, lexer.PLUS)
-	if len(parts) > 1 {
-		expressions := make([]string, 0, len(parts))
-		for _, part := range parts {
-			expression, ok := androidJavaStringExpression(part, stateNames)
-			if !ok {
-				return "", false
-			}
-			expressions = append(expressions, "textValue("+expression+")")
-		}
-		return strings.Join(expressions, " + "), true
-	}
-	if len(tokens) == 1 && tokens[0].Type == lexer.STRING {
-		return quoteCodeString(tokens[0].Literal), true
-	}
-	if value, ok := androidJavaValueExpression(tokens, stateNames); ok {
-		return value, true
-	}
-	return quoteCodeString(androidJoinTokenLiterals(tokens)), true
-}
-
-func androidJavaValueExpression(tokens []lexer.Token, stateNames map[string]bool) (string, bool) {
-	tokens = trimExpressionTokens(tokens)
-	if len(tokens) == 0 {
-		return "null", true
-	}
-	if fields, ok := parseRecordExpressionFields(tokens); ok {
-		parts := make([]string, 0, len(fields))
-		for _, field := range fields {
-			value, ok := androidJavaValueExpression(field.Value, stateNames)
-			if !ok {
-				return "", false
-			}
-			parts = append(parts, "entry("+quoteCodeString(field.Name.Literal)+", "+value+")")
-		}
-		return "record(" + strings.Join(parts, ", ") + ")", true
-	}
-	if len(tokens) == 1 {
-		switch tokens[0].Type {
-		case lexer.STRING:
-			return quoteCodeString(tokens[0].Literal), true
-		case lexer.NUMBER:
-			if strings.Contains(tokens[0].Literal, ".") {
-				return tokens[0].Literal, true
-			}
-			return tokens[0].Literal + ".0", true
-		case lexer.TRUE:
-			return "Boolean.TRUE", true
-		case lexer.FALSE:
-			return "Boolean.FALSE", true
-		case lexer.NULL, lexer.VOID:
-			return "null", true
-		case lexer.IDENT:
-			if stateNames[tokens[0].Literal] {
-				return "state.get(" + quoteCodeString(tokens[0].Literal) + ")", true
-			}
-		}
-	}
-	if isRoutePathExpression(tokens) {
-		return "pathOf(state.get(\"route\"))", true
-	}
-	return "", false
-}
-
-func androidJavaEventArgs(args []view.Binding, stateNames map[string]bool) string {
-	if len(args) == 0 {
-		return "Collections.emptyList()"
-	}
-	values := make([]string, 0, len(args))
-	for _, arg := range args {
-		value, ok := androidJavaValueExpression(arg.Tokens, stateNames)
-		if !ok {
-			value = "null"
-		}
-		values = append(values, value)
-	}
-	return "Arrays.<Object>asList(" + strings.Join(values, ", ") + ")"
-}
-
-func androidJavaButtonLabel(node view.Node, stateNames map[string]bool) string {
-	for _, child := range node.Children {
-		if child.Kind == "text" || child.Kind == "#text" {
-			if value, ok := child.Props["value"]; ok {
-				if expression, ok := androidJavaStringExpression(value.Tokens, stateNames); ok {
-					return "textValue(" + expression + ")"
-				}
-			}
-		}
-	}
-	if label, ok := node.Props["label"]; ok {
-		if expression, ok := androidJavaStringExpression(label.Tokens, stateNames); ok {
-			return "textValue(" + expression + ")"
-		}
-	}
-	return quoteCodeString("Button")
 }
 
 func androidJavaStringList(values []string) string {
@@ -1379,19 +866,6 @@ func androidCSSLineHeight(style androidResolvedStyle) (string, bool) {
 	return strconv.FormatFloat(number, 'f', -1, 64), true
 }
 
-func nodeAtPath(nodes []view.Node, path []int) (view.Node, bool) {
-	list := nodes
-	var node view.Node
-	for _, index := range path {
-		if index < 0 || index >= len(list) {
-			return view.Node{}, false
-		}
-		node = list[index]
-		list = node.Children
-	}
-	return node, true
-}
-
 func androidPathKey(path []int) string {
 	parts := make([]string, 0, len(path))
 	for _, value := range path {
@@ -1419,49 +893,6 @@ func androidJavaPathSuffix(path []int) string {
 	return "_" + strings.Join(parts, "_")
 }
 
-func androidJoinTokenLiterals(tokens []lexer.Token) string {
-	parts := make([]string, 0, len(tokens))
-	for _, token := range tokens {
-		if strings.TrimSpace(token.Literal) == "" {
-			continue
-		}
-		parts = append(parts, token.Literal)
-	}
-	return strings.Join(parts, " ")
-}
-
-func androidApp(name string, target string, config androidTargetConfig) string {
-	if strings.TrimSpace(name) == "" {
-		name = "NovaApp"
-	}
-	return "package " + config.Namespace + ";\n\npublic final class NovaApp {\n    public final String name = " + quoteCodeString(name) + ";\n    public final String target = " + quoteCodeString(target) + ";\n}\n"
-}
-
-func androidRoutes(bundle irBundle, config androidTargetConfig) string {
-	paths := androidPagePaths(bundle)
-	if len(paths) == 0 {
-		paths = []string{"/"}
-	}
-	names := make(map[string]int)
-	var builder strings.Builder
-	builder.WriteString("package " + config.Namespace + ";\n\npublic final class NovaRoutes {\n    private NovaRoutes() {}\n")
-	for _, path := range paths {
-		baseName := androidRouteConstName(path)
-		names[baseName]++
-		name := baseName
-		if names[baseName] > 1 {
-			name = baseName + "_" + javaInt(names[baseName])
-		}
-		builder.WriteString("    public static final String ")
-		builder.WriteString(strings.ToUpper(name))
-		builder.WriteString(" = ")
-		builder.WriteString(quoteCodeString(path))
-		builder.WriteString(";\n")
-	}
-	builder.WriteString("}\n")
-	return builder.String()
-}
-
 func androidExternalBindings(operations []build.ResolvedExternalOperation, config androidTargetConfig) string {
 	names := externalOperationNames(operations)
 	var builder strings.Builder
@@ -1473,69 +904,6 @@ func androidExternalBindings(operations []build.ResolvedExternalOperation, confi
 	}
 	builder.WriteString("        \"\"\n    );\n}\n")
 	return builder.String()
-}
-
-func androidPagePaths(bundle irBundle) []string {
-	seen := make(map[string]bool)
-	paths := make([]string, 0, len(bundle.ViewIR.Metadata.Pages))
-	for _, page := range bundle.ViewIR.Metadata.Pages {
-		path, ok := staticBindingString(page.Path)
-		if !ok {
-			continue
-		}
-		path = routing.DescribePattern(path).Pattern
-		if seen[path] {
-			continue
-		}
-		seen[path] = true
-		paths = append(paths, path)
-	}
-	return paths
-}
-
-func staticBindingString(binding view.Binding) (string, bool) {
-	tokens := trimExpressionTokens(binding.Tokens)
-	if len(tokens) == 1 && tokens[0].Type == lexer.STRING {
-		return tokens[0].Literal, true
-	}
-	if binding.Text != "" {
-		return binding.Text, true
-	}
-	return "", false
-}
-
-func androidStateNames(model appModel) map[string]bool {
-	names := make(map[string]bool, len(model.States))
-	for _, state := range model.States {
-		names[state.Name] = true
-	}
-	return names
-}
-
-func splitAndroidTopLevel(tokens []lexer.Token, delimiter lexer.TokenType) [][]lexer.Token {
-	segments := make([][]lexer.Token, 0)
-	start := 0
-	depth := 0
-	for i, tok := range tokens {
-		if depth == 0 && tok.Type == delimiter {
-			segments = append(segments, trimExpressionTokens(tokens[start:i]))
-			start = i + 1
-			continue
-		}
-		depth = expressionDepth(depth, tok.Type)
-	}
-	if start == 0 {
-		return nil
-	}
-	segments = append(segments, trimExpressionTokens(tokens[start:]))
-	return segments
-}
-
-func isRoutePathExpression(tokens []lexer.Token) bool {
-	return len(tokens) == 3 &&
-		tokens[0].Type == lexer.IDENT && tokens[0].Literal == "route" &&
-		tokens[1].Type == lexer.DOT &&
-		tokens[2].Type == lexer.IDENT && tokens[2].Literal == "path"
 }
 
 func androidRouteConstName(path string) string {

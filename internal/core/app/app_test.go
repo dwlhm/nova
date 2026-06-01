@@ -3,7 +3,7 @@ package app
 import (
 	"testing"
 
-	"github.com/dwlhm/nova/internal/scheduler"
+	"github.com/dwlhm/nova/internal/core/scheduler"
 )
 
 func TestCoalesceLifecycleEventsPreservesLogicalOrder(t *testing.T) {

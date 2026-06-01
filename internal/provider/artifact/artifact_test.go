@@ -5,11 +5,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dwlhm/nova/internal/build"
-	"github.com/dwlhm/nova/internal/lexer"
+	"github.com/dwlhm/nova/internal/core/diagnostic"
+	"github.com/dwlhm/nova/internal/core/ir"
+	"github.com/dwlhm/nova/internal/core/lexer"
+	"github.com/dwlhm/nova/internal/core/parser"
 	"github.com/dwlhm/nova/internal/packages"
-	"github.com/dwlhm/nova/internal/parser"
 	"github.com/dwlhm/nova/internal/project"
+	"github.com/dwlhm/nova/internal/provider/build"
 )
 
 func TestGenerateWebArtifactIncludesRuntimeViewIRAndMetadata(t *testing.T) {
@@ -43,20 +45,18 @@ func TestGenerateWebArtifactIncludesRuntimeViewIRAndMetadata(t *testing.T) {
 		t.Fatalf("unexpected build diagnostics: %+v", plan.Diagnostics)
 	}
 
-	files, diagnostics := Generate(GenerateInput{
-		Project:        manifest,
-		Plan:           plan.Plan,
-		Sources:        []build.SourceFile{{Path: "src/App.nova", File: source}},
-		TargetManifest: targetManifest,
-		StyleAssets: []StyleAsset{
-			{SourcePath: "src/App.css", Content: ".app { color: red; }\n"},
-		},
-	})
+	sources := []build.SourceFile{{Path: "src/App.nova", File: source}}
+	input, _ := testGenerateInput(t, manifest, plan.Plan, sources, targetManifest)
+	input.StyleAssets = []StyleAsset{
+		{SourcePath: "src/App.css", Content: ".app { color: red; }\n"},
+	}
+	files, diagnostics := Generate(input)
 	if len(diagnostics) != 0 {
 		t.Fatalf("unexpected diagnostics: %+v", diagnostics)
 	}
 
-	assertArtifactFile(t, files, "build/web/index.html", "<script src=\"assets/nova-scheduler.js\"></script>\n  <script src=\"assets/nova-renderer.js\"></script>\n  <script src=\"assets/nova-runtime.js\"></script>")
+	assertArtifactFile(t, files, "build/web/index.html", "<script src=\"assets/nova-scheduler.js\"></script>\n  <script src=\"assets/nova-renderer.js\"></script>\n  <script src=\"assets/external-adapters.js\"></script>\n  <script src=\"assets/nova-runtime.js\"></script>")
+	assertArtifactFile(t, files, "build/web/assets/external-adapters.js", "NovaExternal")
 	assertArtifactFile(t, files, "build/web/index.html", "assets/styles/src/App.css")
 	assertArtifactFile(t, files, "build/web/assets/styles/src/App.css", ".app { color: red; }")
 	assertArtifactFile(t, files, "build/web/assets/nova-scheduler.js", "window.NovaScheduler")
@@ -106,12 +106,9 @@ func TestGenerateWebArtifactIncludesRendererExtensionAdapter(t *testing.T) {
 		t.Fatalf("unexpected build diagnostics: %+v", plan.Diagnostics)
 	}
 
-	files, diagnostics := Generate(GenerateInput{
-		Project:        manifest,
-		Plan:           plan.Plan,
-		Sources:        []build.SourceFile{{Path: "src/App.nova", File: source}},
-		TargetManifest: targetManifest,
-	})
+	sources := []build.SourceFile{{Path: "src/App.nova", File: source}}
+	input, _ := testGenerateInput(t, manifest, plan.Plan, sources, targetManifest)
+	files, diagnostics := Generate(input)
 	if len(diagnostics) != 0 {
 		t.Fatalf("unexpected diagnostics: %+v", diagnostics)
 	}
@@ -140,12 +137,10 @@ func TestGenerateWebArtifactAllowsUnknownKindWithWarningPolicy(t *testing.T) {
 		t.Fatalf("unexpected build diagnostics: %+v", plan.Diagnostics)
 	}
 
-	files, diagnostics := Generate(GenerateInput{
-		Project:        manifest,
-		Plan:           plan.Plan,
-		Sources:        []build.SourceFile{{Path: "src/App.nova", File: source}},
-		TargetManifest: targetManifest,
-	})
+	sources := []build.SourceFile{{Path: "src/App.nova", File: source}}
+	input, bundleDiagnostics := testGenerateInput(t, manifest, plan.Plan, sources, targetManifest)
+	files, genDiagnostics := Generate(input)
+	diagnostics := append(bundleDiagnostics, genDiagnostics...)
 	if len(files) == 0 {
 		t.Fatal("expected files despite warning")
 	}
@@ -175,15 +170,12 @@ func TestGenerateWebArtifactScopesScopedStylesAndWritesStyleManifest(t *testing.
 		t.Fatalf("unexpected build diagnostics: %+v", plan.Diagnostics)
 	}
 
-	files, diagnostics := Generate(GenerateInput{
-		Project:        manifest,
-		Plan:           plan.Plan,
-		Sources:        []build.SourceFile{{Path: "src/App.nova", File: source}},
-		TargetManifest: targetManifest,
-		StyleAssets: []StyleAsset{
-			{SourcePath: "src/App.css", Content: ".counter-shell, button:hover {\n  color: red;\n}\n", Scope: StyleScopeApp},
-		},
-	})
+	sources := []build.SourceFile{{Path: "src/App.nova", File: source}}
+	input, _ := testGenerateInput(t, manifest, plan.Plan, sources, targetManifest)
+	input.StyleAssets = []StyleAsset{
+		{SourcePath: "src/App.css", Content: ".counter-shell, button:hover {\n  color: red;\n}\n", Scope: StyleScopeApp},
+	}
+	files, diagnostics := Generate(input)
 	if len(diagnostics) != 0 {
 		t.Fatalf("unexpected diagnostics: %+v", diagnostics)
 	}
@@ -223,12 +215,9 @@ func TestGenerateWebRuntimeUsesDependencyInvalidationsForGranularUpdates(t *test
 		t.Fatalf("unexpected build diagnostics: %+v", plan.Diagnostics)
 	}
 
-	files, diagnostics := Generate(GenerateInput{
-		Project:        manifest,
-		Plan:           plan.Plan,
-		Sources:        []build.SourceFile{{Path: "src/App.nova", File: source}},
-		TargetManifest: targetManifest,
-	})
+	sources := []build.SourceFile{{Path: "src/App.nova", File: source}}
+	input, _ := testGenerateInput(t, manifest, plan.Plan, sources, targetManifest)
+	files, diagnostics := Generate(input)
 	if len(diagnostics) != 0 {
 		t.Fatalf("unexpected diagnostics: %+v", diagnostics)
 	}
@@ -278,17 +267,14 @@ func TestGenerateAndroidArtifactIncludesGradleAndGeneratedBindings(t *testing.T)
 		t.Fatalf("unexpected build diagnostics: %+v", plan.Diagnostics)
 	}
 
-	files, diagnostics := Generate(GenerateInput{
-		Project:        manifest,
-		Plan:           plan.Plan,
-		Sources:        []build.SourceFile{{Path: "src/App.nova", File: source}},
-		TargetManifest: targetManifest,
-		StyleAssets: []StyleAsset{{
-			SourcePath: "src/App.css",
-			Content:    ".counter-shell { padding: 12px; background: #fbfcfe; border: 1px solid #dfe5ef; border-radius: 8px; }\n.counter-value { color: #151923; font-size: 34px; font-weight: 800; text-align: center; }",
-			Scope:      StyleScopeGlobal,
-		}},
-	})
+	sources := []build.SourceFile{{Path: "src/App.nova", File: source}}
+	input, _ := testGenerateInput(t, manifest, plan.Plan, sources, targetManifest)
+	input.StyleAssets = []StyleAsset{{
+		SourcePath: "src/App.css",
+		Content:    ".counter-shell { padding: 12px; background: #fbfcfe; border: 1px solid #dfe5ef; border-radius: 8px; }\n.counter-value { color: #151923; font-size: 34px; font-weight: 800; text-align: center; }",
+		Scope:      StyleScopeGlobal,
+	}}
+	files, diagnostics := Generate(input)
 	if len(diagnostics) != 0 {
 		t.Fatalf("unexpected diagnostics: %+v", diagnostics)
 	}
@@ -318,7 +304,7 @@ func TestGenerateAndroidArtifactIncludesGradleAndGeneratedBindings(t *testing.T)
 	assertArtifactFile(t, files, "build/android/nova-scheduler/src/main/java/nova/scheduler/NovaScheduler.java", "public final class NovaScheduler")
 	assertArtifactFile(t, files, "build/android/nova-scheduler/src/main/java/nova/scheduler/NovaEventEnvelope.java", "final class NovaEventEnvelope")
 	assertArtifactFile(t, files, "build/android/nova-scheduler/src/main/java/nova/scheduler/NovaTransition.java", "public final class NovaTransition")
-	assertArtifactFile(t, files, "build/android/generated/NovaApp.java", "public final class NovaApp")
+	assertArtifactFile(t, files, "build/android/generated/NovaApp.java", "CONTRACT_VERSION = 1")
 	assertArtifactFile(t, files, "build/android/generated/NovaExternalBindings.java", "NovaExternalBindings")
 	assertArtifactFile(t, files, "build/android/nova-ir/app.contract.json", "\"view\"")
 	assertArtifactFile(t, files, "build/android/nova-ir/build.manifest.json", "\"target\": \"android\"")
@@ -342,12 +328,9 @@ func TestGenerateAndroidArtifactRequiresUserTargetConfig(t *testing.T) {
 		t.Fatalf("unexpected build diagnostics: %+v", plan.Diagnostics)
 	}
 
-	_, diagnostics := Generate(GenerateInput{
-		Project:        manifest,
-		Plan:           plan.Plan,
-		Sources:        []build.SourceFile{{Path: "src/App.nova", File: source}},
-		TargetManifest: targetManifest,
-	})
+	sources := []build.SourceFile{{Path: "src/App.nova", File: source}}
+	input, _ := testGenerateInput(t, manifest, plan.Plan, sources, targetManifest)
+	_, diagnostics := Generate(input)
 	assertArtifactDiagnostic(t, diagnostics, "targets.android.application_id is required")
 	assertArtifactDiagnostic(t, diagnostics, "targets.android.compile_sdk is required")
 }
@@ -376,12 +359,9 @@ func TestGenerateAndroidArtifactRejectsUnsupportedRenderer(t *testing.T) {
 		t.Fatalf("unexpected build diagnostics: %+v", plan.Diagnostics)
 	}
 
-	_, diagnostics := Generate(GenerateInput{
-		Project:        manifest,
-		Plan:           plan.Plan,
-		Sources:        []build.SourceFile{{Path: "src/App.nova", File: source}},
-		TargetManifest: targetManifest,
-	})
+	sources := []build.SourceFile{{Path: "src/App.nova", File: source}}
+	input, _ := testGenerateInput(t, manifest, plan.Plan, sources, targetManifest)
+	_, diagnostics := Generate(input)
 	assertArtifactDiagnostic(t, diagnostics, "targets.android.renderer must be @nova/android")
 }
 
@@ -422,18 +402,15 @@ func TestGenerateWebArtifactSupportsMultiPageRouteProjection(t *testing.T) {
 		t.Fatalf("unexpected build diagnostics: %+v", plan.Diagnostics)
 	}
 
-	files, diagnostics := Generate(GenerateInput{
-		Project:        manifest,
-		Plan:           plan.Plan,
-		Sources:        []build.SourceFile{{Path: "src/App.nova", File: source}},
-		TargetManifest: targetManifest,
-	})
+	sources := []build.SourceFile{{Path: "src/App.nova", File: source}}
+	input, _ := testGenerateInput(t, manifest, plan.Plan, sources, targetManifest)
+	files, diagnostics := Generate(input)
 	if len(diagnostics) != 0 {
 		t.Fatalf("unexpected diagnostics: %+v", diagnostics)
 	}
 
 	assertArtifactFile(t, files, "build/web/assets/nova-runtime.js", "renderPage")
-	assertArtifactFile(t, files, "build/web/assets/nova-runtime.js", "recordExpression")
+	assertArtifactFile(t, files, "build/web/assets/nova-runtime.js", "function evaluate(expression, state, payload)")
 	assertArtifactFile(t, files, "build/web/assets/nova-runtime.js", "window.addEventListener(\"popstate\"")
 	assertArtifactFile(t, files, "build/web/assets/nova-runtime.js", "window.history[method]")
 	assertArtifactFile(t, files, "build/web/assets/nova-runtime.js", "ROUTE_CHANGED_EVENT")
@@ -484,12 +461,9 @@ func TestGenerateWebArtifactSupportsProductionRouteMatching(t *testing.T) {
 		t.Fatalf("unexpected build diagnostics: %+v", plan.Diagnostics)
 	}
 
-	files, diagnostics := Generate(GenerateInput{
-		Project:        manifest,
-		Plan:           plan.Plan,
-		Sources:        []build.SourceFile{{Path: "src/App.nova", File: source}},
-		TargetManifest: targetManifest,
-	})
+	sources := []build.SourceFile{{Path: "src/App.nova", File: source}}
+	input, _ := testGenerateInput(t, manifest, plan.Plan, sources, targetManifest)
+	files, diagnostics := Generate(input)
 	if len(diagnostics) != 0 {
 		t.Fatalf("unexpected diagnostics: %+v", diagnostics)
 	}
@@ -542,18 +516,15 @@ func TestGenerateAndroidArtifactSupportsMultiPageRouteProjection(t *testing.T) {
 		t.Fatalf("unexpected build diagnostics: %+v", plan.Diagnostics)
 	}
 
-	files, diagnostics := Generate(GenerateInput{
-		Project:        manifest,
-		Plan:           plan.Plan,
-		Sources:        []build.SourceFile{{Path: "src/App.nova", File: source}},
-		TargetManifest: targetManifest,
-	})
+	sources := []build.SourceFile{{Path: "src/App.nova", File: source}}
+	input, _ := testGenerateInput(t, manifest, plan.Plan, sources, targetManifest)
+	files, diagnostics := Generate(input)
 	if len(diagnostics) != 0 {
 		t.Fatalf("unexpected diagnostics: %+v", diagnostics)
 	}
 
 	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "state.put(\"route\", record(entry(\"path\", \"/\")))")
-	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "dispatch(\"@route_changed\", Arrays.<Object>asList(record(entry(\"path\", \"/settings\"))))")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "dispatch(\"@route_changed\", Arrays.<Object>asList(evaluate(\"({ path: \\\"/settings\\\" })\", state, Collections.emptyMap()))")
 	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "public void onBackPressed()")
 	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "private final List<Object> routeBackStack")
 	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "dispatch(\"@navigate\", Collections.singletonList(record(entry(\"kind\", \"back\"))))")
@@ -605,12 +576,9 @@ func TestGenerateAndroidArtifactSupportsProductionRouteMatching(t *testing.T) {
 		t.Fatalf("unexpected build diagnostics: %+v", plan.Diagnostics)
 	}
 
-	files, diagnostics := Generate(GenerateInput{
-		Project:        manifest,
-		Plan:           plan.Plan,
-		Sources:        []build.SourceFile{{Path: "src/App.nova", File: source}},
-		TargetManifest: targetManifest,
-	})
+	sources := []build.SourceFile{{Path: "src/App.nova", File: source}}
+	input, _ := testGenerateInput(t, manifest, plan.Plan, sources, targetManifest)
+	files, diagnostics := Generate(input)
 	if len(diagnostics) != 0 {
 		t.Fatalf("unexpected diagnostics: %+v", diagnostics)
 	}
@@ -671,12 +639,9 @@ func TestGenerateAndroidArtifactWrapsRowsForDenseNavigation(t *testing.T) {
 		t.Fatalf("unexpected build diagnostics: %+v", plan.Diagnostics)
 	}
 
-	files, diagnostics := Generate(GenerateInput{
-		Project:        manifest,
-		Plan:           plan.Plan,
-		Sources:        []build.SourceFile{{Path: "src/App.nova", File: source}},
-		TargetManifest: targetManifest,
-	})
+	sources := []build.SourceFile{{Path: "src/App.nova", File: source}}
+	input, _ := testGenerateInput(t, manifest, plan.Plan, sources, targetManifest)
+	files, diagnostics := Generate(input)
 	if len(diagnostics) != 0 {
 		t.Fatalf("unexpected diagnostics: %+v", diagnostics)
 	}
@@ -718,12 +683,9 @@ func TestGenerateAndroidArtifactSupportsScrollAndInputs(t *testing.T) {
 		t.Fatalf("unexpected build diagnostics: %+v", plan.Diagnostics)
 	}
 
-	files, diagnostics := Generate(GenerateInput{
-		Project:        manifest,
-		Plan:           plan.Plan,
-		Sources:        []build.SourceFile{{Path: "src/App.nova", File: source}},
-		TargetManifest: targetManifest,
-	})
+	sources := []build.SourceFile{{Path: "src/App.nova", File: source}}
+	input, _ := testGenerateInput(t, manifest, plan.Plan, sources, targetManifest)
+	files, diagnostics := Generate(input)
 	if len(diagnostics) != 0 {
 		t.Fatalf("unexpected diagnostics: %+v", diagnostics)
 	}
@@ -736,13 +698,29 @@ func TestGenerateAndroidArtifactSupportsScrollAndInputs(t *testing.T) {
 	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "dispatch(\"@set_amount\", Arrays.<Object>asList(inputNumber(editable.toString())))")
 }
 
-func TestExpressionToJSCompilesRecordLiterals(t *testing.T) {
-	tokens := lexer.Tokenize(`{ path <- "/settings"; title <- currentTitle; }`)
-	expression := expressionToJS(tokens[:len(tokens)-1], map[string]bool{"currentTitle": true}, nil)
-
-	if expression != `({ path: "/settings", title: state.currentTitle })` {
-		t.Fatalf("expression = %s", expression)
+func testGenerateInput(t *testing.T, manifest project.Manifest, plan build.BuildPlan, sources []build.SourceFile, targetManifest build.TargetManifest) (GenerateInput, []Diagnostic) {
+	t.Helper()
+	bundle, irDiagnostics := ir.Lower(build.IRLowerInput(plan, sources))
+	if len(irDiagnostics) > 0 {
+		t.Fatalf("unexpected ir diagnostics: %+v", irDiagnostics)
 	}
+	out := make([]Diagnostic, 0)
+	for _, item := range build.ValidateViewRenderer(plan, bundle.ViewIR) {
+		if item.Code == "NVA-RENDER-002" {
+			out = append(out, Diagnostic{Code: item.Code, Severity: diagnostic.SeverityWarning, Message: item.Message})
+			continue
+		}
+		if item.Code != "" {
+			t.Fatalf("unexpected renderer diagnostics: %+v", item)
+		}
+	}
+	input := GenerateInput{
+		Project:        manifest,
+		Bundle:         bundle,
+		Plan:           plan,
+		TargetManifest: targetManifest,
+	}
+	return input, out
 }
 
 func parseNova(t *testing.T, input string) parser.File {

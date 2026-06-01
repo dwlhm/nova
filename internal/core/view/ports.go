@@ -3,7 +3,7 @@ package view
 import (
 	"context"
 
-	"github.com/dwlhm/nova/internal/scheduler"
+	"github.com/dwlhm/nova/internal/core/scheduler"
 )
 
 type RendererPort interface {

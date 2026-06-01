@@ -1,6 +1,6 @@
 package types
 
-import "github.com/dwlhm/nova/internal/parser"
+import "github.com/dwlhm/nova/internal/core/parser"
 
 func EmptyEnvironment() Environment {
 	return Environment{

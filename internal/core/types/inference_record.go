@@ -1,6 +1,6 @@
 package types
 
-import "github.com/dwlhm/nova/internal/lexer"
+import "github.com/dwlhm/nova/internal/core/lexer"
 
 func (env Environment) inferRecordLiteral(scope Scope, tokens []lexer.Token) (Type, bool) {
 	fields, ok := parseRecordLiteralFields(tokens)

@@ -1,6 +1,6 @@
 package packages
 
-import "github.com/dwlhm/nova/internal/diagnostic"
+import "github.com/dwlhm/nova/internal/core/diagnostic"
 
 func hasPackageType(types []PackageType, want PackageType) bool {
 	for _, typ := range types {

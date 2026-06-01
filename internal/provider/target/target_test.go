@@ -3,7 +3,7 @@ package target
 import (
 	"testing"
 
-	"github.com/dwlhm/nova/internal/security"
+	"github.com/dwlhm/nova/internal/core/security"
 )
 
 func TestTargetContractsExposeWebAndAndroidRuntimeBoundaries(t *testing.T) {

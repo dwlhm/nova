@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/dwlhm/nova/internal/contract"
+	"github.com/dwlhm/nova/internal/core/contract"
 )
 
 func TestAppContractVersion(t *testing.T) {

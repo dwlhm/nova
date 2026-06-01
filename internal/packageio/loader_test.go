@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dwlhm/nova/internal/diagnostic"
+	"github.com/dwlhm/nova/internal/core/diagnostic"
 	"github.com/dwlhm/nova/internal/project"
 )
 
@@ -35,7 +35,7 @@ adapter = "platform/web/register.web.js"
 		Renderer: project.RendererConfig{
 			ExtensionPackages: []project.RendererPackageRef{{Name: "@acme/charts", Constraint: "*"}},
 		},
-	})
+	}, ResolveOptions{Production: false})
 	if len(diagnostics) != 0 {
 		t.Fatalf("unexpected diagnostics: %+v", diagnostics)
 	}
@@ -69,7 +69,7 @@ adapter = "platform/web/register.web.js"
 		Renderer: project.RendererConfig{
 			ExtensionPackages: []project.RendererPackageRef{{Name: "@acme/charts", Constraint: "*"}},
 		},
-	})
+	}, ResolveOptions{Production: false})
 	assertPackageIODiagnostic(t, diagnostics, "NVA-RENDER-004")
 }
 

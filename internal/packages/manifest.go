@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dwlhm/nova/internal/security"
+	"github.com/dwlhm/nova/internal/core/security"
 )
 
 func ParseManifest(input string) (Manifest, []Diagnostic) {

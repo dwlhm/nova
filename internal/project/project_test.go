@@ -56,6 +56,28 @@ storage.write = false
 	}
 }
 
+func TestParseManifestCapturesProjectDependencies(t *testing.T) {
+	input := `[project]
+name = "demo"
+version = "0.1.0"
+entry = "src/App.nova"
+
+[dependencies]
+"@app/root" = "1.0.0"
+"@env/storage" = ">=1.0.0"
+`
+	manifest, diagnostics := ParseManifest(input)
+	if len(diagnostics) != 0 {
+		t.Fatalf("unexpected diagnostics: %+v", diagnostics)
+	}
+	if len(manifest.Dependencies) != 2 {
+		t.Fatalf("dependencies = %+v", manifest.Dependencies)
+	}
+	if manifest.Dependencies[0].Name != "@app/root" || manifest.Dependencies[0].Constraint != "1.0.0" {
+		t.Fatalf("first dependency = %+v", manifest.Dependencies[0])
+	}
+}
+
 func TestParseManifestCapturesScopedPermissionDeclarations(t *testing.T) {
 	input := `[project]
 name = "audiolab"

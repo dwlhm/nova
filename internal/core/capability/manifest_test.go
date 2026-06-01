@@ -3,8 +3,8 @@ package capability
 import (
 	"testing"
 
-	"github.com/dwlhm/nova/internal/lexer"
-	"github.com/dwlhm/nova/internal/parser"
+	"github.com/dwlhm/nova/internal/core/lexer"
+	"github.com/dwlhm/nova/internal/core/parser"
 )
 
 func TestBuildManifestCapturesCapabilitySurface(t *testing.T) {

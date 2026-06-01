@@ -12,19 +12,19 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/dwlhm/nova/internal/artifact"
-	"github.com/dwlhm/nova/internal/build"
 	"github.com/dwlhm/nova/internal/bundler"
 	"github.com/dwlhm/nova/internal/conformance"
-	"github.com/dwlhm/nova/internal/diagnostic"
-	novaformat "github.com/dwlhm/nova/internal/format"
-	"github.com/dwlhm/nova/internal/lexer"
+	"github.com/dwlhm/nova/internal/core/ast"
+	"github.com/dwlhm/nova/internal/core/compile"
+	"github.com/dwlhm/nova/internal/core/diagnostic"
+	novaformat "github.com/dwlhm/nova/internal/core/format"
+	"github.com/dwlhm/nova/internal/core/ir"
 	"github.com/dwlhm/nova/internal/lsp"
 	"github.com/dwlhm/nova/internal/packageio"
 	"github.com/dwlhm/nova/internal/packages"
-	"github.com/dwlhm/nova/internal/parser"
 	"github.com/dwlhm/nova/internal/project"
-	"github.com/dwlhm/nova/internal/validator"
+	"github.com/dwlhm/nova/internal/provider/artifact"
+	"github.com/dwlhm/nova/internal/provider/build"
 )
 
 func Run(args []string, cwd string, stdout io.Writer, stderr io.Writer) int {
@@ -62,6 +62,7 @@ type buildOptions struct {
 	Offline      bool
 	GradlePath   string
 	GradleTask   string
+	Production   bool
 }
 
 type buildResult struct {
@@ -79,6 +80,7 @@ type projectPipeline struct {
 	Sources        []build.SourceFile
 	Resolution     build.ResolutionResult
 	PackageGraph   packages.ResolvedGraph
+	LockDigest     string
 	StyleAssets    []artifact.StyleAsset
 	Files          []artifact.File
 }
@@ -119,7 +121,7 @@ func runCheck(args []string, cwd string, stdout io.Writer, stderr io.Writer) int
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
-	pipeline, ok := runProjectPipeline(cwd, *targetID, true, stderr)
+	pipeline, ok := runProjectPipeline(cwd, *targetID, true, true, stderr)
 	if !ok {
 		return 1
 	}
@@ -147,6 +149,7 @@ func runBuild(args []string, cwd string, stdout io.Writer, stderr io.Writer) int
 		Offline:      *offline,
 		GradlePath:   *gradlePath,
 		GradleTask:   *gradleTask,
+		Production:   true,
 	}, stdout, stderr); !ok {
 		return 1
 	}
@@ -159,7 +162,7 @@ func buildProject(ctx context.Context, cwd string, options buildOptions, stdout 
 		outRoot = "."
 	}
 
-	pipeline, ok := runProjectPipeline(cwd, options.TargetID, true, stderr)
+	pipeline, ok := runProjectPipeline(cwd, options.TargetID, true, options.Production, stderr)
 	if !ok {
 		return buildResult{}, false
 	}
@@ -203,7 +206,7 @@ func buildProject(ctx context.Context, cwd string, options buildOptions, stdout 
 	return result, true
 }
 
-func runProjectPipeline(cwd string, targetID string, generateArtifacts bool, stderr io.Writer) (projectPipeline, bool) {
+func runProjectPipeline(cwd string, targetID string, generateArtifacts bool, production bool, stderr io.Writer) (projectPipeline, bool) {
 	if targetID == "" {
 		targetID = "web"
 	}
@@ -221,7 +224,9 @@ func runProjectPipeline(cwd string, targetID string, generateArtifacts bool, std
 		return projectPipeline{}, false
 	}
 
-	sources, sourceDiagnostics, ok := loadSources(cwd, manifest.Project.Entry)
+	packageManifests, _ := packageio.LoadProjectManifests(cwd, targetID, packageio.RendererDependencies(manifest.Renderer.ExtensionPackages))
+	packageExports := packageio.BuildExportIndex(cwd, packageManifests)
+	sources, sourceDiagnostics, ok := loadSources(cwd, manifest.Project.Entry, packageExports)
 	for _, diagnostic := range sourceDiagnostics {
 		fmt.Fprintln(stderr, diagnostic)
 	}
@@ -237,14 +242,11 @@ func runProjectPipeline(cwd string, targetID string, generateArtifacts bool, std
 		return projectPipeline{}, false
 	}
 
-	for _, source := range sources {
-		semanticDiagnostics := validator.Validate(source.File)
-		if len(semanticDiagnostics) > 0 {
-			for _, diagnostic := range semanticDiagnostics {
-				fmt.Fprintf(stderr, "NVA-SEMANTIC-001: %s\n", diagnostic.Message)
-			}
-			return projectPipeline{}, false
+	if _, semanticDiagnostics, ok := checkSources(sources); !ok {
+		for _, diagnostic := range semanticDiagnostics {
+			fmt.Fprintf(stderr, "%s: %s\n", diagnostic.Code, diagnostic.Message)
 		}
+		return projectPipeline{}, false
 	}
 
 	styleAssets, styleDiagnostics, ok := loadStyleAssets(cwd, manifest, targetID)
@@ -255,7 +257,8 @@ func runProjectPipeline(cwd string, targetID string, generateArtifacts bool, std
 		return projectPipeline{}, false
 	}
 
-	packageGraph, packageDiagnostics := packageio.ResolveProjectGraph(cwd, targetID, manifest)
+	lockfile, _ := packageio.LoadLockfile(cwd, production, manifest)
+	packageGraph, packageDiagnostics := packageio.ResolveProjectGraph(cwd, targetID, manifest, packageio.ResolveOptions{Production: production})
 	for _, item := range packageDiagnostics {
 		fmt.Fprintf(stderr, "%s: %s\n", item.Code, item.Message)
 	}
@@ -269,6 +272,7 @@ func runProjectPipeline(cwd string, targetID string, generateArtifacts bool, std
 		Sources:        sources,
 		TargetManifest: targetManifest,
 		PackageGraph:   packageGraph,
+		PackageExports: packageExports,
 	})
 	if len(resolution.Diagnostics) > 0 {
 		for _, diagnostic := range resolution.Diagnostics {
@@ -284,17 +288,36 @@ func runProjectPipeline(cwd string, targetID string, generateArtifacts bool, std
 		Sources:        sources,
 		Resolution:     resolution,
 		PackageGraph:   packageGraph,
+		LockDigest:     packageio.LockDigest(lockfile),
 		StyleAssets:    styleAssets,
 	}
 	if !generateArtifacts {
 		return pipeline, true
 	}
+	packageManifests, adapterManifestDiagnostics := packageio.LoadProjectManifests(cwd, targetID, packageio.RendererDependencies(manifest.Renderer.ExtensionPackages))
+	for _, item := range adapterManifestDiagnostics {
+		fmt.Fprintf(stderr, "%s: %s\n", item.Code, item.Message)
+	}
+	if diagnostic.HasErrors(adapterManifestDiagnostics) {
+		return projectPipeline{}, false
+	}
+
+	bundle, irDiagnostics := ir.Lower(build.IRLowerInput(resolution.Plan, sources))
+	renderDiagnostics := build.ValidateViewRenderer(resolution.Plan, bundle.ViewIR)
+	for _, item := range append(build.IRDiagnostics(irDiagnostics), renderDiagnostics...) {
+		fmt.Fprintf(stderr, "%s: %s\n", item.Code, item.Message)
+	}
+	if len(irDiagnostics) > 0 || build.HasBlockingDiagnostics(renderDiagnostics) {
+		return projectPipeline{}, false
+	}
+
 	files, artifactDiagnostics := artifact.Generate(artifact.GenerateInput{
-		Project:        manifest,
-		Plan:           resolution.Plan,
-		Sources:        sources,
-		TargetManifest: targetManifest,
-		StyleAssets:    styleAssets,
+		Project:                 manifest,
+		Bundle:                  bundle,
+		Plan:                    resolution.Plan,
+		TargetManifest:          targetManifest,
+		StyleAssets:             styleAssets,
+		ExternalAdapterContents: externalAdapterContents(cwd, targetID, resolution.Plan.ExternalOperations, packageManifests),
 	})
 	if len(artifactDiagnostics) > 0 {
 		for _, diagnostic := range artifactDiagnostics {
@@ -404,6 +427,8 @@ func inspectSummary(pipeline projectPipeline) map[string]any {
 		"permissions":        pipeline.Resolution.Plan.Permissions,
 		"externalOperations": pipeline.Resolution.Plan.ExternalOperations,
 		"packageGraph":       pipeline.PackageGraph.Packages,
+		"permissionSources":  pipeline.PackageGraph.PermissionSources,
+		"lockDigest":         pipeline.LockDigest,
 		"renderer":           pipeline.Resolution.Plan.Renderer,
 		"styles":             styles,
 	}
@@ -457,7 +482,7 @@ func runInspect(args []string, cwd string, stdout io.Writer, stderr io.Writer) i
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
-	pipeline, ok := runProjectPipeline(cwd, *targetID, true, stderr)
+	pipeline, ok := runProjectPipeline(cwd, *targetID, true, true, stderr)
 	if !ok {
 		return 1
 	}
@@ -587,11 +612,29 @@ func loadManifest(cwd string) (project.Manifest, []string, bool) {
 	return manifest, out, len(out) == 0
 }
 
-func loadSources(cwd string, entry string) ([]build.SourceFile, []string, bool) {
+func checkSources(sources []build.SourceFile) ([]ast.CheckedModule, []compile.Diagnostic, bool) {
+	raw := make([]ast.RawModule, 0, len(sources))
+	for _, source := range sources {
+		raw = append(raw, ast.RawModule{Path: source.Path, File: source.File})
+	}
+	checked, diagnostics := compile.CheckModules(raw)
+	return checked, diagnostics, len(diagnostics) == 0
+}
+
+func loadSources(cwd string, entry string, packageExports map[string]string) ([]build.SourceFile, []string, bool) {
 	paths, err := discoverSourcePaths(cwd, entry)
 	if err != nil {
 		return nil, []string{fmt.Sprintf("NVA-LAYOUT-007: %s", err.Error())}, false
 	}
+	for _, exportPath := range packageExports {
+		if exportPath == "" {
+			continue
+		}
+		if !containsPath(paths, exportPath) {
+			paths = append(paths, exportPath)
+		}
+	}
+	sort.Strings(paths)
 
 	sources := make([]build.SourceFile, 0, len(paths))
 	diagnostics := make([]string, 0)
@@ -601,13 +644,25 @@ func loadSources(cwd string, entry string) ([]build.SourceFile, []string, bool) 
 			diagnostics = append(diagnostics, fmt.Sprintf("NVA-LAYOUT-007: read %s: %s", sourcePath, err.Error()))
 			continue
 		}
-		file, parserDiagnostics := parser.Parse(lexer.Tokenize(string(content)))
-		for _, diagnostic := range parserDiagnostics {
-			diagnostics = append(diagnostics, fmt.Sprintf("NVA-PARSE-001: %s in %s", diagnostic.Message, sourcePath))
+		module, parseDiagnostics := compile.ParseSource(sourcePath, string(content))
+		for _, diagnostic := range parseDiagnostics {
+			diagnostics = append(diagnostics, fmt.Sprintf("%s: %s in %s", diagnostic.Code, diagnostic.Message, sourcePath))
 		}
-		sources = append(sources, build.SourceFile{Path: sourcePath, File: file})
+		if len(parseDiagnostics) > 0 {
+			continue
+		}
+		sources = append(sources, build.SourceFile{Path: sourcePath, File: module.File})
 	}
 	return sources, diagnostics, len(diagnostics) == 0
+}
+
+func containsPath(paths []string, want string) bool {
+	for _, path := range paths {
+		if path == want {
+			return true
+		}
+	}
+	return false
 }
 
 func discoverSourcePaths(cwd string, entry string) ([]string, error) {

@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/dwlhm/nova/internal/diagnostic"
+	"github.com/dwlhm/nova/internal/core/diagnostic"
+	"github.com/dwlhm/nova/internal/core/security"
+	"github.com/dwlhm/nova/internal/core/view"
 	"github.com/dwlhm/nova/internal/packages"
-	"github.com/dwlhm/nova/internal/security"
-	"github.com/dwlhm/nova/internal/view"
 )
 
 type Diagnostic = diagnostic.Diagnostic

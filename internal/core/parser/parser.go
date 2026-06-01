@@ -3,7 +3,7 @@ package parser
 import (
 	"fmt"
 
-	"github.com/dwlhm/nova/internal/lexer"
+	"github.com/dwlhm/nova/internal/core/lexer"
 )
 
 type parser struct {

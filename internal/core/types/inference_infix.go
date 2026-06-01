@@ -1,6 +1,6 @@
 package types
 
-import "github.com/dwlhm/nova/internal/lexer"
+import "github.com/dwlhm/nova/internal/core/lexer"
 
 func (env Environment) inferInfix(scope Scope, tokens []lexer.Token, op lexer.TokenType) (Type, bool) {
 	parts := splitTopLevel(tokens, op)

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dwlhm/nova/internal/view"
+	"github.com/dwlhm/nova/internal/core/view"
 )
 
 func TestOfficialPackagesExposeProductionStandardSurface(t *testing.T) {

@@ -3,9 +3,9 @@ package view
 import (
 	"testing"
 
-	"github.com/dwlhm/nova/internal/lexer"
-	"github.com/dwlhm/nova/internal/parser"
-	"github.com/dwlhm/nova/internal/scheduler"
+	"github.com/dwlhm/nova/internal/core/lexer"
+	"github.com/dwlhm/nova/internal/core/parser"
+	"github.com/dwlhm/nova/internal/core/scheduler"
 )
 
 func TestProjectBuildsRendererNeutralIRAndDependencyMetadata(t *testing.T) {

@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dwlhm/nova/internal/lexer"
-	"github.com/dwlhm/nova/internal/parser"
+	"github.com/dwlhm/nova/internal/core/lexer"
+	"github.com/dwlhm/nova/internal/core/parser"
 )
 
 func TestValidateAllowsExternalOperationsInLifecycle(t *testing.T) {
@@ -175,7 +175,7 @@ func TestValidateRejectsLocalSymbolCollisions(t *testing.T) {
 }
 
 func TestValidateAudioLabExample(t *testing.T) {
-	path := filepath.Join("..", "..", "docs", "example", "audiolab.nova")
+	path := filepath.Join("..", "..", "..", "docs", "example", "audiolab.nova")
 	input, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read example: %v", err)
@@ -188,7 +188,7 @@ func TestValidateAudioLabExample(t *testing.T) {
 }
 
 func TestValidateMultiPageExample(t *testing.T) {
-	path := filepath.Join("..", "..", "examples", "multipage", "src", "App.nova")
+	path := filepath.Join("..", "..", "..", "examples", "multipage", "src", "App.nova")
 	input, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read example: %v", err)

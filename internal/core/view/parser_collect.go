@@ -1,6 +1,6 @@
 package view
 
-import "github.com/dwlhm/nova/internal/lexer"
+import "github.com/dwlhm/nova/internal/core/lexer"
 
 func (p *viewParser) collectAttributeExpression() []lexer.Token {
 	start := p.pos

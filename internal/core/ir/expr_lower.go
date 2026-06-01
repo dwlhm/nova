@@ -1,35 +1,35 @@
-package artifact
+package ir
 
 import (
 	"encoding/json"
 	"strings"
 
-	"github.com/dwlhm/nova/internal/build"
-	"github.com/dwlhm/nova/internal/lexer"
-	"github.com/dwlhm/nova/internal/parser"
+	"github.com/dwlhm/nova/internal/core/lexer"
+	"github.com/dwlhm/nova/internal/core/parser"
+	"github.com/dwlhm/nova/internal/core/view"
 )
 
-type appModel struct {
-	States []stateModel `json:"states"`
+type loweredAppModel struct {
+	States []loweredStateModel `json:"states"`
 }
 
-type stateModel struct {
-	Owner       string            `json:"owner"`
-	Name        string            `json:"name"`
-	Type        string            `json:"type"`
-	Initial     string            `json:"initial"`
-	Transitions []transitionModel `json:"transitions"`
+type loweredStateModel struct {
+	Owner       string                   `json:"owner"`
+	Name        string                   `json:"name"`
+	Type        string                   `json:"type"`
+	Initial     string                   `json:"initial"`
+	Transitions []loweredTransitionModel `json:"transitions"`
 }
 
-type transitionModel struct {
+type loweredTransitionModel struct {
 	Event      string   `json:"event"`
 	Params     []string `json:"params"`
 	Expression string   `json:"expression"`
 }
 
-func buildAppModel(modules []build.ModuleRef, sources map[string]parser.File) appModel {
+func buildLoweredAppModel(modules []ModuleRef, sources map[string]parser.File) loweredAppModel {
 	stateNames := collectModelStateNames(modules, sources)
-	states := make([]stateModel, 0)
+	states := make([]loweredStateModel, 0)
 	for _, module := range modules {
 		file, ok := sources[module.Path]
 		if !ok {
@@ -37,7 +37,7 @@ func buildAppModel(modules []build.ModuleRef, sources map[string]parser.File) ap
 		}
 		for _, contract := range file.ContractStates {
 			for _, state := range contract.States {
-				states = append(states, stateModel{
+				states = append(states, loweredStateModel{
 					Owner:       contract.Name,
 					Name:        state.Name,
 					Type:        state.Type.Text,
@@ -47,15 +47,15 @@ func buildAppModel(modules []build.ModuleRef, sources map[string]parser.File) ap
 			}
 		}
 	}
-	return appModel{States: states}
+	return loweredAppModel{States: states}
 }
 
-func transitionModels(transitions []parser.TransitionRule, stateNames map[string]bool) []transitionModel {
-	out := make([]transitionModel, 0, len(transitions))
+func transitionModels(transitions []parser.TransitionRule, stateNames map[string]bool) []loweredTransitionModel {
+	out := make([]loweredTransitionModel, 0, len(transitions))
 	for _, transition := range transitions {
 		params := eventParamNames(transition.Event)
 		paramSet := stringSet(params)
-		out = append(out, transitionModel{
+		out = append(out, loweredTransitionModel{
 			Event:      transition.Event.Name,
 			Params:     params,
 			Expression: expressionToJS(transition.Expr, stateNames, paramSet),
@@ -72,7 +72,7 @@ func eventParamNames(pattern parser.EventPattern) []string {
 	return out
 }
 
-func collectModelStateNames(modules []build.ModuleRef, sources map[string]parser.File) map[string]bool {
+func collectModelStateNames(modules []ModuleRef, sources map[string]parser.File) map[string]bool {
 	names := make(map[string]bool)
 	for _, module := range modules {
 		file, ok := sources[module.Path]
@@ -82,6 +82,30 @@ func collectModelStateNames(modules []build.ModuleRef, sources map[string]parser
 		for _, contract := range file.ContractStates {
 			for _, state := range contract.States {
 				names[state.Name] = true
+			}
+		}
+	}
+	return names
+}
+
+func collectStateNames(sources []SourceFile) map[string]bool {
+	names := make(map[string]bool)
+	for _, source := range sources {
+		for _, contract := range source.File.ContractStates {
+			for _, state := range contract.States {
+				names[state.Name] = true
+			}
+		}
+		for _, decl := range source.File.Imports {
+			if decl.Kind != parser.ImportState {
+				continue
+			}
+			for _, item := range decl.Items {
+				name := item.Name
+				if item.Alias != "" {
+					name = item.Alias
+				}
+				names[name] = true
 			}
 		}
 	}
@@ -242,4 +266,20 @@ func stringSet(values []string) map[string]bool {
 func quoteJS(value string) string {
 	encoded, _ := json.Marshal(value)
 	return string(encoded)
+}
+
+func staticBindingString(binding view.Binding) (string, bool) {
+	tokens := trimExpressionTokens(binding.Tokens)
+	if len(tokens) == 1 && tokens[0].Type == lexer.STRING {
+		return tokens[0].Literal, true
+	}
+	return "", false
+}
+
+func stateNamesFromModel(model loweredAppModel) map[string]bool {
+	names := make(map[string]bool)
+	for _, state := range model.States {
+		names[state.Name] = true
+	}
+	return names
 }

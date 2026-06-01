@@ -75,6 +75,11 @@ func assignManifestValue(manifest Manifest, section string, dictionaryIndex int,
 			return manifest
 		}
 		manifest.Permissions[key] = allowed
+	case "dependencies":
+		manifest.Dependencies = append(manifest.Dependencies, Dependency{
+			Name:       parseString(key, diagnostics, lineNumber),
+			Constraint: parseString(value, diagnostics, lineNumber),
+		})
 	default:
 		if group, ok := strings.CutPrefix(section, "permissions."); ok {
 			permission := group + "." + key

@@ -4,11 +4,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dwlhm/nova/internal/lexer"
+	"github.com/dwlhm/nova/internal/core/lexer"
+	"github.com/dwlhm/nova/internal/core/parser"
+	"github.com/dwlhm/nova/internal/core/security"
 	"github.com/dwlhm/nova/internal/packages"
-	"github.com/dwlhm/nova/internal/parser"
 	"github.com/dwlhm/nova/internal/project"
-	"github.com/dwlhm/nova/internal/security"
 )
 
 func TestResolveBuildPlanSelectsExactTargetTemplateAndImplementation(t *testing.T) {

@@ -79,6 +79,7 @@ func runDev(args []string, cwd string, stdout io.Writer, stderr io.Writer) int {
 		Offline:      *offline,
 		GradlePath:   *gradlePath,
 		GradleTask:   *gradleTask,
+		Production:   false,
 	}, initial, stdout, stderr)
 	if ok && target == dev.TargetAndroid {
 		ok = deployAndroid(ctx, cwd, result, *adbPath, *androidUser, initial.LaunchAndroid, stdout, stderr)
@@ -123,6 +124,7 @@ func runDev(args []string, cwd string, stdout io.Writer, stderr io.Writer) int {
 			Offline:      *offline,
 			GradlePath:   *gradlePath,
 			GradleTask:   *gradleTask,
+			Production:   false,
 		}, plan, stdout, stderr)
 		if !ok {
 			continue

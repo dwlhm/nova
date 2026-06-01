@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dwlhm/nova/internal/scheduler"
-	novatypes "github.com/dwlhm/nova/internal/types"
+	"github.com/dwlhm/nova/internal/core/scheduler"
+	novatypes "github.com/dwlhm/nova/internal/core/types"
 )
 
 type Route struct {

@@ -3,7 +3,7 @@ package packages
 import (
 	"sort"
 
-	"github.com/dwlhm/nova/internal/security"
+	"github.com/dwlhm/nova/internal/core/security"
 )
 
 func packageIndex(manifests []Manifest) map[string][]Manifest {

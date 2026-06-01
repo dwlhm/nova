@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/dwlhm/nova/internal/parser"
+	"github.com/dwlhm/nova/internal/core/parser"
 )
 
 const UnknownEventArity = -1

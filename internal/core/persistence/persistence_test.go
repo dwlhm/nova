@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dwlhm/nova/internal/scheduler"
+	"github.com/dwlhm/nova/internal/core/scheduler"
 )
 
 func TestRestoreSnapshotValidatesStateAndContinuesLogicalSequence(t *testing.T) {

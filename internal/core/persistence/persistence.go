@@ -3,8 +3,8 @@ package persistence
 import (
 	"fmt"
 
-	"github.com/dwlhm/nova/internal/diagnostic"
-	"github.com/dwlhm/nova/internal/scheduler"
+	"github.com/dwlhm/nova/internal/core/diagnostic"
+	"github.com/dwlhm/nova/internal/core/scheduler"
 )
 
 type SnapshotSource string
