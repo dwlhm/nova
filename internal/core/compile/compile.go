@@ -1,6 +1,10 @@
+// Package compile is the target-neutral Nova compiler core.
+// Edge tooling such as internal/cli should call only [Compile] to run the core pipeline.
 package compile
 
 import (
+	"sort"
+
 	"github.com/dwlhm/nova/internal/core/ast"
 	"github.com/dwlhm/nova/internal/core/ir"
 	"github.com/dwlhm/nova/internal/core/lexer"
@@ -31,9 +35,26 @@ const (
 
 // Program is the output of the core compiler pipeline for a project slice.
 type Program struct {
+	Raw     []ast.RawModule
 	Checked []ast.CheckedModule
 	Plan    plan.Core
 	NovaIR  ir.NovaIR
+}
+
+// SourceModule is an input Nova source unit for the core pipeline.
+type SourceModule struct {
+	Path    string
+	Content string
+}
+
+// CompileInput configures end-to-end core compilation from lexer to core plan.
+type CompileInput struct {
+	Profile        string
+	Entry          string
+	Sources        []SourceModule
+	PackageExports map[string]string
+	Permissions    []security.Permission
+	Externals      []ir.ResolvedExternal
 }
 
 // LowerInput configures IR lowering and core build planning.
@@ -44,6 +65,49 @@ type LowerInput struct {
 	PackageExports map[string]string
 	Permissions    []security.Permission
 	Externals      []ir.ResolvedExternal
+}
+
+// Compile is the single entry point for core compilation.
+// It runs lexer -> parser -> raw AST -> semantic -> checked AST -> IR lowering -> Nova IR -> core build plan.
+func Compile(input CompileInput) (Program, []Diagnostic) {
+	sources := make([]SourceModule, len(input.Sources))
+	copy(sources, input.Sources)
+	sort.Slice(sources, func(i int, j int) bool {
+		return sources[i].Path < sources[j].Path
+	})
+
+	raw := make([]ast.RawModule, 0, len(sources))
+	diagnostics := make([]Diagnostic, 0)
+	for _, source := range sources {
+		module, parseDiagnostics := ParseSource(source.Path, source.Content)
+		diagnostics = append(diagnostics, parseDiagnostics...)
+		if len(parseDiagnostics) > 0 {
+			continue
+		}
+		raw = append(raw, module)
+	}
+	if len(diagnostics) > 0 {
+		return Program{}, diagnostics
+	}
+
+	checked, checkDiagnostics := CheckModules(raw)
+	if len(checkDiagnostics) > 0 {
+		return Program{}, checkDiagnostics
+	}
+
+	lowered, lowerDiagnostics := Lower(LowerInput{
+		Profile:        input.Profile,
+		Entry:          input.Entry,
+		Modules:        checked,
+		PackageExports: input.PackageExports,
+		Permissions:    input.Permissions,
+		Externals:      input.Externals,
+	})
+	if len(lowerDiagnostics) > 0 {
+		return Program{}, lowerDiagnostics
+	}
+	lowered.Raw = raw
+	return lowered, nil
 }
 
 // ParseSource runs lexer and parser to produce a raw AST module.

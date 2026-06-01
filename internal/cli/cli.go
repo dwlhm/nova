@@ -14,11 +14,9 @@ import (
 
 	"github.com/dwlhm/nova/internal/bundler"
 	"github.com/dwlhm/nova/internal/conformance"
-	"github.com/dwlhm/nova/internal/core/ast"
 	"github.com/dwlhm/nova/internal/core/compile"
 	"github.com/dwlhm/nova/internal/core/diagnostic"
 	novaformat "github.com/dwlhm/nova/internal/core/format"
-	"github.com/dwlhm/nova/internal/core/ir"
 	"github.com/dwlhm/nova/internal/lsp"
 	"github.com/dwlhm/nova/internal/packageio"
 	"github.com/dwlhm/nova/internal/packages"
@@ -226,7 +224,7 @@ func runProjectPipeline(cwd string, targetID string, generateArtifacts bool, pro
 
 	packageManifests, _ := packageio.LoadProjectManifests(cwd, targetID, packageio.RendererDependencies(manifest.Renderer.ExtensionPackages))
 	packageExports := packageio.BuildExportIndex(cwd, packageManifests)
-	sources, sourceDiagnostics, ok := loadSources(cwd, manifest.Project.Entry, packageExports)
+	sourceModules, sourceDiagnostics, ok := loadSourceModules(cwd, manifest.Project.Entry, packageExports)
 	for _, diagnostic := range sourceDiagnostics {
 		fmt.Fprintln(stderr, diagnostic)
 	}
@@ -234,7 +232,7 @@ func runProjectPipeline(cwd string, targetID string, generateArtifacts bool, pro
 		return projectPipeline{}, false
 	}
 
-	layoutDiagnostics := project.ValidateLayout(manifest, projectFiles(sources))
+	layoutDiagnostics := project.ValidateLayout(manifest, projectFiles(sourceModules))
 	if len(layoutDiagnostics) > 0 {
 		for _, diagnostic := range layoutDiagnostics {
 			fmt.Fprintf(stderr, "%s: %s\n", diagnostic.Code, diagnostic.Message)
@@ -242,12 +240,19 @@ func runProjectPipeline(cwd string, targetID string, generateArtifacts bool, pro
 		return projectPipeline{}, false
 	}
 
-	if _, semanticDiagnostics, ok := checkSources(sources); !ok {
-		for _, diagnostic := range semanticDiagnostics {
-			fmt.Fprintf(stderr, "%s: %s\n", diagnostic.Code, diagnostic.Message)
+	program, compileDiagnostics := compile.Compile(compile.CompileInput{
+		Profile:        targetID,
+		Entry:          manifest.Project.Entry,
+		Sources:        sourceModules,
+		PackageExports: packageExports,
+	})
+	if len(compileDiagnostics) > 0 {
+		for _, item := range compileDiagnostics {
+			fmt.Fprintf(stderr, "%s: %s\n", item.Code, item.Message)
 		}
 		return projectPipeline{}, false
 	}
+	sources := build.SourcesFromProgram(program)
 
 	styleAssets, styleDiagnostics, ok := loadStyleAssets(cwd, manifest, targetID)
 	for _, diagnostic := range styleDiagnostics {
@@ -302,18 +307,21 @@ func runProjectPipeline(cwd string, targetID string, generateArtifacts bool, pro
 		return projectPipeline{}, false
 	}
 
-	bundle, irDiagnostics := ir.Lower(build.IRLowerInput(resolution.Plan, sources))
-	renderDiagnostics := build.ValidateViewRenderer(resolution.Plan, bundle.ViewIR)
-	for _, item := range append(build.IRDiagnostics(irDiagnostics), renderDiagnostics...) {
+	program, lowerDiagnostics := build.FinalizeProgram(program, resolution.Plan, packageExports)
+	renderDiagnostics := build.ValidateViewRenderer(resolution.Plan, program.NovaIR.ViewIR)
+	for _, item := range lowerDiagnostics {
 		fmt.Fprintf(stderr, "%s: %s\n", item.Code, item.Message)
 	}
-	if len(irDiagnostics) > 0 || build.HasBlockingDiagnostics(renderDiagnostics) {
+	for _, item := range renderDiagnostics {
+		fmt.Fprintf(stderr, "%s: %s\n", item.Code, item.Message)
+	}
+	if len(lowerDiagnostics) > 0 || build.HasBlockingDiagnostics(renderDiagnostics) {
 		return projectPipeline{}, false
 	}
 
 	files, artifactDiagnostics := artifact.Generate(artifact.GenerateInput{
 		Project:                 manifest,
-		Bundle:                  bundle,
+		Bundle:                  program.NovaIR,
 		Plan:                    resolution.Plan,
 		TargetManifest:          targetManifest,
 		StyleAssets:             styleAssets,
@@ -612,16 +620,7 @@ func loadManifest(cwd string) (project.Manifest, []string, bool) {
 	return manifest, out, len(out) == 0
 }
 
-func checkSources(sources []build.SourceFile) ([]ast.CheckedModule, []compile.Diagnostic, bool) {
-	raw := make([]ast.RawModule, 0, len(sources))
-	for _, source := range sources {
-		raw = append(raw, ast.RawModule{Path: source.Path, File: source.File})
-	}
-	checked, diagnostics := compile.CheckModules(raw)
-	return checked, diagnostics, len(diagnostics) == 0
-}
-
-func loadSources(cwd string, entry string, packageExports map[string]string) ([]build.SourceFile, []string, bool) {
+func loadSourceModules(cwd string, entry string, packageExports map[string]string) ([]compile.SourceModule, []string, bool) {
 	paths, err := discoverSourcePaths(cwd, entry)
 	if err != nil {
 		return nil, []string{fmt.Sprintf("NVA-LAYOUT-007: %s", err.Error())}, false
@@ -636,7 +635,7 @@ func loadSources(cwd string, entry string, packageExports map[string]string) ([]
 	}
 	sort.Strings(paths)
 
-	sources := make([]build.SourceFile, 0, len(paths))
+	modules := make([]compile.SourceModule, 0, len(paths))
 	diagnostics := make([]string, 0)
 	for _, sourcePath := range paths {
 		content, err := os.ReadFile(filepath.Join(cwd, filepath.FromSlash(sourcePath)))
@@ -644,16 +643,9 @@ func loadSources(cwd string, entry string, packageExports map[string]string) ([]
 			diagnostics = append(diagnostics, fmt.Sprintf("NVA-LAYOUT-007: read %s: %s", sourcePath, err.Error()))
 			continue
 		}
-		module, parseDiagnostics := compile.ParseSource(sourcePath, string(content))
-		for _, diagnostic := range parseDiagnostics {
-			diagnostics = append(diagnostics, fmt.Sprintf("%s: %s in %s", diagnostic.Code, diagnostic.Message, sourcePath))
-		}
-		if len(parseDiagnostics) > 0 {
-			continue
-		}
-		sources = append(sources, build.SourceFile{Path: sourcePath, File: module.File})
+		modules = append(modules, compile.SourceModule{Path: sourcePath, Content: string(content)})
 	}
-	return sources, diagnostics, len(diagnostics) == 0
+	return modules, diagnostics, len(diagnostics) == 0
 }
 
 func containsPath(paths []string, want string) bool {
@@ -703,7 +695,7 @@ func discoverSourcePaths(cwd string, entry string) ([]string, error) {
 	return paths, nil
 }
 
-func projectFiles(sources []build.SourceFile) []project.File {
+func projectFiles(sources []compile.SourceModule) []project.File {
 	files := make([]project.File, 0, len(sources)+1)
 	files = append(files, project.File{Path: "nova.toml"})
 	for _, source := range sources {
