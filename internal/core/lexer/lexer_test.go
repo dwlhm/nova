@@ -1,10 +1,12 @@
 package lexer
 
 import (
-	"os"
-	"path/filepath"
+	_ "embed"
 	"testing"
 )
+
+//go:embed testdata/audiolab.nova
+var audiolabExample string
 
 func TestTokenizeADRLanguageSurface(t *testing.T) {
 	input := `<import external storage from "./storage.web.js">
@@ -190,13 +192,7 @@ func TestTokenizeDecodesEscapedStrings(t *testing.T) {
 }
 
 func TestTokenizeExampleFileHasNoIllegalTokens(t *testing.T) {
-	path := filepath.Join("..", "..", "docs", "example", "audiolab.nova")
-	input, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read example: %v", err)
-	}
-
-	for _, tok := range Tokenize(string(input)) {
+	for _, tok := range Tokenize(audiolabExample) {
 		if tok.Type == ILLEGAL {
 			t.Fatalf("unexpected illegal token %q", tok.Literal)
 		}
