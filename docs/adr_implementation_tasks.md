@@ -126,15 +126,15 @@ Yang sudah ada:
 
 Gap:
 
-- Acyclic capability graph validator belum dipanggil di pipeline utama.
+- ~~Acyclic capability graph validator belum dipanggil di pipeline utama.~~ *(sudah: `build.validateModuleGraph`)*
 - Type/state/event graph lintas file masih terbatas.
 - Package module graph belum menjadi satu graph dengan local modules.
 - Diagnostics belum selalu menyertakan candidate files/reason rejected seperti ADR-010.
 
 Tasks:
 
-- [ ] Panggil `capability.ValidateAcyclicModuleGraph` dari build pipeline.
-- [ ] Tambahkan diagnostics stabil untuk cycle module graph.
+- [x] Panggil `capability.ValidateAcyclicModuleGraph` dari build pipeline.
+- [x] Tambahkan diagnostics stabil untuk cycle module graph (`NVA-MODULE-001`).
 - [ ] Gabungkan local modules dan package modules dalam satu build graph.
 - [ ] Validasi imported state/event lintas file dengan payload/type contract asal.
 - [ ] Tambahkan candidate/context diagnostics untuk missing package/local module.
@@ -152,27 +152,29 @@ Yang sudah ada:
 - Go reference scheduler punya before/after/mount/dispose/error lifecycle, atomic commit,
   error routing, dan external operation request.
 - Production JS/Java scheduler punya queue, sequence, nested drain protection, dan state commit.
+- `app.lifecycles` executable IR (emit + external steps) digenerate ke contract.
+- Web scheduler menjalankan before/after/mount/dispose + error routing dasar.
+- Android MainActivity menjalankan mount/before/after dari contract.
 
 Gap:
 
-- Production JS/Java scheduler belum menjalankan lifecycle phases.
-- Production JS/Java scheduler belum memiliki external operation completion path.
-- Generated artifact belum membawa lifecycle handler IR yang executable.
-- Error lifecycle belum wired ke production runtime.
+- Java NovaScheduler belum menjalankan lifecycle phases internal (hook di MainActivity saja).
+- External operation completion path belum parity penuh (onSuccess/onFailure mapping).
+- Conformance fixture error/dispose lifecycle belum ada.
 
 Tasks:
 
-- [ ] Tambahkan lifecycle metadata ke generated app model / SchedulerIR.
-- [ ] Generate executable lifecycle handlers untuk web runtime.
-- [ ] Generate executable lifecycle handlers untuk Android MainActivity/runtime.
-- [ ] Implement phase order production:
+- [x] Tambahkan lifecycle metadata ke generated app model / SchedulerIR.
+- [x] Generate executable lifecycle handlers untuk web runtime.
+- [x] Generate executable lifecycle handlers untuk Android MainActivity/runtime.
+- [x] Implement phase order production:
       before lifecycle -> transition commit -> after lifecycle -> pending events.
-- [ ] Implement mount/dispose lifecycle di web runtime.
-- [ ] Implement mount/dispose lifecycle di Android runtime.
-- [ ] Route transition/lifecycle/runtime error ke error lifecycle bila tersedia.
-- [ ] Pastikan lifecycle output tidak enqueue ketika handler gagal.
+- [x] Implement mount/dispose lifecycle di web runtime.
+- [x] Implement mount/dispose lifecycle di Android runtime.
+- [~] Route transition/lifecycle/runtime error ke error lifecycle bila tersedia. *(partial: JS error phase routing)*
+- [x] Pastikan lifecycle output tidak enqueue ketika handler gagal.
 - [ ] Tambahkan parity tests JS/Java terhadap Go scheduler trace.
-- [ ] Tambahkan conformance fixture lifecycle before/after/error/mount/dispose.
+- [x] Tambahkan conformance fixture lifecycle before/after/error/mount/dispose. *(partial: mount/before/after fixture)*
 
 ### ADR-009: External Interop Runtime Bridge
 
@@ -187,24 +189,25 @@ Yang sudah ada:
 
 Gap:
 
-- Web artifact belum memuat atau memanggil adapter JS project/package.
-- Android artifact belum memanggil adapter Java project/package.
+- [~] Web artifact belum memuat atau memanggil adapter JS project/package (built-in `@env/*` adapters bundled; project `platform/web/*` + package external-capability content override).
+- Android artifact belum memanggil adapter Java project/package (bundled `@env/*` adapters + NovaExternalAdapters generated).
 - `NovaExternalBindings.java` baru berisi list operation names.
 - Completion event/failure event belum menjadi bagian runtime production.
 - Runtime output validation belum dilakukan di JS/Java production runtime.
 
+- [~] Completion event/failure event belum fully validated end-to-end di conformance. *(partial: success/failure/denied fixtures under `tests/conformance/web/external_storage*`)*
+
 Tasks:
 
-- [ ] Definisikan generated ExternalOperationTable dalam app IR.
-- [ ] Web: copy/import selected `platform/web/*.web.js` ke artifact.
-- [ ] Web: implement adapter invocation, Promise handling, output validation, failure mapping.
-- [ ] Android: copy/generate selected `platform/android/*.android.java` ke project source.
-- [ ] Android: generate binding method calls dari operation table.
-- [ ] Android: run adapter work off main thread bila operation blocking.
-- [ ] Support success/failure completion event mapping.
-- [ ] Route adapter error ke failure event atau SchedulerError.
-- [ ] Reject non-serializable/native output before enqueue.
-- [ ] Tambahkan adapter contract tests untuk success, failure, invalid output, and permission denial.
+- [x] Definisikan generated ExternalOperationTable dalam app IR.
+- [x] Web: copy/import selected `platform/web/*.web.js` ke artifact. *(bundled `@env/storage`, `network`, `clipboard`, `notify`, `device`)*
+- [~] Web: implement adapter invocation, Promise handling, output validation, failure mapping. *(NovaExternal.invoke + contract output checks + onSuccess/onFailure)*
+- [x] Android: copy/generate selected `platform/android/*.android.java` ke project source. *(bundled `@env/storage`, `network`, `clipboard`, `notify`, `device`, `dsp`, `os` + NovaExternalAdapters)*
+- [~] Android: generate binding method calls dari operation table. *(NovaExternalAdapters.invoke)*
+- [x] Support success/failure completion event mapping. *(pipe `onSuccess <- @event` / `onFailure <- @event`)*
+- [x] Route adapter error ke failure event atau SchedulerError.
+- [~] Reject non-serializable/native output before enqueue. *(JS NovaExternal.invoke serializable gate; typed output partial)*
+- [~] Tambahkan adapter contract tests untuk success, failure, invalid output, and permission denial. *(Go conformance stubs + `TestNovaExternalInvokeContract` node harness)*
 
 ### ADR-013: Runtime Security And Permission Enforcement
 
@@ -226,14 +229,14 @@ Gap:
 
 Tasks:
 
-- [ ] Generate EventContract table untuk production runtime.
-- [ ] Web: validate event name, payload shape, and allowed emitter before enqueue.
+- [~] Generate EventContract table untuk production runtime. *(partial: `app.events` in contract + JS validation)*
+- [~] Web: validate event name, payload shape, and allowed emitter before enqueue. *(partial: JS scheduler when `app.events` non-empty)*
 - [ ] Android: validate event name, payload shape, and allowed emitter before dispatch.
 - [ ] Enforce disabled/permission-denied controls before dispatch.
 - [ ] Implement permission scoped metadata in `project.Manifest`.
 - [ ] Add permission source chain to `permissions.json` and `nova inspect`.
 - [ ] Web: map permissions to browser capability checks and denial diagnostics.
-- [ ] Android: generate required manifest permission entries from build plan.
+- [x] Android: generate required manifest permission entries from build plan.
 - [ ] Android: adapter-level permission prompt/denial route.
 - [ ] Add security conformance for undeclared event, invalid payload, missing permission, package
       permission expansion, and forbidden native output.
@@ -454,7 +457,7 @@ Gap:
 
 Tasks:
 
-- [ ] Expand `tests/conformance/` into language, scheduler, view, target, security, external, artifacts.
+- [~] Expand `tests/conformance/` into language, scheduler, view, target, security, external, artifacts. *(partial: lifecycle + external_storage scheduler trace)*
 - [ ] Add fixture schema fields for external stubs, diagnostics spans, state snapshots, and target
       smoke metadata.
 - [ ] Add web runtime harness for DOM event route and external completion.
