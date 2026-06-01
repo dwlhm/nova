@@ -17,25 +17,102 @@
   }
 /|
 
-<import state exportJson from "./FinanceStore.nova" /|
+<import state exportJson, transactionCount, netTotal, expenseTotal, incomeTotal, transferTotal, feeTotal from "./FinanceStore.nova" /|
+<import state allLine1, allLine2, allLine3, allLine4 from "./FinanceStore.nova" /|
 <import event @restore, @save_expense, @save_income, @save_transfer from "./FinanceStore.nova" /|
+<import event @loaded, @loaded_tx_count, @loaded_net_total, @loaded_expense_total, @loaded_income_total, @loaded_transfer_total, @loaded_fee_total from "./FinanceStore.nova" /|
+<import event @loaded_all_line1, @loaded_all_line2, @loaded_all_line3, @loaded_all_line4, @ledger_ready, @load_failed from "./FinanceStore.nova" /|
 
 <lifecycle mount>
   void -> @restore;
 /|
 
 <lifecycle after @restore>
-  "finance_ledger_export" |> storage.load key <- "finance_ledger_export";
+  void |> storage.load key <- "finance_ledger_export" onSuccess <- @loaded onFailure <- @load_failed;
+/|
+
+<lifecycle after @loaded>
+  void |> storage.load key <- "finance_transaction_count" onSuccess <- @loaded_tx_count onFailure <- @load_failed;
+/|
+
+<lifecycle after @loaded_tx_count>
+  void |> storage.load key <- "finance_net_total" onSuccess <- @loaded_net_total onFailure <- @load_failed;
+/|
+
+<lifecycle after @loaded_net_total>
+  void |> storage.load key <- "finance_expense_total" onSuccess <- @loaded_expense_total onFailure <- @load_failed;
+/|
+
+<lifecycle after @loaded_expense_total>
+  void |> storage.load key <- "finance_income_total" onSuccess <- @loaded_income_total onFailure <- @load_failed;
+/|
+
+<lifecycle after @loaded_income_total>
+  void |> storage.load key <- "finance_transfer_total" onSuccess <- @loaded_transfer_total onFailure <- @load_failed;
+/|
+
+<lifecycle after @loaded_transfer_total>
+  void |> storage.load key <- "finance_fee_total" onSuccess <- @loaded_fee_total onFailure <- @load_failed;
+/|
+
+<lifecycle after @loaded_fee_total>
+  void |> storage.load key <- "finance_all_line1" onSuccess <- @loaded_all_line1 onFailure <- @load_failed;
+/|
+
+<lifecycle after @loaded_all_line1>
+  void |> storage.load key <- "finance_all_line2" onSuccess <- @loaded_all_line2 onFailure <- @load_failed;
+/|
+
+<lifecycle after @loaded_all_line2>
+  void |> storage.load key <- "finance_all_line3" onSuccess <- @loaded_all_line3 onFailure <- @load_failed;
+/|
+
+<lifecycle after @loaded_all_line3>
+  void |> storage.load key <- "finance_all_line4" onSuccess <- @loaded_all_line4 onFailure <- @load_failed;
+/|
+
+<lifecycle after @loaded_all_line4>
+  void -> @ledger_ready;
 /|
 
 <lifecycle after @save_expense>
   exportJson |> storage.set key <- "finance_ledger_export" value <- exportJson;
+  transactionCount |> storage.set key <- "finance_transaction_count" value <- transactionCount;
+  netTotal |> storage.set key <- "finance_net_total" value <- netTotal;
+  expenseTotal |> storage.set key <- "finance_expense_total" value <- expenseTotal;
+  incomeTotal |> storage.set key <- "finance_income_total" value <- incomeTotal;
+  transferTotal |> storage.set key <- "finance_transfer_total" value <- transferTotal;
+  feeTotal |> storage.set key <- "finance_fee_total" value <- feeTotal;
+  allLine1 |> storage.set key <- "finance_all_line1" value <- allLine1;
+  allLine2 |> storage.set key <- "finance_all_line2" value <- allLine2;
+  allLine3 |> storage.set key <- "finance_all_line3" value <- allLine3;
+  allLine4 |> storage.set key <- "finance_all_line4" value <- allLine4;
 /|
 
 <lifecycle after @save_income>
   exportJson |> storage.set key <- "finance_ledger_export" value <- exportJson;
+  transactionCount |> storage.set key <- "finance_transaction_count" value <- transactionCount;
+  netTotal |> storage.set key <- "finance_net_total" value <- netTotal;
+  expenseTotal |> storage.set key <- "finance_expense_total" value <- expenseTotal;
+  incomeTotal |> storage.set key <- "finance_income_total" value <- incomeTotal;
+  transferTotal |> storage.set key <- "finance_transfer_total" value <- transferTotal;
+  feeTotal |> storage.set key <- "finance_fee_total" value <- feeTotal;
+  allLine1 |> storage.set key <- "finance_all_line1" value <- allLine1;
+  allLine2 |> storage.set key <- "finance_all_line2" value <- allLine2;
+  allLine3 |> storage.set key <- "finance_all_line3" value <- allLine3;
+  allLine4 |> storage.set key <- "finance_all_line4" value <- allLine4;
 /|
 
 <lifecycle after @save_transfer>
   exportJson |> storage.set key <- "finance_ledger_export" value <- exportJson;
+  transactionCount |> storage.set key <- "finance_transaction_count" value <- transactionCount;
+  netTotal |> storage.set key <- "finance_net_total" value <- netTotal;
+  expenseTotal |> storage.set key <- "finance_expense_total" value <- expenseTotal;
+  incomeTotal |> storage.set key <- "finance_income_total" value <- incomeTotal;
+  transferTotal |> storage.set key <- "finance_transfer_total" value <- transferTotal;
+  feeTotal |> storage.set key <- "finance_fee_total" value <- feeTotal;
+  allLine1 |> storage.set key <- "finance_all_line1" value <- allLine1;
+  allLine2 |> storage.set key <- "finance_all_line2" value <- allLine2;
+  allLine3 |> storage.set key <- "finance_all_line3" value <- allLine3;
+  allLine4 |> storage.set key <- "finance_all_line4" value <- allLine4;
 /|

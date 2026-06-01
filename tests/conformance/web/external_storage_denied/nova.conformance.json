@@ -1,0 +1,56 @@
+{
+  "target": "web",
+  "expected": {
+    "diagnosticCodes": [],
+    "artifact": {
+      "target": "web",
+      "entry": "src/App.nova",
+      "modules": ["src/App.nova"],
+      "permissions": ["storage.write"]
+    },
+    "appContract": {
+      "v": 1,
+      "target": "web",
+      "entry": "src/App.nova",
+      "stateCount": 1,
+      "forbidden": ["viewIR", "Tokens", "capabilityManifests"]
+    },
+    "view": {
+      "bindings": 0,
+      "eventRoutes": 1,
+      "pages": 0,
+      "routePatterns": []
+    },
+    "scheduler": {
+      "completeExternals": true,
+      "runtimePermissions": [],
+      "steps": [
+        { "enqueue": { "source": "host", "event": "@save" } }
+      ],
+      "trace": {
+        "events": [
+          { "sequence": 1, "source": "host", "name": "@save" },
+          { "sequence": 2, "source": "App", "name": "@save_failed", "payload": "permission denied: storage.write" }
+        ],
+        "lifecycleCalls": [
+          { "owner": "App", "phase": "after", "event": "@save" }
+        ],
+        "externalCalls": [
+          {
+            "source": "App",
+            "capability": "storage",
+            "operation": "set",
+            "input": { "key": "demo", "value": "demo" },
+            "outputType": "void",
+            "onSuccess": "@saved",
+            "onFailure": "@save_failed"
+          }
+        ],
+        "commits": [
+          { "sequence": 1, "event": "@save", "committed": true, "changes": [], "invalidations": [] },
+          { "sequence": 2, "event": "@save_failed", "committed": true, "changes": [], "invalidations": [] }
+        ]
+      }
+    }
+  }
+}

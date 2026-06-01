@@ -45,4 +45,4 @@ All types live in `nova.scheduler`:
 
 ## Versioning
 
-Library version tracks Nova `schedulerVersion` metadata (`0.1.0` in artifact `metadata.json`).
+Library version tracks Nova `schedulerVersion` metadata (`0.1.0` in artifact `build.manifest.json`).

@@ -87,4 +87,50 @@ describe("NovaScheduler", () => {
     assert.equal(runtimeHost.state().count, 2);
     assert.equal(scheduler.queue.length, 0);
   });
+
+  it("runs before and after lifecycle around transition commit", () => {
+    const runtimeHost = createHost({ count: 0 });
+    runtimeHost.app.lifecycles = [
+      {
+        owner: "counter",
+        phase: "before",
+        event: "@increment",
+        steps: [{ emit: { name: "@seen_before", args: ["count"] } }]
+      },
+      {
+        owner: "counter",
+        phase: "after",
+        event: "@increment",
+        steps: [{ emit: { name: "@seen_after", args: ["count"] } }]
+      }
+    ];
+    runtimeHost.app.events = [
+      { name: "@increment", emitters: ["renderer", "lifecycle"] },
+      { name: "@seen_before", emitters: ["counter"] },
+      { name: "@seen_after", emitters: ["counter"] }
+    ];
+    runtimeHost.evaluate = (expression, current) => {
+      if (expression === "count + 1") return current.count + 1;
+      if (expression === "count + 10") return current.count + 10;
+      if (expression === "count") return current.count;
+      throw new Error("unsupported expression: " + expression);
+    };
+    const scheduler = NovaScheduler.create(runtimeHost);
+    scheduler.dispatch("@increment", []);
+    assert.equal(runtimeHost.state().count, 1);
+    assert.equal(scheduler.queue.length, 0);
+  });
+
+  it("runs mount lifecycle via runLifecycle", () => {
+    const runtimeHost = createHost({ count: 0 });
+    runtimeHost.app.lifecycles = [{
+      owner: "boot",
+      phase: "mount",
+      steps: [{ emit: { name: "@increment", args: [] } }]
+    }];
+    runtimeHost.app.events = [{ name: "@increment", emitters: ["boot", "lifecycle"] }];
+    const scheduler = NovaScheduler.create(runtimeHost);
+    scheduler.runLifecycle("mount", "", []);
+    assert.equal(runtimeHost.state().count, 1);
+  });
 });

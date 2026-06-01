@@ -1,0 +1,33 @@
+<contract capability AppEvents>
+  emits {
+    @boot: void;
+    @increment: void;
+    @seen_before: void;
+    @seen_after: void;
+  }
+/|
+
+<contract state Counter>
+  count: number <- 0 {
+    @increment -> count + 1;
+    @boot -> 5;
+  };
+/|
+
+<lifecycle mount>
+  void -> @boot;
+/|
+
+<lifecycle before @increment>
+  void -> @seen_before;
+/|
+
+<lifecycle after @increment>
+  void -> @seen_after;
+/|
+
+<template target <- web>
+  <button on_press -> @increment>
+    <text value <- "increment" /|
+/|
+/|

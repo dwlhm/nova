@@ -129,7 +129,7 @@
     @filter_expense -> "Semua";
     @filter_income -> "Semua";
     @filter_transfer -> "Semua";
-    @loaded(value: string) -> filterLabel "Semua" historyFilter;
+    @ledger_ready -> filterLabel "Semua" historyFilter;
   };
 
   filterExpenseLabel: string <- "Keluar" {
@@ -137,7 +137,7 @@
     @filter_all -> "Keluar";
     @filter_income -> "Keluar";
     @filter_transfer -> "Keluar";
-    @loaded(value: string) -> filterLabel "Keluar" historyFilter;
+    @ledger_ready -> filterLabel "Keluar" historyFilter;
   };
 
   filterIncomeLabel: string <- "Masuk" {
@@ -145,7 +145,7 @@
     @filter_all -> "Masuk";
     @filter_expense -> "Masuk";
     @filter_transfer -> "Masuk";
-    @loaded(value: string) -> filterLabel "Masuk" historyFilter;
+    @ledger_ready -> filterLabel "Masuk" historyFilter;
   };
 
   filterTransferLabel: string <- "Transfer" {
@@ -153,7 +153,7 @@
     @filter_all -> "Transfer";
     @filter_expense -> "Transfer";
     @filter_income -> "Transfer";
-    @loaded(value: string) -> filterLabel "Transfer" historyFilter;
+    @ledger_ready -> filterLabel "Transfer" historyFilter;
   };
 
   draftCategory: string <- "" {
@@ -194,35 +194,41 @@
   };
 
   transactionCount: number <- 0 {
+    @loaded_tx_count(value: unknown) -> value == null ? transactionCount : value;
     @save_expense -> transactionCount + 1;
     @save_income -> transactionCount + 1;
     @save_transfer -> transactionCount + 1;
   };
 
   netTotal: number <- 0 {
+    @loaded_net_total(value: unknown) -> value == null ? netTotal : value;
     @save_expense -> netTotal - draftAmount;
     @save_income -> netTotal + draftAmount;
     @save_transfer -> netTotal - feeAmount;
   };
 
   expenseTotal: number <- 0 {
+    @loaded_expense_total(value: unknown) -> value == null ? expenseTotal : value;
     @save_expense -> expenseTotal + draftAmount;
   };
 
   incomeTotal: number <- 0 {
+    @loaded_income_total(value: unknown) -> value == null ? incomeTotal : value;
     @save_income -> incomeTotal + draftAmount;
   };
 
   transferTotal: number <- 0 {
+    @loaded_transfer_total(value: unknown) -> value == null ? transferTotal : value;
     @save_transfer -> transferTotal + draftAmount;
   };
 
   feeTotal: number <- 0 {
+    @loaded_fee_total(value: unknown) -> value == null ? feeTotal : value;
     @save_transfer -> feeTotal + feeAmount;
   };
 
   statusMessage: string <- "Memuat ledger tersimpan..." {
-    @loaded(value: string) -> "Ledger dimuat dari penyimpanan lokal.";
+    @ledger_ready -> "Ledger dimuat dari penyimpanan lokal.";
     @load_failed(message: string) -> "Gagal memuat ledger: " + message;
     @save_expense -> "Pengeluaran tersimpan ke penyimpanan lokal.";
     @save_income -> "Pemasukan tersimpan ke penyimpanan lokal.";
@@ -230,24 +236,28 @@
   };
 
   allLine1: string <- "Belum ada transaksi." {
+    @loaded_all_line1(value: unknown) -> value == null ? allLine1 : value;
     @save_expense -> expenseSummary draftCategory draftAmount fromAccount note;
     @save_income -> incomeSummary draftCategory draftAmount toAccount note;
     @save_transfer -> transferSummary fromAccount toAccount draftAmount feeAmount note;
   };
 
   allLine2: string <- "Transaksi terbaru akan muncul di sini." {
+    @loaded_all_line2(value: unknown) -> value == null ? allLine2 : value;
     @save_expense -> allLine1;
     @save_income -> allLine1;
     @save_transfer -> allLine1;
   };
 
   allLine3: string <- "Export JSON ikut diperbarui setiap simpan." {
+    @loaded_all_line3(value: unknown) -> value == null ? allLine3 : value;
     @save_expense -> allLine2;
     @save_income -> allLine2;
     @save_transfer -> allLine2;
   };
 
   allLine4: string <- "Gunakan filter di halaman riwayat." {
+    @loaded_all_line4(value: unknown) -> value == null ? allLine4 : value;
     @save_expense -> allLine3;
     @save_income -> allLine3;
     @save_transfer -> allLine3;
@@ -288,6 +298,7 @@
   };
 
   visibleLine1: string <- "Belum ada transaksi." {
+    @ledger_ready -> allLine1;
     @save_expense -> expenseSummary draftCategory draftAmount fromAccount note;
     @save_income -> incomeSummary draftCategory draftAmount toAccount note;
     @save_transfer -> transferSummary fromAccount toAccount draftAmount feeAmount note;
@@ -298,6 +309,7 @@
   };
 
   visibleLine2: string <- "Transaksi terbaru akan muncul di sini." {
+    @ledger_ready -> allLine2;
     @save_expense -> visibleLine1;
     @save_income -> visibleLine1;
     @save_transfer -> visibleLine1;
@@ -308,6 +320,7 @@
   };
 
   visibleLine3: string <- "Export JSON ikut diperbarui setiap simpan." {
+    @ledger_ready -> allLine3;
     @save_expense -> visibleLine2;
     @save_income -> visibleLine2;
     @save_transfer -> visibleLine2;
@@ -318,6 +331,7 @@
   };
 
   visibleLine4: string <- "Gunakan filter di halaman riwayat." {
+    @ledger_ready -> allLine4;
     @save_expense -> visibleLine3;
     @save_income -> visibleLine3;
     @save_transfer -> visibleLine3;
@@ -328,78 +342,91 @@
   };
 
   chartMaxValue: number <- 1 {
+    @ledger_ready -> chartMax incomeTotal expenseTotal transferTotal;
     @save_expense -> chartMax incomeTotal expenseTotal + draftAmount transferTotal;
     @save_income -> chartMax incomeTotal + draftAmount expenseTotal transferTotal;
     @save_transfer -> chartMax incomeTotal expenseTotal transferTotal + draftAmount;
   };
 
   incomeBarVisual: string <- "▁▁▁▁▁" {
+    @ledger_ready -> barVisual incomeTotal chartMax incomeTotal expenseTotal transferTotal;
     @save_expense -> barVisual incomeTotal chartMax incomeTotal expenseTotal + draftAmount transferTotal;
     @save_income -> barVisual incomeTotal + draftAmount chartMax incomeTotal + draftAmount expenseTotal transferTotal;
     @save_transfer -> barVisual incomeTotal chartMax incomeTotal expenseTotal transferTotal + draftAmount;
   };
 
   expenseBarVisual: string <- "▁▁▁▁▁" {
+    @ledger_ready -> barVisual expenseTotal chartMax incomeTotal expenseTotal transferTotal;
     @save_expense -> barVisual expenseTotal + draftAmount chartMax incomeTotal expenseTotal + draftAmount transferTotal;
     @save_income -> barVisual expenseTotal chartMax incomeTotal + draftAmount expenseTotal transferTotal;
     @save_transfer -> barVisual expenseTotal chartMax incomeTotal expenseTotal transferTotal + draftAmount;
   };
 
   transferBarVisual: string <- "▁▁▁▁▁" {
+    @ledger_ready -> barVisual transferTotal chartMax incomeTotal expenseTotal transferTotal;
     @save_expense -> barVisual transferTotal chartMax incomeTotal expenseTotal + draftAmount transferTotal;
     @save_income -> barVisual transferTotal chartMax incomeTotal + draftAmount expenseTotal transferTotal;
     @save_transfer -> barVisual transferTotal + draftAmount chartMax incomeTotal expenseTotal transferTotal + draftAmount;
   };
 
   incomeBarClass: string <- "bar-fill bar-h-0" {
+    @ledger_ready -> barHeightClass incomeTotal chartMax incomeTotal expenseTotal transferTotal;
     @save_expense -> barHeightClass incomeTotal chartMax incomeTotal expenseTotal + draftAmount transferTotal;
     @save_income -> barHeightClass incomeTotal + draftAmount chartMax incomeTotal + draftAmount expenseTotal transferTotal;
     @save_transfer -> barHeightClass incomeTotal chartMax incomeTotal expenseTotal transferTotal + draftAmount;
   };
 
   expenseBarClass: string <- "bar-fill bar-h-0" {
+    @ledger_ready -> barHeightClass expenseTotal chartMax incomeTotal expenseTotal transferTotal;
     @save_expense -> barHeightClass expenseTotal + draftAmount chartMax incomeTotal expenseTotal + draftAmount transferTotal;
     @save_income -> barHeightClass expenseTotal chartMax incomeTotal + draftAmount expenseTotal transferTotal;
     @save_transfer -> barHeightClass expenseTotal chartMax incomeTotal expenseTotal transferTotal + draftAmount;
   };
 
   transferBarClass: string <- "bar-fill bar-h-0" {
+    @ledger_ready -> barHeightClass transferTotal chartMax incomeTotal expenseTotal transferTotal;
     @save_expense -> barHeightClass transferTotal chartMax incomeTotal expenseTotal + draftAmount transferTotal;
     @save_income -> barHeightClass transferTotal chartMax incomeTotal + draftAmount expenseTotal transferTotal;
     @save_transfer -> barHeightClass transferTotal + draftAmount chartMax incomeTotal expenseTotal transferTotal + draftAmount;
   };
 
   pieIncomeClass: string <- "pie-segment pie-income pie-w-0" {
+    @ledger_ready -> pieIncomeClassFor incomeTotal incomeTotal + expenseTotal + transferTotal;
     @save_expense -> pieIncomeClassFor incomeTotal incomeTotal + expenseTotal + draftAmount + transferTotal;
     @save_income -> pieIncomeClassFor incomeTotal + draftAmount incomeTotal + draftAmount + expenseTotal + transferTotal;
     @save_transfer -> pieIncomeClassFor incomeTotal incomeTotal + expenseTotal + transferTotal + draftAmount;
   };
 
   pieExpenseClass: string <- "pie-segment pie-expense pie-w-0" {
+    @ledger_ready -> pieExpenseClassFor expenseTotal incomeTotal + expenseTotal + transferTotal;
     @save_expense -> pieExpenseClassFor expenseTotal + draftAmount incomeTotal + expenseTotal + draftAmount + transferTotal;
     @save_income -> pieExpenseClassFor expenseTotal incomeTotal + draftAmount + expenseTotal + transferTotal;
     @save_transfer -> pieExpenseClassFor expenseTotal incomeTotal + expenseTotal + transferTotal + draftAmount;
   };
 
   pieTransferClass: string <- "pie-segment pie-transfer pie-w-0" {
+    @ledger_ready -> pieTransferClassFor transferTotal incomeTotal + expenseTotal + transferTotal;
     @save_expense -> pieTransferClassFor transferTotal incomeTotal + expenseTotal + draftAmount + transferTotal;
     @save_income -> pieTransferClassFor transferTotal incomeTotal + draftAmount + expenseTotal + transferTotal;
     @save_transfer -> pieTransferClassFor transferTotal + draftAmount incomeTotal + expenseTotal + transferTotal + draftAmount;
   };
 
   pieIncomeLabel: string <- "0%" {
+    @ledger_ready -> piePercent incomeTotal incomeTotal + expenseTotal + transferTotal;
     @save_expense -> piePercent incomeTotal incomeTotal + expenseTotal + draftAmount + transferTotal;
     @save_income -> piePercent incomeTotal + draftAmount incomeTotal + draftAmount + expenseTotal + transferTotal;
     @save_transfer -> piePercent incomeTotal incomeTotal + expenseTotal + transferTotal + draftAmount;
   };
 
   pieExpenseLabel: string <- "0%" {
+    @ledger_ready -> piePercent expenseTotal incomeTotal + expenseTotal + transferTotal;
     @save_expense -> piePercent expenseTotal + draftAmount incomeTotal + expenseTotal + draftAmount + transferTotal;
     @save_income -> piePercent expenseTotal incomeTotal + draftAmount + expenseTotal + transferTotal;
     @save_transfer -> piePercent expenseTotal incomeTotal + expenseTotal + transferTotal + draftAmount;
   };
 
   pieTransferLabel: string <- "0%" {
+    @ledger_ready -> piePercent transferTotal incomeTotal + expenseTotal + transferTotal;
     @save_expense -> piePercent transferTotal incomeTotal + expenseTotal + draftAmount + transferTotal;
     @save_income -> piePercent transferTotal incomeTotal + draftAmount + expenseTotal + transferTotal;
     @save_transfer -> piePercent transferTotal + draftAmount incomeTotal + expenseTotal + transferTotal + draftAmount;
@@ -412,7 +439,7 @@
   };
 
   exportJson: string <- "{\"transactions\":[]}" {
-    @loaded(value: string) -> value;
+    @loaded(value: unknown) -> value == null ? exportJson : value;
     @save_expense -> "{\"transactions\":[{\"type\":\"expense\",\"category\":\"" + draftCategory + "\",\"amount\":" + draftAmount + ",\"account\":\"" + fromAccount + "\",\"note\":\"" + note + "\"}" + jsonSuffix + "]}";
     @save_income -> "{\"transactions\":[{\"type\":\"income\",\"category\":\"" + draftCategory + "\",\"amount\":" + draftAmount + ",\"account\":\"" + toAccount + "\",\"note\":\"" + note + "\"}" + jsonSuffix + "]}";
     @save_transfer -> "{\"transactions\":[{\"type\":\"transfer\",\"from\":\"" + fromAccount + "\",\"to\":\"" + toAccount + "\",\"amount\":" + draftAmount + ",\"fee\":" + feeAmount + ",\"note\":\"" + note + "\"}" + jsonSuffix + "]}";

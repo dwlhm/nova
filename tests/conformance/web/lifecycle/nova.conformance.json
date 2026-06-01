@@ -1,0 +1,81 @@
+{
+  "target": "web",
+  "expected": {
+    "diagnosticCodes": [],
+    "artifact": {
+      "target": "web",
+      "entry": "src/App.nova",
+      "modules": ["src/App.nova"],
+      "permissions": []
+    },
+    "appContract": {
+      "v": 1,
+      "target": "web",
+      "entry": "src/App.nova",
+      "stateCount": 1,
+      "forbidden": ["viewIR", "Tokens", "capabilityManifests"]
+    },
+    "view": {
+      "bindings": 0,
+      "eventRoutes": 1,
+      "pages": 0,
+      "routePatterns": []
+    },
+    "scheduler": {
+      "steps": [
+        { "lifecycle": { "phase": "mount", "source": "runtime" } },
+        { "enqueue": { "source": "host", "event": "@increment" } }
+      ],
+      "trace": {
+        "events": [
+          { "sequence": 1, "source": "App", "name": "@boot" },
+          { "sequence": 2, "source": "host", "name": "@increment" },
+          { "sequence": 3, "source": "App", "name": "@seen_before" },
+          { "sequence": 4, "source": "App", "name": "@seen_after" }
+        ],
+        "lifecycleCalls": [
+          { "owner": "App", "phase": "before", "event": "@increment" },
+          { "owner": "App", "phase": "after", "event": "@increment" }
+        ],
+        "commits": [
+          {
+            "sequence": 1,
+            "event": "@boot",
+            "committed": true,
+            "changes": [
+              { "key": { "owner": "Counter", "name": "count" }, "before": 0, "after": 5 }
+            ],
+            "invalidations": [
+              { "owner": "Counter", "name": "count" }
+            ]
+          },
+          {
+            "sequence": 2,
+            "event": "@increment",
+            "committed": true,
+            "changes": [
+              { "key": { "owner": "Counter", "name": "count" }, "before": 5, "after": 6 }
+            ],
+            "invalidations": [
+              { "owner": "Counter", "name": "count" }
+            ]
+          },
+          {
+            "sequence": 3,
+            "event": "@seen_before",
+            "committed": true,
+            "changes": [],
+            "invalidations": []
+          },
+          {
+            "sequence": 4,
+            "event": "@seen_after",
+            "committed": true,
+            "changes": [],
+            "invalidations": []
+          }
+        ]
+      }
+    }
+  }
+}

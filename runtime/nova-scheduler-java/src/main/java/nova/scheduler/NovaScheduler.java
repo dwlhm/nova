@@ -32,6 +32,10 @@ public final class NovaScheduler {
         void schedulerReconcileRouteBackStack(Object beforeRoute, Object afterRoute);
 
         void schedulerApplyStateCommit(Set<String> invalidations);
+
+        default void schedulerBeforeEvent(String eventName, List<Object> args) {}
+
+        default void schedulerAfterEvent(String eventName, List<Object> args) {}
     }
 
     private final Host host;
@@ -49,6 +53,26 @@ public final class NovaScheduler {
             return;
         }
         drain();
+    }
+
+    public void enqueueLifecycle(String source, String eventName, List<Object> args) {
+        NovaEventEnvelope envelope = enqueue(source, eventName, args);
+        if (envelope != null && draining) {
+            step();
+        }
+    }
+
+    public void commitTransition(String eventName, List<Object> args) {
+        if (eventName == null || !eventName.startsWith("@") || eventName.length() <= 1) {
+            return;
+        }
+        List<Object> eventArgs = args == null ? Collections.emptyList() : new ArrayList<>(args);
+        NovaEventEnvelope event = new NovaEventEnvelope(nextSequence++, "hydrate", eventName, eventArgs);
+        Map<String, Object> beforeState = new LinkedHashMap<>(host.schedulerState());
+        Object beforeRoute = host.schedulerCloneRoute(host.schedulerState().get("route"));
+        Set<String> invalidations = applyTransitionCommit(event, beforeState);
+        host.schedulerReconcileRouteBackStack(beforeRoute, host.schedulerState().get("route"));
+        host.schedulerApplyStateCommit(invalidations);
     }
 
     NovaEventEnvelope enqueue(String source, String eventName, List<Object> args) {
@@ -77,11 +101,13 @@ public final class NovaScheduler {
 
     private void step() {
         NovaEventEnvelope event = queue.remove(0);
+        host.schedulerBeforeEvent(event.name, event.args);
         Map<String, Object> beforeState = new LinkedHashMap<>(host.schedulerState());
         Object beforeRoute = host.schedulerCloneRoute(host.schedulerState().get("route"));
         Set<String> invalidations = applyTransitionCommit(event, beforeState);
         host.schedulerReconcileRouteBackStack(beforeRoute, host.schedulerState().get("route"));
         host.schedulerApplyStateCommit(invalidations);
+        host.schedulerAfterEvent(event.name, event.args);
     }
 
     private Set<String> applyTransitionCommit(NovaEventEnvelope event, Map<String, Object> beforeState) {

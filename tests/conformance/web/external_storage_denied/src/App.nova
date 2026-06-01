@@ -1,0 +1,34 @@
+<import external storage from "@env/storage">
+  operation set {
+    input {
+      key: string;
+      value: unknown;
+    }
+
+    output void;
+  }
+/|
+
+<contract capability StorageEvents>
+  emits {
+    @save: void;
+    @saved: void;
+    @save_failed: void;
+  }
+/|
+
+<contract state AppState>
+  payload: string <- "demo" {
+    @save -> payload;
+  };
+/|
+
+<lifecycle after @save>
+  payload |> storage.set key <- "demo" value <- payload onSuccess <- @saved onFailure <- @save_failed;
+/|
+
+<template target <- web>
+  <button on_press -> @save>
+    <text value <- "save" /|
+  /|
+/|

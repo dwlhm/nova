@@ -53,7 +53,7 @@ const NovaScheduler = require("@nova/scheduler");
 
 ## Versioning
 
-Package version tracks Nova `schedulerVersion` metadata (`0.1.0` in artifact `metadata.json`).
+Package version tracks Nova `schedulerVersion` metadata (`0.1.0` in artifact `build.manifest.json`).
 
 ## Test
 

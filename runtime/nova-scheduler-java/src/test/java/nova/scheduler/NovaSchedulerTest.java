@@ -30,6 +30,48 @@ public class NovaSchedulerTest {
     }
 
     @Test
+    void dispatchRunsBeforeAndAfterHooksAroundTransition() {
+        RecordingHost host = new RecordingHost();
+        host.state.put("count", 1);
+        host.transitions.add(new NovaTransition("count", "@increment", List.of(), "count + 1"));
+        host.stateNames.add("count");
+
+        NovaScheduler scheduler = new NovaScheduler(host);
+        scheduler.dispatch("renderer", "@increment", List.of());
+
+        assertEquals(List.of("before:@increment", "after:@increment"), host.hookTrace);
+    }
+
+    @Test
+    void commitTransitionAppliesWithoutLifecycleHooks() {
+        RecordingHost host = new RecordingHost();
+        host.state.put("count", 1);
+        host.transitions.add(new NovaTransition("count", "@hydrate", List.of(), "9"));
+        host.stateNames.add("count");
+
+        NovaScheduler scheduler = new NovaScheduler(host);
+        scheduler.commitTransition("@hydrate", List.of());
+
+        assertEquals(9, host.state.get("count"));
+        assertEquals(List.of(), host.hookTrace);
+    }
+
+    @Test
+    void drainRunsAfterHooksForEnqueuedLifecycleEvents() {
+        RecordingHost host = new RecordingHost();
+        host.state.put("count", 0);
+        host.transitions.add(new NovaTransition("count", "@boot", List.of(), "1"));
+        host.stateNames.add("count");
+
+        NovaScheduler scheduler = new NovaScheduler(host);
+        scheduler.enqueueLifecycle("app", "@boot", List.of());
+        scheduler.drain();
+
+        assertEquals(List.of("before:@boot", "after:@boot"), host.hookTrace);
+        assertEquals(1, host.state.get("count"));
+    }
+
+    @Test
     void ignoresInvalidEventNames() {
         RecordingHost host = new RecordingHost();
         NovaScheduler scheduler = new NovaScheduler(host);
@@ -42,6 +84,7 @@ public class NovaSchedulerTest {
         private final List<NovaTransition> transitions = new ArrayList<>();
         private final List<String> stateNames = new ArrayList<>();
         private final Set<String> committed = new LinkedHashSet<>();
+        private final List<String> hookTrace = new ArrayList<>();
         private int reconcileCalls = 0;
 
         @Override
@@ -95,6 +138,16 @@ public class NovaSchedulerTest {
         @Override
         public void schedulerApplyStateCommit(Set<String> invalidations) {
             committed.addAll(invalidations);
+        }
+
+        @Override
+        public void schedulerBeforeEvent(String eventName, List<Object> args) {
+            hookTrace.add("before:" + eventName);
+        }
+
+        @Override
+        public void schedulerAfterEvent(String eventName, List<Object> args) {
+            hookTrace.add("after:" + eventName);
         }
     }
 }

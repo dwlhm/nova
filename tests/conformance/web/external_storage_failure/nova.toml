@@ -1,0 +1,10 @@
+[project]
+name = "external_storage_failure"
+version = "0.1.0"
+entry = "src/App.nova"
+
+[targets.web]
+renderer = "@nova/web"
+
+[permissions]
+storage.write = true
