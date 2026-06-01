@@ -1,6 +1,7 @@
-package artifact
+package android
 
 import (
+	"github.com/dwlhm/nova/internal/provider/shared"
 	"strings"
 	"unicode"
 )
@@ -17,7 +18,7 @@ type androidResolvedStyle struct {
 	Properties map[string]string
 }
 
-func newAndroidStyleSheet(assets []StyleAsset) androidStyleSheet {
+func newAndroidStyleSheet(assets []shared.StyleAsset) androidStyleSheet {
 	sheet := androidStyleSheet{Classes: make(map[string]androidStyleRule)}
 	for _, asset := range assets {
 		for _, rule := range parseAndroidStyleRules(asset.Content) {
@@ -78,7 +79,7 @@ func parseAndroidStyleRules(input string) []androidParsedStyleRule {
 			break
 		}
 		open += pos
-		close := matchingCSSBrace(clean, open)
+		close := shared.MatchingCSSBrace(clean, open)
 		if close < 0 {
 			break
 		}
@@ -113,7 +114,7 @@ func stripCSSComments(input string) string {
 
 func androidStyleClasses(prelude string) []string {
 	classes := make([]string, 0)
-	for _, selector := range splitSelectorList(prelude) {
+	for _, selector := range shared.SplitSelectorList(prelude) {
 		if className, ok := androidStyleClassSelector(selector); ok {
 			classes = append(classes, className)
 		}

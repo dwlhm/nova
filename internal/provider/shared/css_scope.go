@@ -1,8 +1,8 @@
-package artifact
+package shared
 
 import "strings"
 
-func scopeCSS(input string, scopeSelector string) string {
+func ScopeCSS(input string, scopeSelector string) string {
 	if strings.TrimSpace(input) == "" || strings.TrimSpace(scopeSelector) == "" {
 		return input
 	}
@@ -15,7 +15,7 @@ func scopeCSS(input string, scopeSelector string) string {
 			break
 		}
 		open += pos
-		close := matchingCSSBrace(input, open)
+		close := MatchingCSSBrace(input, open)
 		if close < 0 {
 			out.WriteString(input[pos:])
 			break
@@ -35,7 +35,7 @@ func scopedCSSRule(prelude string, body string, scopeSelector string) string {
 		return prelude + "{" + body + "}"
 	}
 	if scopesNestedRules(trimmed) {
-		return prelude + "{" + scopeCSS(body, scopeSelector) + "}"
+		return prelude + "{" + ScopeCSS(body, scopeSelector) + "}"
 	}
 	if strings.HasPrefix(trimmed, "@") {
 		return prelude + "{" + body + "}"
@@ -54,7 +54,7 @@ func scopeSelectorList(prelude string, scopeSelector string) string {
 	leading := leadingWhitespace(prelude)
 	trailing := trailingWhitespace(prelude)
 	body := strings.TrimSpace(prelude)
-	selectors := splitSelectorList(body)
+	selectors := SplitSelectorList(body)
 	scoped := make([]string, 0, len(selectors))
 	for _, selector := range selectors {
 		trimmed := strings.TrimSpace(selector)
@@ -76,7 +76,7 @@ func scopedSelector(selector string, scopeSelector string) string {
 	return scopeSelector + " " + selector
 }
 
-func splitSelectorList(input string) []string {
+func SplitSelectorList(input string) []string {
 	parts := make([]string, 0)
 	start := 0
 	depth := 0
@@ -99,7 +99,7 @@ func splitSelectorList(input string) []string {
 	return parts
 }
 
-func matchingCSSBrace(input string, open int) int {
+func MatchingCSSBrace(input string, open int) int {
 	depth := 0
 	for i := open; i < len(input); i++ {
 		switch input[i] {

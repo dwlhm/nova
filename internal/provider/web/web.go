@@ -1,4 +1,6 @@
-package artifact
+package web
+
+import "github.com/dwlhm/nova/internal/provider/shared"
 
 func webCSS() string {
 	return `:root {
@@ -797,7 +799,7 @@ window.NovaRuntime = (() => {
 
 func webBundle(app any) string {
 	return `"use strict";
-window.__NOVA_APP__ = ` + mustJSON(app) + `;
+window.__NOVA_APP__ = ` + shared.MustJSON(app) + `;
 if (window.NovaRuntime) {
   window.NovaRuntime.mount(window.__NOVA_APP__);
 }

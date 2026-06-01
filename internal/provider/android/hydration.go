@@ -1,6 +1,7 @@
-package artifact
+package android
 
 import (
+	"github.com/dwlhm/nova/internal/provider/shared"
 	"sort"
 	"strings"
 
@@ -81,7 +82,7 @@ func androidContractStorageHydration(chain storageHydrationChain) string {
 	}
 	sort.Strings(skipEvents)
 	for _, event := range skipEvents {
-		builder.WriteString("        " + quoteCodeString(event) + ",\n")
+		builder.WriteString("        " + shared.QuoteCodeString(event) + ",\n")
 	}
 	builder.WriteString("        \"\"\n")
 	builder.WriteString("    ));\n\n")
@@ -89,22 +90,22 @@ func androidContractStorageHydration(chain storageHydrationChain) string {
 	for _, step := range chain.Steps {
 		builder.WriteString("        try {\n")
 		builder.WriteString("            Object output = NovaExternalAdapters.invoke(this, ")
-		builder.WriteString(quoteCodeString(step.EffectID) + ", ")
+		builder.WriteString(shared.QuoteCodeString(step.EffectID) + ", ")
 		builder.WriteString(androidJavaHydrateExternalInputMap(step.Input) + ");\n")
 		builder.WriteString("            scheduler.commitTransition(")
-		builder.WriteString(quoteCodeString(step.SuccessEvent) + ", ")
+		builder.WriteString(shared.QuoteCodeString(step.SuccessEvent) + ", ")
 		builder.WriteString("output == null ? Collections.emptyList() : Collections.singletonList(output));\n")
 		builder.WriteString("        } catch (Exception error) {\n")
 		if step.FailureEvent != "" {
 			builder.WriteString("            scheduler.commitTransition(")
-			builder.WriteString(quoteCodeString(step.FailureEvent) + ", Collections.singletonList(error.getMessage()));\n")
+			builder.WriteString(shared.QuoteCodeString(step.FailureEvent) + ", Collections.singletonList(error.getMessage()));\n")
 		}
 		builder.WriteString("            return;\n")
 		builder.WriteString("        }\n")
 	}
 	if chain.TerminalEvent != "" {
 		builder.WriteString("        scheduler.commitTransition(")
-		builder.WriteString(quoteCodeString(chain.TerminalEvent) + ", Collections.emptyList());\n")
+		builder.WriteString(shared.QuoteCodeString(chain.TerminalEvent) + ", Collections.emptyList());\n")
 	}
 	builder.WriteString("    }\n\n")
 	return builder.String()
@@ -121,7 +122,7 @@ func androidJavaHydrateExternalInputMap(input map[string]string) string {
 	sort.Strings(names)
 	pairs := make([]string, 0, len(names))
 	for _, name := range names {
-		pairs = append(pairs, "entry("+quoteCodeString(name)+", "+androidJavaEvalValueExpr(input[name])+")")
+		pairs = append(pairs, "entry("+shared.QuoteCodeString(name)+", "+androidJavaEvalValueExpr(input[name])+")")
 	}
 	return "record(" + strings.Join(pairs, ", ") + ")"
 }

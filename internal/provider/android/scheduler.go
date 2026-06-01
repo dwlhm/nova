@@ -1,39 +1,30 @@
-package artifact
+package android
 
 import (
 	"fmt"
 
-	rendererjs "github.com/dwlhm/nova/runtime/nova-renderer-js"
+	"github.com/dwlhm/nova/internal/provider/shared"
 	schedulerjava "github.com/dwlhm/nova/runtime/nova-scheduler-java"
-	schedulerjs "github.com/dwlhm/nova/runtime/nova-scheduler-js"
 )
 
-func webSchedulerModule() string {
-	return schedulerjs.Source
-}
-
-func webRendererModule() string {
-	return rendererjs.Source
-}
-
-func androidSchedulerLibraryFiles() ([]File, error) {
+func schedulerLibraryFiles() ([]shared.File, error) {
 	sources, err := schedulerjava.SourceFiles()
 	if err != nil {
 		return nil, err
 	}
 	root := "build/android/nova-scheduler/src/main/java/" + schedulerjava.PackagePath
-	files := make([]File, 0, len(sources)+1)
+	files := make([]shared.File, 0, len(sources)+1)
 	for _, source := range sources {
-		files = append(files, File{
+		files = append(files, shared.File{
 			Path:    root + "/" + source.RelativePath,
 			Content: source.Content,
 		})
 	}
-	files = append(files, File{Path: "build/android/nova-scheduler/build.gradle.kts", Content: androidSchedulerGradle()})
+	files = append(files, shared.File{Path: "build/android/nova-scheduler/build.gradle.kts", Content: schedulerGradle()})
 	return files, nil
 }
 
-func androidSchedulerGradle() string {
+func schedulerGradle() string {
 	return `plugins {
     java
 }
@@ -49,7 +40,7 @@ java {
 `
 }
 
-func androidJavaSchedulerActivityHost() string {
+func javaSchedulerActivityHost() string {
 	return `    private void dispatch(String eventName, List<Object> args) {
         scheduler.dispatch("renderer", eventName, args);
     }
@@ -102,7 +93,7 @@ func androidJavaSchedulerActivityHost() string {
 `
 }
 
-func androidJavaSchedulerApplyStateCommit() string {
+func javaSchedulerApplyStateCommit() string {
 	return `    @Override
     public void schedulerApplyStateCommit(Set<String> invalidations) {
         applyStateCommit(invalidations);
@@ -111,7 +102,7 @@ func androidJavaSchedulerApplyStateCommit() string {
 `
 }
 
-func androidJavaSchedulerLifecycleStubs() string {
+func javaSchedulerLifecycleStubs() string {
 	return `    @Override
     public void schedulerBeforeEvent(String eventName, List<Object> args) {}
 
@@ -125,15 +116,9 @@ func androidJavaSchedulerLifecycleStubs() string {
 `
 }
 
-func schedulerLibraryVersionCheck() error {
-	if schedulerjs.Version != schedulerVersion {
-		return fmt.Errorf("web scheduler library version %s does not match artifact schedulerVersion %s", schedulerjs.Version, schedulerVersion)
-	}
-	if schedulerjava.Version != schedulerVersion {
-		return fmt.Errorf("java scheduler library version %s does not match artifact schedulerVersion %s", schedulerjava.Version, schedulerVersion)
-	}
-	if rendererjs.Version != runtimeVersion {
-		return fmt.Errorf("web renderer library version %s does not match artifact runtimeVersion %s", rendererjs.Version, runtimeVersion)
+func schedulerVersionCheck() error {
+	if schedulerjava.Version != shared.SchedulerVersion {
+		return fmt.Errorf("java scheduler library version %s does not match provider schedulerVersion %s", schedulerjava.Version, shared.SchedulerVersion)
 	}
 	return nil
 }

@@ -8,6 +8,7 @@ import (
 	"github.com/dwlhm/nova/internal/core/ir"
 	"github.com/dwlhm/nova/internal/project"
 	"github.com/dwlhm/nova/internal/provider/build"
+	"github.com/dwlhm/nova/internal/provider/shared"
 )
 
 func TestBuildAppContractOmitsCompilerInternals(t *testing.T) {
@@ -32,7 +33,7 @@ func TestBuildAppContractOmitsCompilerInternals(t *testing.T) {
 	if len(app.View.Nodes) != 1 || app.View.Nodes[0].Props["value"] == "" {
 		t.Fatalf("expected compiled prop expr, got %+v", app.View.Nodes[0].Props)
 	}
-	raw := mustJSON(app)
+	raw := shared.MustJSON(app)
 	for _, forbidden := range []string{"capabilityManifests", "viewIR", "Tokens", "capabilityManifest"} {
 		if strings.Contains(raw, forbidden) {
 			t.Fatalf("contract must not contain %q", forbidden)

@@ -1,6 +1,7 @@
-package artifact
+package android
 
 import (
+	"github.com/dwlhm/nova/internal/provider/shared"
 	"strconv"
 	"strings"
 
@@ -12,7 +13,7 @@ import (
 	"github.com/dwlhm/nova/internal/provider/target"
 )
 
-type androidTargetConfig struct {
+type targetConfig struct {
 	ApplicationID string
 	Namespace     string
 	CompileSDK    string
@@ -27,7 +28,7 @@ type androidTargetConfig struct {
 	JavaVersion   string
 }
 
-func androidConfig(manifest project.Manifest) (androidTargetConfig, []Diagnostic) {
+func parseTargetConfig(manifest project.Manifest) (targetConfig, []shared.Diagnostic) {
 	target := manifest.Targets["android"]
 	options := target.Options
 	renderer := strings.TrimSpace(target.Renderer)
@@ -35,7 +36,7 @@ func androidConfig(manifest project.Manifest) (androidTargetConfig, []Diagnostic
 		renderer = "@nova/android"
 	}
 	if renderer != "@nova/android" {
-		return androidTargetConfig{}, []Diagnostic{{
+		return targetConfig{}, []shared.Diagnostic{{
 			Code:     "NVA-ANDROID-002",
 			Severity: diagnostic.SeverityError,
 			Message:  "targets.android.renderer must be @nova/android",
@@ -53,10 +54,10 @@ func androidConfig(manifest project.Manifest) (androidTargetConfig, []Diagnostic
 		"theme_parent",
 		"java_version",
 	}
-	diagnostics := make([]Diagnostic, 0)
+	diagnostics := make([]shared.Diagnostic, 0)
 	for _, key := range required {
 		if strings.TrimSpace(options[key]) == "" {
-			diagnostics = append(diagnostics, Diagnostic{
+			diagnostics = append(diagnostics, shared.Diagnostic{
 				Code:     "NVA-ANDROID-001",
 				Severity: diagnostic.SeverityError,
 				Message:  "targets.android." + key + " is required for Android artifact generation",
@@ -64,7 +65,7 @@ func androidConfig(manifest project.Manifest) (androidTargetConfig, []Diagnostic
 		}
 	}
 	if len(diagnostics) > 0 {
-		return androidTargetConfig{}, diagnostics
+		return targetConfig{}, diagnostics
 	}
 
 	versionName := strings.TrimSpace(options["version_name"])
@@ -75,7 +76,7 @@ func androidConfig(manifest project.Manifest) (androidTargetConfig, []Diagnostic
 	if label == "" {
 		label = manifest.Project.Name
 	}
-	return androidTargetConfig{
+	return targetConfig{
 		ApplicationID: options["application_id"],
 		Namespace:     options["namespace"],
 		CompileSDK:    options["compile_sdk"],
@@ -91,31 +92,31 @@ func androidConfig(manifest project.Manifest) (androidTargetConfig, []Diagnostic
 	}, nil
 }
 
-func androidSettings(name string, config androidTargetConfig) string {
+func settingsGradle(name string, config targetConfig) string {
 	if strings.TrimSpace(name) == "" {
 		name = "nova-app"
 	}
-	return "pluginManagement {\n    repositories {\n        google()\n        mavenCentral()\n        gradlePluginPortal()\n    }\n    plugins {\n        id(\"com.android.application\") version " + quoteCodeString(config.GradlePlugin) + "\n    }\n}\n\ndependencyResolutionManagement {\n    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)\n    repositories {\n        google()\n        mavenCentral()\n    }\n}\n\nrootProject.name = " + quoteCodeString(name) + "\ninclude(\":app\")\ninclude(\":nova-scheduler\")\n"
+	return "pluginManagement {\n    repositories {\n        google()\n        mavenCentral()\n        gradlePluginPortal()\n    }\n    plugins {\n        id(\"com.android.application\") version " + shared.QuoteCodeString(config.GradlePlugin) + "\n    }\n}\n\ndependencyResolutionManagement {\n    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)\n    repositories {\n        google()\n        mavenCentral()\n    }\n}\n\nrootProject.name = " + shared.QuoteCodeString(name) + "\ninclude(\":app\")\ninclude(\":nova-scheduler\")\n"
 }
 
-func androidGradleProperties(config androidTargetConfig) string {
+func gradleProperties(config targetConfig) string {
 	return "android.nonTransitiveRClass=true\n"
 }
 
-func androidGradle(name string, config androidTargetConfig) string {
+func rootGradle(name string, config targetConfig) string {
 	if strings.TrimSpace(name) == "" {
 		name = "nova-app"
 	}
 	_ = config
-	return "// Generated Nova Android project for " + escapeGradleComment(name) + ".\n"
+	return "// Generated Nova Android project for " + shared.EscapeGradleComment(name) + ".\n"
 }
 
-func androidAppGradle(config androidTargetConfig) string {
+func appGradle(config targetConfig) string {
 	javaVersion := "JavaVersion.VERSION_" + strings.ReplaceAll(config.JavaVersion, ".", "_")
-	return "plugins {\n    id(\"com.android.application\")\n}\n\nandroid {\n    namespace = " + quoteCodeString(config.Namespace) + "\n    compileSdk = " + config.CompileSDK + "\n\n    defaultConfig {\n        applicationId = " + quoteCodeString(config.ApplicationID) + "\n        minSdk = " + config.MinSDK + "\n        targetSdk = " + config.TargetSDK + "\n        versionCode = " + config.VersionCode + "\n        versionName = " + quoteCodeString(config.VersionName) + "\n    }\n\n    compileOptions {\n        sourceCompatibility = " + javaVersion + "\n        targetCompatibility = " + javaVersion + "\n    }\n}\n\ndependencies {\n    implementation(project(\":nova-scheduler\"))\n}\n"
+	return "plugins {\n    id(\"com.android.application\")\n}\n\nandroid {\n    namespace = " + shared.QuoteCodeString(config.Namespace) + "\n    compileSdk = " + config.CompileSDK + "\n\n    defaultConfig {\n        applicationId = " + shared.QuoteCodeString(config.ApplicationID) + "\n        minSdk = " + config.MinSDK + "\n        targetSdk = " + config.TargetSDK + "\n        versionCode = " + config.VersionCode + "\n        versionName = " + shared.QuoteCodeString(config.VersionName) + "\n    }\n\n    compileOptions {\n        sourceCompatibility = " + javaVersion + "\n        targetCompatibility = " + javaVersion + "\n    }\n}\n\ndependencies {\n    implementation(project(\":nova-scheduler\"))\n}\n"
 }
 
-func androidManifest(config androidTargetConfig, permissions []security.Permission) string {
+func androidManifestXML(config targetConfig, permissions []security.Permission) string {
 	manifestPermissions := target.AndroidManifestPermissions(permissions)
 	var usesPermissions strings.Builder
 	for _, permission := range manifestPermissions {
@@ -136,19 +137,19 @@ func androidManifest(config androidTargetConfig, permissions []security.Permissi
 		"</manifest>\n"
 }
 
-func androidStyles(config androidTargetConfig) string {
+func stylesXML(config targetConfig) string {
 	return "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<resources>\n    <style name=\"" + escapeXML(config.Theme) + "\" parent=\"" + escapeXML(config.ThemeParent) + "\">\n        <item name=\"android:windowActionBar\">false</item>\n        <item name=\"android:windowNoTitle\">true</item>\n    </style>\n</resources>\n"
 }
 
-func androidMainActivity(app contract.App, config androidTargetConfig, styles []StyleAsset) string {
-	return androidMainActivityFromContract(app, config, styles)
+func mainActivity(app contract.App, config targetConfig, styles []shared.StyleAsset) string {
+	return mainActivityFromContract(app, config, styles)
 }
 
-func androidRuntime(config androidTargetConfig) string {
-	return androidJavaRuntime(config)
+func runtimeJava(config targetConfig) string {
+	return javaRuntime(config)
 }
 
-func androidJavaRuntime(config androidTargetConfig) string {
+func javaRuntime(config targetConfig) string {
 	return "package " + config.Namespace + ";\n\n" + `import java.net.URI;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
@@ -616,7 +617,7 @@ func androidJavaRoutePatternTable(patterns []string) string {
 	} else {
 		builder.WriteString("        return Arrays.asList(\n")
 		for _, pattern := range patterns {
-			builder.WriteString("            " + quoteCodeString(pattern) + ",\n")
+			builder.WriteString("            " + shared.QuoteCodeString(pattern) + ",\n")
 		}
 		builder.WriteString("            \"\"\n")
 		builder.WriteString("        );\n")
@@ -634,7 +635,7 @@ func androidJavaInitialValue(expression string) string {
 		return androidJavaInitialRecord(expression)
 	}
 	if strings.HasPrefix(expression, "\"") && strings.HasSuffix(expression, "\"") {
-		return quoteCodeString(androidJavaStringLiteralValue(expression))
+		return shared.QuoteCodeString(androidJavaStringLiteralValue(expression))
 	}
 	if _, err := strconv.ParseFloat(expression, 64); err == nil {
 		if strings.Contains(expression, ".") {
@@ -674,7 +675,7 @@ func androidJavaInitialRecord(expression string) string {
 		if !ok {
 			continue
 		}
-		parts = append(parts, "entry("+quoteCodeString(strings.TrimSpace(name))+", "+androidJavaInitialValue(strings.TrimSpace(value))+")")
+		parts = append(parts, "entry("+shared.QuoteCodeString(strings.TrimSpace(name))+", "+androidJavaInitialValue(strings.TrimSpace(value))+")")
 	}
 	if len(parts) == 0 {
 		return "record()"
@@ -728,7 +729,7 @@ func androidJavaStringList(values []string) string {
 	}
 	quoted := make([]string, 0, len(values))
 	for _, value := range values {
-		quoted = append(quoted, quoteCodeString(value))
+		quoted = append(quoted, shared.QuoteCodeString(value))
 	}
 	return "Arrays.asList(" + strings.Join(quoted, ", ") + ")"
 }
@@ -750,7 +751,7 @@ func androidCSSColor(value string) (string, bool) {
 	for _, field := range strings.Fields(strings.TrimSpace(value)) {
 		cleaned := strings.Trim(field, ",")
 		if strings.HasPrefix(cleaned, "#") || androidCSSNamedColor(cleaned) {
-			return "Color.parseColor(" + quoteCodeString(cleaned) + ")", true
+			return "Color.parseColor(" + shared.QuoteCodeString(cleaned) + ")", true
 		}
 	}
 	return "", false
@@ -893,13 +894,13 @@ func androidJavaPathSuffix(path []int) string {
 	return "_" + strings.Join(parts, "_")
 }
 
-func androidExternalBindings(operations []build.ResolvedExternalOperation, config androidTargetConfig) string {
-	names := externalOperationNames(operations)
+func externalBindings(operations []build.ResolvedExternalOperation, config targetConfig) string {
+	names := shared.ExternalOperationNames(operations)
 	var builder strings.Builder
 	builder.WriteString("package " + config.Namespace + ";\n\nimport java.util.Arrays;\nimport java.util.List;\n\npublic final class NovaExternalBindings {\n    private NovaExternalBindings() {}\n    public static final List<String> OPERATIONS = Arrays.asList(\n")
 	for _, name := range names {
 		builder.WriteString("        ")
-		builder.WriteString(quoteCodeString(name))
+		builder.WriteString(shared.QuoteCodeString(name))
 		builder.WriteString(",\n")
 	}
 	builder.WriteString("        \"\"\n    );\n}\n")

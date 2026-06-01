@@ -95,6 +95,32 @@ func TestCorePackagesDoNotImportProvider(t *testing.T) {
 	}
 }
 
+func TestProviderTargetsStaySandboxed(t *testing.T) {
+	importsByPackage, err := collectProductionImports(repoRoot(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	failures := make([]string, 0)
+	for importer, imports := range importsByPackage {
+		switch importer {
+		case "internal/provider/web":
+			if imports[modulePath+"/internal/provider/android"] {
+				failures = append(failures, importer+" imports internal/provider/android")
+			}
+		case "internal/provider/android":
+			if imports[modulePath+"/internal/provider/web"] {
+				failures = append(failures, importer+" imports internal/provider/web")
+			}
+		}
+	}
+
+	sort.Strings(failures)
+	for _, failure := range failures {
+		t.Error(failure)
+	}
+}
+
 func allowedInternalImports() map[string]map[string]bool {
 	return map[string]map[string]bool{
 		"cmd/nova": set("internal/cli"),
@@ -177,6 +203,30 @@ func allowedInternalImports() map[string]map[string]bool {
 			"internal/core/scheduler",
 		),
 		"internal/provider/artifact": set(
+			"internal/provider/android",
+			"internal/provider/shared",
+			"internal/provider/web",
+			"internal/core/contract",
+			"internal/core/ir",
+		),
+		"internal/provider/shared": set(
+			"internal/core/contract",
+			"internal/core/diagnostic",
+			"internal/core/ir",
+			"internal/project",
+			"internal/core/security",
+			"internal/provider/build",
+			"internal/provider/target",
+		),
+		"internal/provider/web": set(
+			"internal/provider/build",
+			"internal/provider/shared",
+			"internal/provider/standard",
+			"internal/provider/target",
+			"runtime/nova-renderer-js",
+			"runtime/nova-scheduler-js",
+		),
+		"internal/provider/android": set(
 			"internal/provider/build",
 			"internal/core/contract",
 			"internal/core/diagnostic",
@@ -184,14 +234,14 @@ func allowedInternalImports() map[string]map[string]bool {
 			"internal/project",
 			"internal/core/routing",
 			"internal/core/security",
+			"internal/provider/shared",
 			"internal/provider/standard",
 			"internal/provider/target",
-			"runtime/nova-renderer-js",
 			"runtime/nova-scheduler-java",
-			"runtime/nova-scheduler-js",
 		),
 		"internal/provider/build": set(
 			"internal/core/ast",
+			"internal/core/compile",
 			"internal/core/ir",
 			"internal/core/plan",
 			"internal/packages",

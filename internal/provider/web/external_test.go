@@ -1,4 +1,4 @@
-package artifact
+package web
 
 import (
 	"os/exec"
@@ -15,7 +15,7 @@ func TestWebExternalAdaptersPreferProjectOverrideContent(t *testing.T) {
   });
 }
 // CUSTOM_STORAGE_ADAPTER_MARKER`
-	bundle := webExternalAdapters([]build.ResolvedExternalOperation{
+	bundle := externalAdapters([]build.ResolvedExternalOperation{
 		{CapabilitySource: "@env/storage", Operation: "set", Implementation: build.Implementation{Path: "platform/web/storage.web.js"}},
 	}, map[string]string{"platform/web/storage.web.js": override})
 	if !bundle.Enabled {
@@ -31,7 +31,7 @@ func TestNovaExternalInvokeContract(t *testing.T) {
 		t.Skip("node not available")
 	}
 
-	bundle := webExternalAdapters([]build.ResolvedExternalOperation{
+	bundle := externalAdapters([]build.ResolvedExternalOperation{
 		{CapabilitySource: "@env/storage", Operation: "set", Implementation: build.Implementation{Path: "platform/web/storage.web.js"}},
 	}, nil)
 	if !bundle.Enabled {

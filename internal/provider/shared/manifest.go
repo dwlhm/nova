@@ -1,4 +1,4 @@
-package artifact
+package shared
 
 import (
 	"sort"
@@ -9,13 +9,7 @@ import (
 	"github.com/dwlhm/nova/internal/provider/build"
 )
 
-type buildManifestVersions struct {
-	LanguageVersion  string
-	SchedulerVersion string
-	RuntimeVersion   string
-}
-
-func buildManifest(bundle ir.Bundle, plan build.BuildPlan, versions buildManifestVersions) contract.BuildManifest {
+func BuildManifest(bundle ir.Bundle, plan build.BuildPlan, versions ManifestVersions) contract.BuildManifest {
 	return contract.BuildManifest{
 		ContractVersion:    contract.Version,
 		LanguageVersion:    versions.LanguageVersion,
@@ -26,12 +20,12 @@ func buildManifest(bundle ir.Bundle, plan build.BuildPlan, versions buildManifes
 		Modules:            bundle.Modules,
 		TemplateFile:       plan.Template.SourceFile,
 		TemplateIndex:      plan.Template.Index,
-		ExternalOperations: externalOperationNames(plan.ExternalOperations),
-		Permissions:        manifestPermissionStrings(plan.Permissions),
+		ExternalOperations: ExternalOperationNames(plan.ExternalOperations),
+		Permissions:        ManifestPermissionStrings(plan.Permissions),
 	}
 }
 
-func manifestPermissionStrings(permissions []security.Permission) []string {
+func ManifestPermissionStrings(permissions []security.Permission) []string {
 	if len(permissions) == 0 {
 		return nil
 	}

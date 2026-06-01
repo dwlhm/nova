@@ -1,6 +1,7 @@
-package artifact
+package android
 
 import (
+	"github.com/dwlhm/nova/internal/provider/shared"
 	"regexp"
 	"sort"
 	"strings"
@@ -14,7 +15,7 @@ var (
 	javaPublicClassRE = regexp.MustCompile(`(?m)^\s*public\s+(?:final\s+)?class\s+([A-Za-z0-9_]+)\b`)
 )
 
-func androidExternalAdapterFiles(operations []build.ResolvedExternalOperation, javaSourceRoot string, overrides map[string]string) []File {
+func externalAdapterFiles(operations []build.ResolvedExternalOperation, javaSourceRoot string, overrides map[string]string) []shared.File {
 	javaSourceRoot = strings.TrimSuffix(strings.TrimSpace(javaSourceRoot), "/")
 	if javaSourceRoot == "" {
 		javaSourceRoot = "build/android/app/src/main/java/nova/generated"
@@ -30,18 +31,18 @@ func androidExternalAdapterFiles(operations []build.ResolvedExternalOperation, j
 		paths = append(paths, path)
 	}
 	sort.Strings(paths)
-	files := make([]File, 0, len(paths)+1)
+	files := make([]shared.File, 0, len(paths)+1)
 	namespace := strings.ReplaceAll(strings.TrimPrefix(javaSourceRoot, "build/android/app/src/main/java/"), "/", ".")
 	for _, path := range paths {
-		content, ok := androidAdapterContent(path, overrides)
+		content, ok := adapterContent(path, overrides)
 		if !ok || strings.TrimSpace(content) == "" {
 			continue
 		}
-		javaPath, ok := androidExternalAdapterJavaPath(path, content)
+		javaPath, ok := externalAdapterJavaPath(path, content)
 		if !ok {
 			continue
 		}
-		files = append(files, File{
+		files = append(files, shared.File{
 			Path:    javaPath,
 			Content: content,
 		})
@@ -49,21 +50,21 @@ func androidExternalAdapterFiles(operations []build.ResolvedExternalOperation, j
 	if len(files) == 0 {
 		return nil
 	}
-	files = append(files, File{
+	files = append(files, shared.File{
 		Path:    javaSourceRoot + "/NovaExternalAdapters.java",
-		Content: androidExternalAdaptersJava(namespace, paths),
+		Content: externalAdaptersJava(namespace, paths),
 	})
 	return files
 }
 
-func androidExternalAdapterJavaPath(adapterPath, content string) (string, bool) {
+func externalAdapterJavaPath(adapterPath, content string) (string, bool) {
 	if className, ok := standard.AndroidPlatformAdapterClass(adapterPath); ok {
-		return androidJavaSourcePath(className)
+		return javaSourcePath(className)
 	}
-	return androidJavaSourcePathFromContent(content)
+	return javaSourcePathFromContent(content)
 }
 
-func androidJavaSourcePath(className string) (string, bool) {
+func javaSourcePath(className string) (string, bool) {
 	className = strings.TrimSpace(className)
 	lastDot := strings.LastIndex(className, ".")
 	if lastDot <= 0 || lastDot >= len(className)-1 {
@@ -74,7 +75,7 @@ func androidJavaSourcePath(className string) (string, bool) {
 	return "build/android/app/src/main/java/" + pkg + "/" + simple + ".java", true
 }
 
-func androidJavaSourcePathFromContent(content string) (string, bool) {
+func javaSourcePathFromContent(content string) (string, bool) {
 	pkgMatch := javaPackageDeclRE.FindStringSubmatch(content)
 	classMatch := javaPublicClassRE.FindStringSubmatch(content)
 	if len(pkgMatch) < 2 || len(classMatch) < 2 {
@@ -83,7 +84,7 @@ func androidJavaSourcePathFromContent(content string) (string, bool) {
 	return "build/android/app/src/main/java/" + strings.ReplaceAll(pkgMatch[1], ".", "/") + "/" + classMatch[1] + ".java", true
 }
 
-func androidExternalAdaptersJava(namespace string, paths []string) string {
+func externalAdaptersJava(namespace string, paths []string) string {
 	var builder strings.Builder
 	builder.WriteString("package " + namespace + ";\n\n")
 	builder.WriteString("import android.content.Context;\n")

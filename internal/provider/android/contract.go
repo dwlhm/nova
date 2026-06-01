@@ -1,6 +1,7 @@
-package artifact
+package android
 
 import (
+	"github.com/dwlhm/nova/internal/provider/shared"
 	"sort"
 	"strconv"
 	"strings"
@@ -13,7 +14,7 @@ type androidContractRenderer struct {
 	styles androidStyleSheet
 }
 
-func androidMainActivityFromContract(app contract.App, config androidTargetConfig, styles []StyleAsset) string {
+func mainActivityFromContract(app contract.App, config targetConfig, styles []shared.StyleAsset) string {
 	routePatterns := androidContractPagePaths(app.View)
 	renderer := androidContractRenderer{styles: newAndroidStyleSheet(styles)}
 	var builder strings.Builder
@@ -98,16 +99,16 @@ func androidMainActivityFromContract(app contract.App, config androidTargetConfi
 	builder.WriteString("    private List<String> stateNames() {\n")
 	builder.WriteString("        return Arrays.asList(\n")
 	for _, state := range app.Model.States {
-		builder.WriteString("            " + quoteCodeString(state.Name) + ",\n")
+		builder.WriteString("            " + shared.QuoteCodeString(state.Name) + ",\n")
 	}
 	builder.WriteString("            \"\"\n")
 	builder.WriteString("        );\n")
 	builder.WriteString("    }\n\n")
 	builder.WriteString(renderer.renderApplyBindings(app.View.Nodes, app.View.Bindings))
 	builder.WriteString(renderer.renderUpdatePageVisibility(app.View.Nodes))
-	builder.WriteString(androidJavaSchedulerActivityHost())
+	builder.WriteString(javaSchedulerActivityHost())
 	if len(app.Lifecycles) == 0 {
-		builder.WriteString(androidJavaSchedulerLifecycleStubs())
+		builder.WriteString(javaSchedulerLifecycleStubs())
 	} else {
 		builder.WriteString("    protected void schedulerDisposeLifecycles() {}\n\n")
 	}
@@ -183,7 +184,7 @@ func androidMainActivityFromContract(app contract.App, config androidTargetConfi
 func (renderer androidContractRenderer) renderBuildNodes(nodes []contract.Node, parent string, indent string, path []int) string {
 	var builder strings.Builder
 	for index, node := range nodes {
-		nodePath := append(cloneIntPath(path), index)
+		nodePath := append(shared.CloneIntPath(path), index)
 		builder.WriteString(renderer.renderBuildNode(node, parent, indent, nodePath))
 	}
 	return builder.String()
@@ -196,7 +197,7 @@ func (renderer androidContractRenderer) renderBuildNode(node contract.Node, pare
 	case "page":
 		return renderer.renderJavaContainer(node, parent, indent, path, key, name, "FrameLayout", "")
 	case "text", "#text":
-		value := quoteCodeString("")
+		value := shared.QuoteCodeString("")
 		if expr := strings.TrimSpace(node.Props["value"]); expr != "" {
 			value = androidJavaEvalStringExpr(expr)
 		}
@@ -204,7 +205,7 @@ func (renderer androidContractRenderer) renderBuildNode(node contract.Node, pare
 		builder.WriteString(indent + "TextView " + name + " = new TextView(this);\n")
 		builder.WriteString(indent + name + ".setText(" + value + ");\n")
 		builder.WriteString(renderer.renderStaticStyles(node, name, indent))
-		builder.WriteString(indent + "views.put(" + quoteCodeString(key) + ", " + name + ");\n")
+		builder.WriteString(indent + "views.put(" + shared.QuoteCodeString(key) + ", " + name + ");\n")
 		builder.WriteString(indent + parent + ".addView(" + name + ");\n")
 		return builder.String()
 	case "button":
@@ -225,11 +226,11 @@ func (renderer androidContractRenderer) renderBuildNode(node contract.Node, pare
 }
 
 func (renderer androidContractRenderer) renderJavaInput(node contract.Node, parent string, indent string, path []int, key string, name string, number bool) string {
-	value := quoteCodeString("")
+	value := shared.QuoteCodeString("")
 	if expr := strings.TrimSpace(node.Props["value"]); expr != "" {
 		value = androidJavaEvalStringExpr(expr)
 	}
-	hint := quoteCodeString("")
+	hint := shared.QuoteCodeString("")
 	if expr := strings.TrimSpace(node.Props["placeholder"]); expr != "" {
 		hint = androidJavaEvalStringExpr(expr)
 	}
@@ -250,12 +251,12 @@ func (renderer androidContractRenderer) renderJavaInput(node contract.Node, pare
 		builder.WriteString(indent + "    @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}\n")
 		builder.WriteString(indent + "    @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}\n")
 		builder.WriteString(indent + "    @Override public void afterTextChanged(Editable editable) {\n")
-		builder.WriteString(indent + "        dispatch(" + quoteCodeString(route.Name) + ", " + androidJavaContractEventArgs(route.Args, valueExpr) + ");\n")
+		builder.WriteString(indent + "        dispatch(" + shared.QuoteCodeString(route.Name) + ", " + androidJavaContractEventArgs(route.Args, valueExpr) + ");\n")
 		builder.WriteString(indent + "    }\n")
 		builder.WriteString(indent + "});\n")
 	}
 	builder.WriteString(renderer.renderStaticStyles(node, name, indent))
-	builder.WriteString(indent + "views.put(" + quoteCodeString(key) + ", " + name + ");\n")
+	builder.WriteString(indent + "views.put(" + shared.QuoteCodeString(key) + ", " + name + ");\n")
 	builder.WriteString(indent + parent + ".addView(" + name + ");\n")
 	return builder.String()
 }
@@ -267,7 +268,7 @@ func (renderer androidContractRenderer) renderJavaScroll(node contract.Node, par
 	builder.WriteString(indent + "LinearLayout " + contentName + " = new LinearLayout(this);\n")
 	builder.WriteString(indent + contentName + ".setOrientation(LinearLayout.VERTICAL);\n")
 	builder.WriteString(renderer.renderStaticStyles(node, name, indent))
-	builder.WriteString(indent + "views.put(" + quoteCodeString(key) + ", " + name + ");\n")
+	builder.WriteString(indent + "views.put(" + shared.QuoteCodeString(key) + ", " + name + ");\n")
 	builder.WriteString(indent + parent + ".addView(" + name + ");\n")
 	builder.WriteString(indent + name + ".addView(" + contentName + ");\n")
 	builder.WriteString(renderer.renderBuildNodes(node.Children, contentName, indent, path))
@@ -284,7 +285,7 @@ func (renderer androidContractRenderer) renderJavaContainer(node contract.Node, 
 		builder.WriteString(indent + name + ".setPadding(0, dp(4), 0, dp(4));\n")
 	}
 	builder.WriteString(renderer.renderStaticStyles(node, name, indent))
-	builder.WriteString(indent + "views.put(" + quoteCodeString(key) + ", " + name + ");\n")
+	builder.WriteString(indent + "views.put(" + shared.QuoteCodeString(key) + ", " + name + ");\n")
 	builder.WriteString(indent + parent + ".addView(" + name + ");\n")
 	builder.WriteString(renderer.renderBuildNodes(node.Children, name, indent, path))
 	return builder.String()
@@ -295,7 +296,7 @@ func (renderer androidContractRenderer) renderJavaRow(node contract.Node, parent
 	builder.WriteString(indent + "GridLayout " + name + " = new GridLayout(this);\n")
 	builder.WriteString(indent + name + ".setColumnCount(" + javaInt(androidContractRowColumnCount(node)) + ");\n")
 	builder.WriteString(renderer.renderStaticStyles(node, name, indent))
-	builder.WriteString(indent + "views.put(" + quoteCodeString(key) + ", " + name + ");\n")
+	builder.WriteString(indent + "views.put(" + shared.QuoteCodeString(key) + ", " + name + ");\n")
 	builder.WriteString(indent + parent + ".addView(" + name + ");\n")
 	builder.WriteString(renderer.renderBuildNodes(node.Children, name, indent, path))
 	return builder.String()
@@ -307,10 +308,10 @@ func (renderer androidContractRenderer) renderJavaButton(node contract.Node, par
 	builder.WriteString(indent + name + ".setAllCaps(false);\n")
 	builder.WriteString(indent + name + ".setText(" + androidContractButtonLabel(node) + ");\n")
 	if route, ok := node.Events["on_press"]; ok {
-		builder.WriteString(indent + name + ".setOnClickListener(view -> dispatch(" + quoteCodeString(route.Name) + ", " + androidJavaContractEventArgs(route.Args, "") + "));\n")
+		builder.WriteString(indent + name + ".setOnClickListener(view -> dispatch(" + shared.QuoteCodeString(route.Name) + ", " + androidJavaContractEventArgs(route.Args, "") + "));\n")
 	}
 	builder.WriteString(renderer.renderStaticStyles(node, name, indent))
-	builder.WriteString(indent + "views.put(" + quoteCodeString(key) + ", " + name + ");\n")
+	builder.WriteString(indent + "views.put(" + shared.QuoteCodeString(key) + ", " + name + ");\n")
 	builder.WriteString(indent + parent + ".addView(" + name + ");\n")
 	return builder.String()
 }
@@ -360,7 +361,7 @@ func (renderer androidContractRenderer) renderApplyBindings(nodes []contract.Nod
 		pathKey := androidPathKey(binding.At)
 		states := androidJavaStringList(binding.States)
 		builder.WriteString("        if (shouldApply(invalidations, " + states + ")) {\n")
-		builder.WriteString("            View target = views.get(" + quoteCodeString(pathKey) + ");\n")
+		builder.WriteString("            View target = views.get(" + shared.QuoteCodeString(pathKey) + ");\n")
 		builder.WriteString("            if (target != null) {\n")
 		switch {
 		case binding.Prop == "value" && (node.Kind == "text" || node.Kind == "#text"):
@@ -391,7 +392,7 @@ func (renderer androidContractRenderer) renderUpdatePageVisibility(nodes []contr
 
 func (renderer androidContractRenderer) appendPageVisibility(builder *strings.Builder, nodes []contract.Node, path []int) {
 	for index, node := range nodes {
-		nodePath := append(cloneIntPath(path), index)
+		nodePath := append(shared.CloneIntPath(path), index)
 		if node.Kind == "page" {
 			expr := strings.TrimSpace(node.Props["path"])
 			if expr == "" {
@@ -399,7 +400,7 @@ func (renderer androidContractRenderer) appendPageVisibility(builder *strings.Bu
 			}
 			key := androidPathKey(nodePath)
 			scoreVar := "pageScore" + androidJavaPathSuffix(nodePath)
-			builder.WriteString("        View page" + androidJavaPathSuffix(nodePath) + " = views.get(" + quoteCodeString(key) + ");\n")
+			builder.WriteString("        View page" + androidJavaPathSuffix(nodePath) + " = views.get(" + shared.QuoteCodeString(key) + ");\n")
 			builder.WriteString("        int " + scoreVar + " = routeMatchScore(textValue(" + androidJavaEvalValueExpr(expr) + "), activePath);\n")
 			builder.WriteString("        if (page" + androidJavaPathSuffix(nodePath) + " != null) page" + androidJavaPathSuffix(nodePath) + ".setVisibility(" + scoreVar + " >= 0 && " + scoreVar + " == selectedRouteScore ? View.VISIBLE : View.GONE);\n")
 		}
@@ -418,13 +419,13 @@ func androidContractButtonLabel(node contract.Node) string {
 	if expr := strings.TrimSpace(node.Props["label"]); expr != "" {
 		return androidJavaEvalStringExpr(expr)
 	}
-	return quoteCodeString("Button")
+	return shared.QuoteCodeString("Button")
 }
 
 func androidContractStateInitializers(states []contract.State) string {
 	var builder strings.Builder
 	for _, state := range states {
-		builder.WriteString("        state.put(" + quoteCodeString(state.Name) + ", " + androidJavaInitialValue(state.Initial) + ");\n")
+		builder.WriteString("        state.put(" + shared.QuoteCodeString(state.Name) + ", " + androidJavaInitialValue(state.Initial) + ");\n")
 	}
 	return builder.String()
 }
@@ -436,13 +437,13 @@ func androidContractTransitionTable(states []contract.State) string {
 	for _, state := range states {
 		for _, transition := range state.Transitions {
 			builder.WriteString("            new NovaTransition(")
-			builder.WriteString(quoteCodeString(state.Name))
+			builder.WriteString(shared.QuoteCodeString(state.Name))
 			builder.WriteString(", ")
-			builder.WriteString(quoteCodeString(transition.Event))
+			builder.WriteString(shared.QuoteCodeString(transition.Event))
 			builder.WriteString(", ")
 			builder.WriteString(androidJavaStringList(transition.Params))
 			builder.WriteString(", ")
-			builder.WriteString(quoteCodeString(transition.Expression))
+			builder.WriteString(shared.QuoteCodeString(transition.Expression))
 			builder.WriteString("),\n")
 		}
 	}
@@ -475,7 +476,7 @@ func androidContractPagePaths(view contract.View) []string {
 	return paths
 }
 
-func androidRoutesFromContract(view contract.View, config androidTargetConfig) string {
+func routesFromContract(view contract.View, config targetConfig) string {
 	paths := androidContractPagePaths(view)
 	if len(paths) == 0 {
 		paths = []string{"/"}
@@ -493,14 +494,14 @@ func androidRoutesFromContract(view contract.View, config androidTargetConfig) s
 		builder.WriteString("    public static final String ")
 		builder.WriteString(strings.ToUpper(name))
 		builder.WriteString(" = ")
-		builder.WriteString(quoteCodeString(path))
+		builder.WriteString(shared.QuoteCodeString(path))
 		builder.WriteString(";\n")
 	}
 	builder.WriteString("}\n")
 	return builder.String()
 }
 
-func androidAppFromContract(name string, app contract.App, config androidTargetConfig) string {
+func appFromContract(name string, app contract.App, config targetConfig) string {
 	if strings.TrimSpace(name) == "" {
 		name = "NovaApp"
 	}
@@ -508,9 +509,9 @@ func androidAppFromContract(name string, app contract.App, config androidTargetC
 	return "package " + config.Namespace + ";\n\n" +
 		"public final class NovaApp {\n" +
 		"    public static final int CONTRACT_VERSION = " + strconv.Itoa(app.V) + ";\n" +
-		"    public final String name = " + quoteCodeString(name) + ";\n" +
-		"    public final String target = " + quoteCodeString(app.Target) + ";\n" +
-		"    public final String entry = " + quoteCodeString(app.Entry) + ";\n" +
+		"    public final String name = " + shared.QuoteCodeString(name) + ";\n" +
+		"    public final String target = " + shared.QuoteCodeString(app.Target) + ";\n" +
+		"    public final String entry = " + shared.QuoteCodeString(app.Entry) + ";\n" +
 		"    public final java.util.List<String> permissions = " + perms + ";\n" +
 		"    private NovaApp() {}\n" +
 		"}\n"
@@ -541,11 +542,11 @@ func staticStringFromJSExpr(expr string) (string, bool) {
 }
 
 func androidJavaEvalStringExpr(jsExpr string) string {
-	return "textValue(evaluate(" + quoteCodeString(jsExpr) + ", state, Collections.emptyMap()))"
+	return "textValue(evaluate(" + shared.QuoteCodeString(jsExpr) + ", state, Collections.emptyMap()))"
 }
 
 func androidJavaEvalValueExpr(jsExpr string) string {
-	return "evaluate(" + quoteCodeString(jsExpr) + ", state, Collections.emptyMap())"
+	return "evaluate(" + shared.QuoteCodeString(jsExpr) + ", state, Collections.emptyMap())"
 }
 
 func androidJavaContractEventArgs(args []string, implicitValueExpr string) string {
@@ -612,7 +613,7 @@ func androidContractLifecycleHooks(app contract.App, hydration storageHydrationC
 		for _, transition := range state.Transitions {
 			builder.WriteString("        if (\"" + transition.Event + "\".equals(eventName)) {\n")
 			for index, param := range transition.Params {
-				builder.WriteString("            payload.put(" + quoteCodeString(param) + ", ")
+				builder.WriteString("            payload.put(" + shared.QuoteCodeString(param) + ", ")
 				builder.WriteString("args.size() > " + strconv.Itoa(index) + " ? args.get(" + strconv.Itoa(index) + ") : null);\n")
 			}
 			builder.WriteString("        }\n")
@@ -630,17 +631,17 @@ func androidContractLifecycleHooks(app contract.App, hydration storageHydrationC
 		builder.WriteString(") {\n")
 		for _, step := range lifecycle.Steps {
 			if step.Emit != nil {
-				builder.WriteString("            scheduler.enqueueLifecycle(" + quoteCodeString(lifecycle.Owner) + ", ")
-				builder.WriteString(quoteCodeString(step.Emit.Name) + ", ")
+				builder.WriteString("            scheduler.enqueueLifecycle(" + shared.QuoteCodeString(lifecycle.Owner) + ", ")
+				builder.WriteString(shared.QuoteCodeString(step.Emit.Name) + ", ")
 				builder.WriteString(androidJavaContractLifecycleEventArgs(step.Emit.Args) + ");\n")
 				continue
 			}
 			if step.External != nil {
-				builder.WriteString("            invokeExternal(" + quoteCodeString(lifecycle.Owner) + ", ")
-				builder.WriteString(quoteCodeString(step.External.EffectID) + ", ")
+				builder.WriteString("            invokeExternal(" + shared.QuoteCodeString(lifecycle.Owner) + ", ")
+				builder.WriteString(shared.QuoteCodeString(step.External.EffectID) + ", ")
 				builder.WriteString(androidJavaExternalInputMap(step.External.Input) + ", ")
-				builder.WriteString(quoteCodeString(step.External.OnSuccess) + ", ")
-				builder.WriteString(quoteCodeString(step.External.OnFailure) + ");\n")
+				builder.WriteString(shared.QuoteCodeString(step.External.OnSuccess) + ", ")
+				builder.WriteString(shared.QuoteCodeString(step.External.OnFailure) + ");\n")
 			}
 		}
 		builder.WriteString("        }\n")
@@ -662,7 +663,7 @@ func androidContractLifecycleHooks(app contract.App, hydration storageHydrationC
 }
 
 func androidJavaEvalLifecycleExpr(jsExpr string) string {
-	return "evaluate(" + quoteCodeString(jsExpr) + ", snapshot, payload)"
+	return "evaluate(" + shared.QuoteCodeString(jsExpr) + ", snapshot, payload)"
 }
 
 func androidJavaContractLifecycleEventArgs(args []string) string {
@@ -687,7 +688,7 @@ func androidJavaExternalInputMap(input map[string]string) string {
 	sort.Strings(names)
 	pairs := make([]string, 0, len(names))
 	for _, name := range names {
-		pairs = append(pairs, "entry("+quoteCodeString(name)+", "+androidJavaEvalLifecycleExpr(input[name])+")")
+		pairs = append(pairs, "entry("+shared.QuoteCodeString(name)+", "+androidJavaEvalLifecycleExpr(input[name])+")")
 	}
 	return "record(" + strings.Join(pairs, ", ") + ")"
 }

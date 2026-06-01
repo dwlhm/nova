@@ -78,6 +78,7 @@ Core (target-neutral)
 
 Provider (target-specific)
   internal/provider/build, internal/provider/target, internal/provider/artifact
+  internal/provider/shared, internal/provider/web, internal/provider/android
   internal/provider/standard
 
 Dev helpers
@@ -111,7 +112,10 @@ mengambil dependency ke CLI, bundler, atau filesystem host.
 | `internal/core/view` | Projection template menjadi ViewIR dan dependency metadata. |
 | `internal/core/contract` | Kontrak runtime bundle (`App` v1, `BuildManifest`). |
 | `internal/core/capability` | Manifest capability dari source/parser contract. |
-| `internal/provider/artifact` | Generate file web/android dari build plan dan IR, tanpa menulis disk. |
+| `internal/provider/shared` | Tipe input codegen, manifest, CSS scoping, dan helper generik lintas target. |
+| `internal/provider/web` | Codegen artifact web (sandboxed; tidak mengimpor `android`). |
+| `internal/provider/android` | Codegen artifact Android (sandboxed; tidak mengimpor `web`). |
+| `internal/provider/artifact` | Fasad tipis: delegasi `Generate` ke `web` atau `android` berdasarkan target. |
 | `internal/provider/standard` | Katalog built-in `@nova/ui` dan merge primitive renderer (ADR-010, ADR-005). |
 | `internal/bundler` | Validasi artifact target, manifest bundle, Gradle/process execution. |
 | `internal/dev` | Planning dev cycle yang pure dan mudah diuji. |

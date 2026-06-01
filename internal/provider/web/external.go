@@ -1,4 +1,4 @@
-package artifact
+package web
 
 import (
 	"sort"
@@ -7,14 +7,14 @@ import (
 	"github.com/dwlhm/nova/internal/provider/build"
 )
 
-type webExternalAdapterBundle struct {
+type externalAdapterBundle struct {
 	Enabled bool
 	Content string
 }
 
-func webExternalAdapters(operations []build.ResolvedExternalOperation, overrides map[string]string) webExternalAdapterBundle {
+func externalAdapters(operations []build.ResolvedExternalOperation, overrides map[string]string) externalAdapterBundle {
 	if len(operations) == 0 {
-		return webExternalAdapterBundle{}
+		return externalAdapterBundle{}
 	}
 	paths := make([]string, 0, len(operations))
 	seen := make(map[string]bool)
@@ -28,7 +28,7 @@ func webExternalAdapters(operations []build.ResolvedExternalOperation, overrides
 	}
 	sort.Strings(paths)
 	if len(paths) == 0 {
-		return webExternalAdapterBundle{}
+		return externalAdapterBundle{}
 	}
 	var builder strings.Builder
 	builder.WriteString(`"use strict";
@@ -78,19 +78,19 @@ window.NovaExternal = window.NovaExternal || (() => {
 
 `)
 	for _, path := range paths {
-		content, ok := webAdapterContent(path, overrides)
+		content, ok := adapterContent(path, overrides)
 		if !ok || strings.TrimSpace(content) == "" {
 			continue
 		}
 		builder.WriteString("\n// " + path + "\n")
 		builder.WriteString("(function(NovaExternal) {\n")
-		builder.WriteString(rewriteWebRegisterModule(content))
+		builder.WriteString(rewriteRegisterModule(content))
 		builder.WriteString("\nif (typeof register === \"function\") register(NovaExternal);\n")
 		builder.WriteString("})(window.NovaExternal);\n")
 	}
 	body := builder.String()
 	if !strings.Contains(body, "register(NovaExternal)") {
-		return webExternalAdapterBundle{}
+		return externalAdapterBundle{}
 	}
-	return webExternalAdapterBundle{Enabled: true, Content: body}
+	return externalAdapterBundle{Enabled: true, Content: body}
 }
