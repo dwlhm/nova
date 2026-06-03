@@ -55,6 +55,10 @@ Semantic ViewIR dan event route tidak berubah per strategi delivery.
 Style lewat manifest build / metadata artifact (token, file path). Injection ke renderer di
 provider; tidak hardcode path platform di core.
 
+Portable authoring: [ADR-012](adr_012_style_format.md) — `.nova-style` via `<import style>`,
+web-only `.css` via `<import stylesheet>`, one scope per file, discovery from module graph (not
+`nova.toml`). Author guide: [style-format.md](../style-format.md).
+
 ### Primitive & extension
 
 Primitive bawaan: `@nova/ui`, `@nova/web`, `@nova/android` (ADR-010). Extension primitive

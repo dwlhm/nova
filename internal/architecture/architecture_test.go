@@ -112,6 +112,26 @@ func TestProviderTargetsStaySandboxed(t *testing.T) {
 			if imports[modulePath+"/internal/provider/web"] {
 				failures = append(failures, importer+" imports internal/provider/web")
 			}
+		case "internal/provider/capability/view/external":
+			if imports[modulePath+"/internal/provider/android"] || imports[modulePath+"/internal/provider/web"] {
+				failures = append(failures, importer+" imports target package")
+			}
+		case "internal/provider/capability/view/external/runtime":
+			if imports[modulePath+"/internal/provider/android"] || imports[modulePath+"/internal/provider/web"] {
+				failures = append(failures, importer+" imports legacy target package")
+			}
+		case "internal/provider/capability/view/external/style":
+			if imports[modulePath+"/internal/provider/android"] || imports[modulePath+"/internal/provider/web"] {
+				failures = append(failures, importer+" imports target package")
+			}
+		case "internal/provider/capability/view/android":
+			if imports[modulePath+"/internal/provider/web"] {
+				failures = append(failures, importer+" imports internal/provider/web")
+			}
+		case "internal/provider/capability/view/web":
+			if imports[modulePath+"/internal/provider/android"] {
+				failures = append(failures, importer+" imports internal/provider/android")
+			}
 		}
 	}
 
@@ -157,6 +177,13 @@ func allowedInternalImports() map[string]map[string]bool {
 			"internal/core/plan",
 			"internal/core/semantic",
 			"internal/core/security",
+			"internal/core/style",
+		),
+		"internal/core/style": set(
+			"internal/core/ast",
+			"internal/core/lexer",
+			"internal/core/plan",
+			"internal/core/view",
 		),
 		"internal/core/lexer": set(),
 		"internal/core/parser": set(
@@ -213,13 +240,212 @@ func allowedInternalImports() map[string]map[string]bool {
 			"internal/core/contract",
 			"internal/core/diagnostic",
 			"internal/core/ir",
+			"internal/core/style",
 			"internal/project",
 			"internal/core/security",
 			"internal/provider/build",
 			"internal/provider/target",
 		),
+		"internal/provider/capability/view/codegen/android": set(
+			"internal/core/contract",
+			"internal/core/routing",
+			"internal/core/style",
+			"internal/provider/build",
+			"internal/provider/capability/view/target/android",
+			"internal/provider/shared",
+		),
+		"internal/provider/capability/view/codegen/web": set(
+			"internal/core/contract",
+			"internal/provider/shared",
+		),
+		"internal/provider/capability/view/target/android": set(
+			"internal/core/diagnostic",
+			"internal/project",
+			"internal/provider/shared",
+		),
+		"internal/provider/capability/view/hostctx": set(
+			"internal/provider/capability/view/codegen/android",
+			"internal/provider/capability/view/target/android",
+			"internal/provider/shared",
+		),
+		"internal/provider/capability/view/ir/android": set(
+			"internal/core/contract",
+		),
+		"internal/provider/capability/view/ir/web": set(
+			"internal/core/contract",
+		),
+		"internal/provider/capability/view/registry/android": set(
+			"internal/core/contract",
+			"internal/provider/capability/view/codegen/android",
+			"internal/provider/capability/view/hostctx",
+			"internal/provider/capability/view/ir/android",
+			"internal/provider/shared",
+		),
+		"internal/provider/capability/view/registry/web": set(
+			"internal/core/contract",
+			"internal/provider/capability/view/hostctx",
+			"internal/provider/capability/view/ir/web",
+			"internal/provider/shared",
+		),
+		"internal/provider/capability/view/external": set(
+			"internal/provider/capability/view/hostctx",
+			"internal/provider/capability/view/registry/android",
+			"internal/provider/capability/view/registry/web",
+			"internal/provider/shared",
+		),
+		"internal/provider/capability/view/external/primitive": set(
+			"internal/core/contract",
+			"internal/provider/capability/view/codegen/android",
+			"internal/provider/capability/view/external",
+			"internal/provider/capability/view/hostctx",
+			"internal/provider/capability/view/ir/android",
+			"internal/provider/capability/view/registry/android",
+			"internal/provider/shared",
+		),
+		"internal/provider/capability/view/external/runtime": set(
+			"internal/provider/capability/view/codegen/android",
+			"internal/provider/capability/view/codegen/web",
+			"internal/provider/capability/view/external",
+			"internal/provider/capability/view/hostctx",
+			"internal/provider/capability/view/registry/android",
+			"internal/provider/capability/view/registry/web",
+			"internal/provider/shared",
+		),
+		"internal/provider/capability/view/external/style": set(
+			"internal/core/style",
+			"internal/provider/capability/view/external",
+			"internal/provider/capability/view/hostctx",
+			"internal/provider/capability/view/registry/android",
+			"internal/provider/capability/view/registry/web",
+			"internal/provider/capability/view/target/android",
+			"internal/provider/shared",
+		),
+		"internal/provider/capability/view/external/text": set(
+			"internal/core/contract",
+			"internal/provider/capability/view/codegen/android",
+			"internal/provider/capability/view/external",
+			"internal/provider/capability/view/external/primitive",
+			"internal/provider/capability/view/registry/android",
+			"internal/provider/capability/view/registry/web",
+			"internal/provider/shared",
+		),
+		"internal/provider/capability/view/external/button": set(
+			"internal/core/contract",
+			"internal/provider/capability/view/codegen/android",
+			"internal/provider/capability/view/external",
+			"internal/provider/capability/view/external/primitive",
+			"internal/provider/capability/view/registry/android",
+			"internal/provider/capability/view/registry/web",
+			"internal/provider/shared",
+		),
+		"internal/provider/capability/view/external/page": set(
+			"internal/core/contract",
+			"internal/provider/capability/view/codegen/android",
+			"internal/provider/capability/view/external",
+			"internal/provider/capability/view/external/primitive",
+			"internal/provider/capability/view/registry/android",
+			"internal/provider/capability/view/registry/web",
+			"internal/provider/shared",
+		),
+		"internal/provider/capability/view/external/row": set(
+			"internal/core/contract",
+			"internal/provider/capability/view/codegen/android",
+			"internal/provider/capability/view/external",
+			"internal/provider/capability/view/external/primitive",
+			"internal/provider/capability/view/registry/android",
+			"internal/provider/capability/view/registry/web",
+			"internal/provider/shared",
+		),
+		"internal/provider/capability/view/external/scroll": set(
+			"internal/core/contract",
+			"internal/provider/capability/view/codegen/android",
+			"internal/provider/capability/view/external",
+			"internal/provider/capability/view/external/primitive",
+			"internal/provider/capability/view/registry/android",
+			"internal/provider/capability/view/registry/web",
+			"internal/provider/shared",
+		),
+		"internal/provider/capability/view/external/stack": set(
+			"internal/core/contract",
+			"internal/provider/capability/view/codegen/android",
+			"internal/provider/capability/view/external",
+			"internal/provider/capability/view/external/primitive",
+			"internal/provider/capability/view/registry/android",
+			"internal/provider/capability/view/registry/web",
+			"internal/provider/shared",
+		),
+		"internal/provider/capability/view/external/surface": set(
+			"internal/core/contract",
+			"internal/provider/capability/view/codegen/android",
+			"internal/provider/capability/view/external",
+			"internal/provider/capability/view/external/primitive",
+			"internal/provider/capability/view/registry/android",
+			"internal/provider/capability/view/registry/web",
+			"internal/provider/shared",
+		),
+		"internal/provider/capability/view/external/column": set(
+			"internal/core/contract",
+			"internal/provider/capability/view/codegen/android",
+			"internal/provider/capability/view/external",
+			"internal/provider/capability/view/external/primitive",
+			"internal/provider/capability/view/registry/android",
+			"internal/provider/capability/view/registry/web",
+			"internal/provider/shared",
+		),
+		"internal/provider/capability/view/external/text_input": set(
+			"internal/core/contract",
+			"internal/provider/capability/view/codegen/android",
+			"internal/provider/capability/view/external",
+			"internal/provider/capability/view/external/primitive",
+			"internal/provider/capability/view/registry/android",
+			"internal/provider/capability/view/registry/web",
+			"internal/provider/shared",
+		),
+		"internal/provider/capability/view/external/number_input": set(
+			"internal/core/contract",
+			"internal/provider/capability/view/codegen/android",
+			"internal/provider/capability/view/external",
+			"internal/provider/capability/view/external/primitive",
+			"internal/provider/capability/view/hostctx",
+			"internal/provider/capability/view/ir/android",
+			"internal/provider/capability/view/registry/android",
+			"internal/provider/capability/view/registry/web",
+			"internal/provider/shared",
+		),
+		"internal/provider/capability/view/internal": set(
+			"internal/provider/capability/view/codegen/android",
+			"internal/provider/capability/view/external",
+			"internal/provider/capability/view/external/button",
+			"internal/provider/capability/view/external/column",
+			"internal/provider/capability/view/external/number_input",
+			"internal/provider/capability/view/external/page",
+			"internal/provider/capability/view/external/row",
+			"internal/provider/capability/view/external/runtime",
+			"internal/provider/capability/view/external/scroll",
+			"internal/provider/capability/view/external/stack",
+			"internal/provider/capability/view/external/style",
+			"internal/provider/capability/view/external/surface",
+			"internal/provider/capability/view/external/text",
+			"internal/provider/capability/view/external/text_input",
+			"internal/provider/capability/view/hostctx",
+			"internal/provider/capability/view/registry/android",
+			"internal/provider/capability/view/registry/web",
+			"internal/provider/capability/view/target/android",
+			"internal/provider/shared",
+		),
+		"internal/provider/capability/view/android": set(
+			"internal/provider/capability/view/internal",
+			"internal/provider/shared",
+		),
+		"internal/provider/capability/view/web": set(
+			"internal/provider/capability/view/internal",
+			"internal/provider/shared",
+		),
 		"internal/provider/web": set(
 			"internal/provider/build",
+			"internal/core/style",
+			"internal/provider/capability/view/external/style",
+			"internal/provider/capability/view/web",
 			"internal/provider/shared",
 			"internal/provider/standard",
 			"internal/provider/target",
@@ -228,12 +454,10 @@ func allowedInternalImports() map[string]map[string]bool {
 		),
 		"internal/provider/android": set(
 			"internal/provider/build",
-			"internal/core/contract",
+			"internal/provider/capability/view/android",
 			"internal/core/diagnostic",
-			"internal/core/ir",
-			"internal/project",
-			"internal/core/routing",
 			"internal/core/security",
+			"internal/project",
 			"internal/provider/shared",
 			"internal/provider/standard",
 			"internal/provider/target",
@@ -274,6 +498,7 @@ func allowedInternalImports() map[string]map[string]bool {
 			"internal/core/diagnostic",
 			"internal/core/format",
 			"internal/core/ir",
+			"internal/core/style",
 			"internal/lsp",
 			"internal/packageio",
 			"internal/packages",

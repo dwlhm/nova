@@ -1,0 +1,522 @@
+scope: app
+
+token color.ink = #172033
+token color.ink-strong = #101828
+token color.muted = #536071
+token color.border = #d9e1ea
+token color.canvas = #f6f8fb
+token color.surface = #ffffff
+token color.hero = #172033
+token color.hero-alt = #263447
+token color.hero-border = #223248
+token color.hero-muted = #41546d
+token color.hero-text = #ffffff
+token color.hero-copy = #d8e1ec
+token color.hero-eyebrow = #8fd5c7
+token color.hero-label = #aab8ca
+token color.accent = #2e6f64
+token color.income = #38a169
+token color.income-soft = #eef9f1
+token color.income-border = #93c9a2
+token color.expense = #e04f44
+token color.expense-soft = #fff1f0
+token color.expense-border = #eca19b
+token color.transfer = #4776d0
+token color.transfer-soft = #eef4ff
+token color.transfer-border = #8aa7df
+token color.fee-soft = #fff8df
+token color.fee-border = #e5c26f
+token color.field-bg = #fbfcfe
+token color.export-bg = #101828
+token color.export-text = #e6edf7
+
+class finance-shell {
+  padding: 10
+  border: 1 color.border
+  border-radius: 8
+  background: color.canvas
+  min-height: 48
+}
+
+class tab-bar {
+  padding: 6
+  border: 1 color.border
+  border-radius: 8
+  background: color.surface
+}
+
+class tab-button {
+  min-height: 46
+  padding: 10 12
+  border: 1 #cfd8e3
+  border-radius: 8
+  background: color.surface
+  color: color.ink
+  font-size: 14sp
+  font-weight: 800
+}
+
+state tab-button active {
+  background: color.transfer-soft
+  border-color: color.transfer-border
+}
+
+class page-scroll {
+  min-height: 48
+}
+
+class page-stack {
+  padding: 0
+}
+
+class summary-panel {
+  padding: 16
+  border: 1 color.hero-border
+  border-radius: 8
+  background: color.hero
+}
+
+class history-head {
+  padding: 16
+  border: 1 color.hero-border
+  border-radius: 8
+  background: color.hero-alt
+}
+
+class summary-head {
+  padding: 0
+}
+
+class export-head {
+  padding: 0
+}
+
+class eyebrow {
+  color: color.hero-eyebrow
+  font-size: 12sp
+  font-weight: 800
+  text-transform: uppercase
+}
+
+class summary-title {
+  color: color.hero-text
+  font-size: 30sp
+  font-weight: 800
+}
+
+class history-title {
+  color: color.hero-text
+  font-size: 30sp
+  font-weight: 800
+}
+
+class summary-copy {
+  color: color.hero-copy
+  font-size: 14sp
+  line-height: 1.45
+}
+
+class count-pill {
+  padding: 10
+  border: 1 color.hero-muted
+  border-radius: 8
+  background: color.hero-border
+  min-height: 48
+}
+
+class count-value {
+  color: color.hero-text
+  font-size: 22sp
+  font-weight: 800
+  text-align: center
+}
+
+class count-label {
+  color: color.hero-label
+  font-size: 12sp
+  font-weight: 800
+  text-align: center
+}
+
+class stat-grid {
+  padding: 0
+}
+
+class stat-card {
+  padding: 13
+  border: 1 color.border
+  border-radius: 8
+  background: color.surface
+}
+
+class stat-income {
+  border-color: color.income-border
+  background: color.income-soft
+}
+
+class stat-expense {
+  border-color: color.expense-border
+  background: color.expense-soft
+}
+
+class stat-fee {
+  border-color: color.fee-border
+  background: color.fee-soft
+}
+
+class stat-label {
+  color: #344054
+  font-size: 12sp
+  font-weight: 800
+  text-transform: uppercase
+}
+
+class stat-value {
+  color: color.ink-strong
+  font-size: 17sp
+  font-weight: 800
+}
+
+class form-section {
+  padding: 13
+  border: 1 color.border
+  border-radius: 8
+  background: color.surface
+}
+
+class filter-section {
+  padding: 13
+  border: 1 color.border
+  border-radius: 8
+  background: color.surface
+}
+
+class chart-panel {
+  padding: 13
+  border: 1 color.border
+  border-radius: 8
+  background: color.surface
+}
+
+class section-title {
+  color: #344054
+  font-size: 12sp
+  font-weight: 800
+  text-transform: uppercase
+}
+
+class form-hint {
+  color: color.muted
+  font-size: 13sp
+  line-height: 1.45
+}
+
+class segmented-row {
+  padding: 0
+}
+
+class filter-row {
+  padding: 0
+}
+
+class two-field-grid {
+  padding: 0
+}
+
+class type-button {
+  min-height: 46
+  padding: 10 12
+  border: 1 #cfd8e3
+  border-radius: 8
+  background: color.surface
+  color: color.ink
+  font-size: 14sp
+  font-weight: 800
+}
+
+class filter-button {
+  min-height: 46
+  padding: 10 12
+  border: 1 #cfd8e3
+  border-radius: 8
+  background: color.surface
+  color: color.ink
+  font-size: 14sp
+  font-weight: 800
+}
+
+class save-button {
+  min-height: 46
+  padding: 10 12
+  border: 1 #cfd8e3
+  border-radius: 8
+  background: color.surface
+  color: color.ink
+  font-size: 14sp
+  font-weight: 800
+}
+
+state type-button active {
+  border-width: 2
+}
+
+state filter-button active {
+  background: color.transfer-soft
+  border-color: color.transfer-border
+}
+
+class expense-action {
+  border-color: #e88d84
+  background: color.expense-soft
+}
+
+class income-action {
+  border-color: #83bd92
+  background: color.income-soft
+}
+
+class transfer-action {
+  border-color: color.transfer-border
+  background: color.transfer-soft
+}
+
+class amount-field {
+  min-height: 58
+  padding: 11 12
+  border: 1 #cfd8e3
+  border-radius: 8
+  background: color.field-bg
+  color: color.ink-strong
+  font-size: 24sp
+  font-weight: 800
+}
+
+class edit-field {
+  min-height: 48
+  padding: 11 12
+  border: 1 #cfd8e3
+  border-radius: 8
+  background: color.field-bg
+  color: color.ink
+  font-size: 15sp
+}
+
+class pie-chart {
+  min-height: 56
+  padding: 0
+}
+
+class pie-segment {
+  min-height: 56
+  border-radius: 8
+  align-content: center
+}
+
+class pie-income {
+  background: color.income
+}
+
+class pie-expense {
+  background: color.expense
+}
+
+class pie-transfer {
+  background: color.transfer
+}
+
+class pie-segment-label {
+  color: color.hero-text
+  font-size: 12sp
+  font-weight: 800
+  text-align: center
+}
+
+class pie-legend {
+  padding: 4 0 0 0
+}
+
+class legend-item {
+  font-size: 12sp
+  font-weight: 800
+}
+
+class legend-income {
+  color: #2f855a
+}
+
+class legend-expense {
+  color: #c53030
+}
+
+class legend-transfer {
+  color: #2b6cb0
+}
+
+class bar-chart {
+  min-height: 180
+  padding: 0
+  align-content: center
+}
+
+class bar-column {
+  padding: 0
+}
+
+class bar-track {
+  min-height: 120
+  padding: 8
+  border: 1 color.border
+  border-radius: 8
+  background: #f7f9fc
+  align-content: center
+}
+
+class bar-fill {
+  min-height: 4
+  border-radius: 6
+  background: #e2e8f0
+}
+
+class bar-h-0 {
+  min-height: 4
+  background: #e2e8f0
+}
+
+class bar-h-5 {
+  min-height: 12
+  background: #94a3b8
+}
+
+class bar-h-10 {
+  min-height: 24
+  background: color.income
+}
+
+class bar-h-20 {
+  min-height: 36
+  background: color.income
+}
+
+class bar-h-30 {
+  min-height: 48
+  background: color.income
+}
+
+class bar-h-40 {
+  min-height: 60
+  background: color.income
+}
+
+class bar-h-50 {
+  min-height: 72
+  background: color.income
+}
+
+class bar-h-60 {
+  min-height: 84
+  background: color.income
+}
+
+class bar-h-70 {
+  min-height: 96
+  background: color.income
+}
+
+class bar-h-80 {
+  min-height: 108
+  background: color.income
+}
+
+class bar-h-90 {
+  min-height: 120
+  background: color.income
+}
+
+class bar-visual {
+  color: #334155
+  font-size: 16sp
+  font-weight: 800
+  text-align: center
+}
+
+class bar-caption {
+  color: color.muted
+  font-size: 12sp
+  font-weight: 800
+  text-align: center
+}
+
+class bar-value {
+  color: color.ink
+  font-size: 13sp
+  font-weight: 800
+  text-align: center
+}
+
+class pie-w-0 {
+  min-height: 56
+}
+
+class pie-w-5 {
+  min-height: 56
+}
+
+class pie-w-10 {
+  min-height: 56
+}
+
+class pie-w-20 {
+  min-height: 56
+}
+
+class pie-w-33 {
+  min-height: 56
+}
+
+class pie-w-66 {
+  min-height: 56
+}
+
+class transaction-list {
+  padding: 0
+}
+
+class transaction-card {
+  padding: 13
+  border: 1 color.border
+  border-radius: 8
+  background: color.surface
+  border-color: color.transfer-border
+}
+
+class transaction-text {
+  color: color.ink
+  font-size: 14sp
+  line-height: 1.45
+}
+
+class export-panel {
+  padding: 13
+  border: 1 color.border
+  border-radius: 8
+  background: color.surface
+}
+
+class export-badge {
+  padding: 6 8
+  border: 1 #cfd8e3
+  border-radius: 8
+  background: color.canvas
+  color: color.muted
+  font-size: 12sp
+  font-weight: 800
+}
+
+class json-output {
+  padding: 12
+  border-radius: 8
+  background: color.export-bg
+  color: color.export-text
+  font-size: 12sp
+  line-height: 1.45
+}

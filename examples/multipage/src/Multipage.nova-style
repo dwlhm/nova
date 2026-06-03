@@ -1,0 +1,26 @@
+scope: app
+
+class multipage-shell {
+  padding: 12
+}
+
+class multipage-page {
+  padding: 28
+  border: 1 #dfe5ef
+  border-radius: 8
+  background: #fbfcfe
+  min-height: 260
+}
+
+class multipage-title {
+  color: #151923
+  font-size: 34sp
+  font-weight: 800
+}
+
+class multipage-eyebrow {
+  color: #2e6f64
+  font-size: 13sp
+  font-weight: 800
+  text-transform: uppercase
+}

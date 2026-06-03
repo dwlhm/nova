@@ -8,6 +8,7 @@ Dokumen ini adalah peta kerja untuk implementasi Go Nova.
 | [language-design.md](language-design.md) | Prinsip bahasa ringkas (normatif untuk `.nova`) |
 | [adr/README.md](adr/README.md) | Indeks ADR & jalur baca per topik |
 | [contract.md](contract.md) | Kontrak runtime bundle (`App` v1) |
+| [style-format.md](style-format.md) | Penulisan `.nova-style` portable (author) |
 
 **Mulai baca:** [language-design.md](language-design.md) → [adr_000](adr/adr_000_production_baseline.md) →
 [adr/README.md](adr/README.md) (indeks ADR 000–011).
@@ -75,6 +76,7 @@ Core (target-neutral)
   internal/core/view, internal/core/capability, internal/core/contract, internal/core/ir
   internal/core/routing, internal/core/security, internal/core/scheduler, internal/core/effect
   internal/core/app, internal/core/persistence, internal/core/diagnostic, internal/core/format
+  internal/core/style
 
 Provider (target-specific)
   internal/provider/build, internal/provider/target, internal/provider/artifact
@@ -112,7 +114,8 @@ mengambil dependency ke CLI, bundler, atau filesystem host.
 | `internal/core/view` | Projection template menjadi ViewIR dan dependency metadata. |
 | `internal/core/contract` | Kontrak runtime bundle (`App` v1, `BuildManifest`). |
 | `internal/core/capability` | Manifest capability dari source/parser contract. |
-| `internal/provider/shared` | Tipe input codegen, manifest, CSS scoping, dan helper generik lintas target. |
+| `internal/core/style` | Parse `.nova-style`, StyleSheet IR, validasi portable (target); koleksi import dari module graph. |
+| `internal/provider/shared` | Tipe input codegen, manifest, CSS scoping, helper generik lintas target. |
 | `internal/provider/web` | Codegen artifact web (sandboxed; tidak mengimpor `android`). |
 | `internal/provider/android` | Codegen artifact Android (sandboxed; tidak mengimpor `web`). |
 | `internal/provider/artifact` | Fasad tipis: delegasi `Generate` ke `web` atau `android` berdasarkan target. |

@@ -1,4 +1,4 @@
-package android
+package androidcodegen
 
 import (
 	"github.com/dwlhm/nova/internal/provider/shared"

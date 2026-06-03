@@ -27,20 +27,16 @@ storage.write = false
 `
 
 	manifest, diagnostics := ParseManifest(input)
-	if len(diagnostics) != 0 {
-		t.Fatalf("unexpected diagnostics: %+v", diagnostics)
-	}
 	if manifest.Project.Name != "audiolab" || manifest.Project.Version != "0.1.0" || manifest.Project.Entry != "src/App.nova" {
 		t.Fatalf("unexpected project metadata: %+v", manifest.Project)
 	}
 	if manifest.Targets["web"].Renderer != "@nova/web" {
 		t.Fatalf("web renderer = %q, want @nova/web", manifest.Targets["web"].Renderer)
 	}
-	if got := manifest.Targets["web"].Styles; len(got) != 2 || got[0] != "src/global.css" || got[1] != "src/counter.css" {
-		t.Fatalf("web styles = %+v, want global/counter css", got)
-	}
-	if got := manifest.Targets["web"].ScopedStyles; len(got) != 1 || got[0] != "src/App.css" {
-		t.Fatalf("web scoped styles = %+v, want App.css", got)
+	assertProjectDiagnostic(t, diagnostics, "styles is removed")
+	assertProjectDiagnostic(t, diagnostics, "scoped_styles is removed")
+	if len(manifest.Targets["web"].Styles) != 0 || len(manifest.Targets["web"].ScopedStyles) != 0 {
+		t.Fatalf("legacy style lists should not be populated: %+v", manifest.Targets["web"])
 	}
 	if got := manifest.Targets["android"].Options["application_id"]; got != "dev.example.audiolab" {
 		t.Fatalf("android application_id = %q, want dev.example.audiolab", got)

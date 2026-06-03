@@ -9,11 +9,9 @@ write = true
 
 [targets.web]
 renderer = "@nova/web"
-styles = ["src/Finance.css"]
 
 [targets.android]
 renderer = "@nova/android"
-styles = ["src/Finance.css"]
 application_id = "dev.nova.example.finance"
 namespace = "nova.generated.finance"
 compile_sdk = 35

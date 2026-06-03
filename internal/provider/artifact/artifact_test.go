@@ -9,6 +9,7 @@ import (
 	"github.com/dwlhm/nova/internal/core/ir"
 	"github.com/dwlhm/nova/internal/core/lexer"
 	"github.com/dwlhm/nova/internal/core/parser"
+	"github.com/dwlhm/nova/internal/core/style"
 	"github.com/dwlhm/nova/internal/packages"
 	"github.com/dwlhm/nova/internal/project"
 	"github.com/dwlhm/nova/internal/provider/build"
@@ -47,8 +48,12 @@ func TestGenerateWebArtifactIncludesRuntimeViewIRAndMetadata(t *testing.T) {
 
 	sources := []build.SourceFile{{Path: "src/App.nova", File: source}}
 	input, _ := testGenerateInput(t, manifest, plan.Plan, sources, targetManifest)
-	input.StyleAssets = []StyleAsset{
-		{SourcePath: "src/App.css", Content: ".app { color: red; }\n"},
+	input.StyleBundle = style.Bundle{
+		WebStylesheets: []style.WebStylesheet{{
+			SourcePath: "src/App.css",
+			Content:    ".app { color: red; }\n",
+			Scope:      style.ScopeGlobal,
+		}},
 	}
 	files, diagnostics := Generate(input)
 	if len(diagnostics) != 0 {
@@ -172,8 +177,12 @@ func TestGenerateWebArtifactScopesScopedStylesAndWritesStyleManifest(t *testing.
 
 	sources := []build.SourceFile{{Path: "src/App.nova", File: source}}
 	input, _ := testGenerateInput(t, manifest, plan.Plan, sources, targetManifest)
-	input.StyleAssets = []StyleAsset{
-		{SourcePath: "src/App.css", Content: ".counter-shell, button:hover {\n  color: red;\n}\n", Scope: StyleScopeApp},
+	input.StyleBundle = style.Bundle{
+		WebStylesheets: []style.WebStylesheet{{
+			SourcePath: "src/App.css",
+			Content:    ".counter-shell, button:hover {\n  color: red;\n}\n",
+			Scope:      style.ScopeApp,
+		}},
 	}
 	files, diagnostics := Generate(input)
 	if len(diagnostics) != 0 {
@@ -269,11 +278,24 @@ func TestGenerateAndroidArtifactIncludesGradleAndGeneratedBindings(t *testing.T)
 
 	sources := []build.SourceFile{{Path: "src/App.nova", File: source}}
 	input, _ := testGenerateInput(t, manifest, plan.Plan, sources, targetManifest)
-	input.StyleAssets = []StyleAsset{{
-		SourcePath: "src/App.css",
-		Content:    ".counter-shell { padding: 12px; background: #fbfcfe; border: 1px solid #dfe5ef; border-radius: 8px; }\n.counter-value { color: #151923; font-size: 34px; font-weight: 800; text-align: center; }",
-		Scope:      StyleScopeGlobal,
-	}}
+	input.StyleBundle = style.Bundle{Sheets: []style.Sheet{{
+		SourcePath: "src/App.nova-style",
+		Scope:      style.ScopeGlobal,
+		Classes: map[string]style.ClassRule{
+			"counter-shell": {Properties: map[string]string{
+				"padding":       "12px",
+				"background":    "#fbfcfe",
+				"border":        "1px solid #dfe5ef",
+				"border-radius": "8px",
+			}},
+			"counter-value": {Properties: map[string]string{
+				"color":       "#151923",
+				"font-size":   "34px",
+				"font-weight": "800",
+				"text-align":  "center",
+			}},
+		},
+	}}}
 	files, diagnostics := Generate(input)
 	if len(diagnostics) != 0 {
 		t.Fatalf("unexpected diagnostics: %+v", diagnostics)
@@ -308,6 +330,67 @@ func TestGenerateAndroidArtifactIncludesGradleAndGeneratedBindings(t *testing.T)
 	assertArtifactFile(t, files, "build/android/generated/NovaExternalBindings.java", "NovaExternalBindings")
 	assertArtifactFile(t, files, "build/android/nova-ir/app.contract.json", "\"view\"")
 	assertArtifactFile(t, files, "build/android/nova-ir/build.manifest.json", "\"target\": \"android\"")
+}
+
+func TestGenerateAndroidArtifactAppliesStyleStateSelectors(t *testing.T) {
+	source := parseNova(t, `<template target <- android>
+  <button class <- "primary-btn" on_press -> @noop>
+    <text value <- "Tap" /|
+  /|
+/|`)
+	manifest := project.Manifest{
+		Project: project.Project{Name: "demo", Version: "0.1.0", Entry: "src/App.nova"},
+		Targets: map[string]project.Target{"android": testAndroidTarget("dev.example.demo")},
+	}
+	targetManifest := build.AndroidTargetManifest()
+	plan := build.Resolve(build.ResolutionInput{
+		Project:        manifest,
+		Target:         "android",
+		Sources:        []build.SourceFile{{Path: "src/App.nova", File: source}},
+		TargetManifest: targetManifest,
+	})
+	if len(plan.Diagnostics) != 0 {
+		t.Fatalf("unexpected build diagnostics: %+v", plan.Diagnostics)
+	}
+
+	input, _ := testGenerateInput(t, manifest, plan.Plan, []build.SourceFile{{Path: "src/App.nova", File: source}}, targetManifest)
+	input.StyleBundle = style.Bundle{Sheets: []style.Sheet{{
+		SourcePath: "src/App.nova-style",
+		Scope:      style.ScopeGlobal,
+		Classes: map[string]style.ClassRule{
+			"primary-btn": {Properties: map[string]string{
+				"background-color": "#0055aa",
+				"color":            "#ffffff",
+				"padding":          "8",
+			}},
+		},
+		States: []style.StateRule{{
+			Class:  "primary-btn",
+			Pseudo: "active",
+			Properties: map[string]string{
+				"background-color": "#0066cc",
+				"font-size":        "18",
+			},
+		}, {
+			Class:  "primary-btn",
+			Pseudo: "disabled",
+			Properties: map[string]string{
+				"color": "#999999",
+			},
+		}},
+	}}}
+	files, diagnostics := Generate(input)
+	if len(diagnostics) != 0 {
+		t.Fatalf("unexpected diagnostics: %+v", diagnostics)
+	}
+
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "new ColorStateList(")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "-android.R.attr.state_enabled")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "StateListDrawable")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "android.R.attr.state_pressed")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "bindStatefulLayout_")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "applyLayoutSkin_")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "fontSizeSp = 18f")
 }
 
 func TestGenerateAndroidArtifactRequiresUserTargetConfig(t *testing.T) {

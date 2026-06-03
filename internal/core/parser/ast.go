@@ -4,6 +4,7 @@ import "github.com/dwlhm/nova/internal/core/lexer"
 
 type File struct {
 	Imports              []ImportDecl
+	StyleImports         []StyleImportDecl
 	ExternalImports      []ExternalImportDecl
 	ContractTypes        []ContractTypeDecl
 	ContractStates       []ContractStateDecl
@@ -27,6 +28,18 @@ const (
 	ImportState      ImportKind = "state"
 	ImportEvent      ImportKind = "event"
 )
+
+type StyleImportKind string
+
+const (
+	ImportStyle       StyleImportKind = "style"
+	ImportStylesheet  StyleImportKind = "stylesheet"
+)
+
+type StyleImportDecl struct {
+	Kind StyleImportKind
+	From string
+}
 
 type ImportItem struct {
 	Name   string

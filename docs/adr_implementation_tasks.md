@@ -13,6 +13,7 @@ Checklist gap implementasi (bukan ADR). ADR aktif: **000–011** di `docs/adr/RE
 | 016 web, 017 android | **009** |
 | 015 standard packages | **010** |
 | 020 test, 021 tooling | **011** |
+| 024 style (legacy index) | **012** style format |
 
 Bagian di bawah masih memakai nomor lama di judul; arti tugas sama, lihat map di atas.
 
@@ -306,6 +307,36 @@ Tasks:
 - [ ] Introduce explicit target IR structs only if needed by artifact boundary.
 - [ ] Add conformance for ViewIR shape, source spans, event routes, list keys, and conditional
       projection.
+
+### ADR-012: Portable `.nova-style` format
+
+Status: `[x]` (import discovery, native IR, Android state/layout, template class cross-check)
+
+Yang sudah ada:
+
+- Lexer/parser: `<import style>` / `<import stylesheet>`; `compile` → `style.CollectImports`.
+- `internal/core/style`: parse `.nova-style`, `Bundle` IR, portable subset, Android pseudo filter, `ValidateViewClasses`.
+- CLI `loadStyleBundle`; TOML legacy keys → `NVA-PROJECT-005`; examples migrated.
+- Web: emit CSS from `Sheet` IR + raw `WebStylesheet`.
+- Android: class + state IR → `ColorStateList` / `StateListDrawable` + dynamic layout refresh (`font-size`, `padding`, typography).
+- ADR-012 + [style-format.md](style-format.md).
+
+Gap:
+
+- Package style imports `@scope/pkg` deferred.
+
+Tasks:
+
+- [x] Add lexer/parser support for `import style` and `import stylesheet`.
+- [x] Collect style imports from module closure (via `compile` + `style.CollectImports`).
+- [x] Add `internal/core/style`: parse `.nova-style` → IR; validate one scope per file.
+- [x] Remove `styles` / `scoped_styles` from `nova.toml` + `loadStyleAssets`; refs via compile.
+- [x] Native style IR (`style.Bundle`) on `GenerateInput`; providers lower IR at target boundary.
+- [~] `provider/web`: bundle `.css` imports + emit CSS from sheets (works).
+- [x] Wire Android codegen (`state` → pressed/focused/disabled + layout overrides).
+- [x] `provider/android`: consume `Sheet` IR + states; skip `WebStylesheet`.
+- [x] Cross-check template `class` literals vs style sheets (`NVA-STYLE-007` / `NVA-STYLE-008`).
+- [ ] Future: package style imports `@scope/pkg`.
 
 ## P1: Target Runtime Gaps
 

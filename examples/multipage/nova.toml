@@ -5,11 +5,9 @@ entry = "src/App.nova"
 
 [targets.web]
 renderer = "@nova/web"
-styles = ["src/Multipage.css"]
 
 [targets.android]
 renderer = "@nova/android"
-styles = ["src/Multipage.css"]
 application_id = "dev.nova.example.multipage"
 namespace = "nova.generated.multipage"
 compile_sdk = 35

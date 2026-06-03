@@ -2,7 +2,6 @@ package cli
 
 import (
 	"bytes"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,11 +17,9 @@ entry = "src/App.nova"
 
 [targets.web]
 renderer = "@nova/web"
-styles = ["src/App.css"]
 
 [targets.android]
 renderer = "@nova/android"
-styles = ["src/App.css"]
 application_id = "dev.example.demo"
 namespace = "nova.generated"
 compile_sdk = 35
@@ -36,7 +33,16 @@ theme_parent = "android:style/Theme.DeviceDefault.Light.NoActionBar"
 java_version = "17"
 label = "demo"
 	`)
-	writeFile(t, cwd, "src/App.nova", `<contract state Counter>
+	writeFile(t, cwd, "src/App.nova-style", `scope: app
+
+class counter-shell {
+  padding: 12
+}
+`)
+	writeFile(t, cwd, "src/App.nova", `<import style from "./App.nova-style" /|
+<import stylesheet from "./App.css" /|
+
+<contract state Counter>
   count: number <- 0 {
     @increment -> count + 1;
     @decrement -> count - 1;
@@ -223,27 +229,27 @@ func TestCommandOutputErrorDetectsAndroidActivityManagerFailure(t *testing.T) {
 
 func TestRunBuildReportsStyleAssetDiagnostics(t *testing.T) {
 	cases := []struct {
-		name   string
-		styles string
-		want   string
+		name    string
+		imports string
+		want    string
 	}{
-		{name: "unsafe path", styles: `styles = ["../theme.css"]`, want: "NVA-STYLE-001"},
-		{name: "missing file", styles: `styles = ["src/Missing.css"]`, want: "NVA-STYLE-002"},
+		{name: "unsafe path", imports: `<import stylesheet from "../theme.css" /|`, want: "NVA-STYLE-001"},
+		{name: "missing file", imports: `<import stylesheet from "./Missing.css" /|`, want: "NVA-STYLE-002"},
 	}
 
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
 			cwd := t.TempDir()
-			writeFile(t, cwd, "nova.toml", fmt.Sprintf(`[project]
+			writeFile(t, cwd, "nova.toml", `[project]
 name = "demo"
 version = "0.1.0"
 entry = "src/App.nova"
 
 [targets.web]
 renderer = "@nova/web"
-%s
-`, tt.styles))
-			writeFile(t, cwd, "src/App.nova", `<template target <- web>
+`)
+			writeFile(t, cwd, "src/App.nova", tt.imports+`
+<template target <- web>
   <text value <- "web" /|
 /|`)
 
@@ -290,7 +296,7 @@ func TestRunInitCreatesReadableStarterProject(t *testing.T) {
 	}
 
 	assertFileContains(t, cwd, "nova.toml", `name = "hello"`)
-	assertFileContains(t, cwd, "nova.toml", `scoped_styles = ["src/App.css"]`)
+	assertFileContains(t, cwd, "src/App.nova", `<import style from "./App.nova-style"`)
 	assertFileContains(t, cwd, "src/App.nova", `<contract state Counter>`)
 	assertFileContains(t, cwd, "src/App.css", `.counter-shell`)
 	if !strings.Contains(out.String(), "initialized Nova project hello") {

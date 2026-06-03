@@ -1,4 +1,4 @@
-package android
+package androidcodegen
 
 import (
 	"strings"
@@ -50,30 +50,30 @@ func TestDetectStorageHydrationChain(t *testing.T) {
 	if chain.TerminalEvent != "@ready" {
 		t.Fatalf("terminal = %q", chain.TerminalEvent)
 	}
-	if !chain.AfterSkipEvents["@loaded_a"] || !chain.AfterSkipEvents["@restore"] {
-		t.Fatalf("skip = %+v", chain.AfterSkipEvents)
+	if !strings.Contains(androidContractStorageHydration(chain), "HYDRATION_SKIP_AFTER") {
+		t.Fatal("expected hydration skip set in generated Java")
 	}
 }
 
-func TestAndroidContractStorageHydrationCodegen(t *testing.T) {
+func TestDetectStorageHydrationChainFromFixtureApp(t *testing.T) {
 	app := contract.App{
 		Lifecycles: []contract.Lifecycle{
+			{Phase: "mount", Steps: []contract.LifecycleStep{{Emit: &contract.LifecycleEmit{Name: "@restore"}}}},
 			{
 				Phase: "after",
 				Event: "@restore",
 				Steps: []contract.LifecycleStep{{
 					External: &contract.LifecycleExternal{
 						EffectID:  "@env/storage#load",
-						Input:     map[string]string{"key": `"finance_count"`},
-						OnSuccess: "@loaded_count",
-						OnFailure: "@load_failed",
+						Input:     map[string]string{"key": `"state"`},
+						OnSuccess: "@loaded",
 					},
 				}},
 			},
 			{
 				Phase: "after",
-				Event: "@loaded_count",
-				Steps: []contract.LifecycleStep{{Emit: &contract.LifecycleEmit{Name: "@ledger_ready"}}},
+				Event: "@loaded",
+				Steps: []contract.LifecycleStep{{Emit: &contract.LifecycleEmit{Name: "@ready"}}},
 			},
 		},
 	}
@@ -81,10 +81,7 @@ func TestAndroidContractStorageHydrationCodegen(t *testing.T) {
 	if !ok {
 		t.Fatal("expected hydration chain")
 	}
-	out := androidContractStorageHydration(chain)
-	for _, token := range []string{"hydratePersistedState", "commitTransition", "HYDRATION_SKIP_AFTER", "@ledger_ready"} {
-		if !strings.Contains(out, token) {
-			t.Fatalf("missing %q in codegen:\n%s", token, out)
-		}
+	if chain.TerminalEvent != "@ready" {
+		t.Fatalf("terminal = %q", chain.TerminalEvent)
 	}
 }

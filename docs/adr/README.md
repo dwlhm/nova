@@ -31,6 +31,7 @@ ADR mencatat keputusan yang mengikat implementasi. Ringkas; detail operasional d
 | [009](adr_009_targets.md) | Web & Android runtime |
 | [010](adr_010_packages.md) | `@nova/*`, `@env/*` |
 | [011](adr_011_tooling.md) | CLI, test, conformance, dev |
+| [012](adr_012_style_format.md) | `.nova-style`, import discovery, core/style, web-only `.css` |
 
 ## Istilah
 

@@ -1,31 +1,44 @@
-package android
+package androidcodegen
 
 import (
-	"github.com/dwlhm/nova/internal/provider/shared"
 	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/dwlhm/nova/internal/core/contract"
 	"github.com/dwlhm/nova/internal/core/routing"
+	"github.com/dwlhm/nova/internal/core/style"
+	androidtarget "github.com/dwlhm/nova/internal/provider/capability/view/target/android"
+	"github.com/dwlhm/nova/internal/provider/shared"
 )
 
-type androidContractRenderer struct {
-	styles androidStyleSheet
+// Renderer generates Android MainActivity view-tree Java from contract.App.
+type Renderer struct {
+	styles        androidStyleSheet
+	statefulSkins map[string]androidStatefulSkinSpec
+	nodes         *NodeRegistry
 }
 
-func mainActivityFromContract(app contract.App, config targetConfig, styles []shared.StyleAsset) string {
+type androidContractRenderer = Renderer
+
+func MainActivityFromContract(app contract.App, config androidtarget.Config, bundle style.Bundle, nodes *NodeRegistry) string {
 	routePatterns := androidContractPagePaths(app.View)
-	renderer := androidContractRenderer{styles: newAndroidStyleSheet(styles)}
+	renderer := &androidContractRenderer{
+		styles:        newAndroidStyleSheet(bundle),
+		statefulSkins: make(map[string]androidStatefulSkinSpec),
+		nodes:         nodes,
+	}
 	var builder strings.Builder
 	builder.WriteString("package " + config.Namespace + ";\n\n")
 	builder.WriteString("import static " + config.Namespace + ".NovaRuntime.*;\n\n")
 	builder.WriteString("import nova.scheduler.NovaScheduler;\n")
 	builder.WriteString("import nova.scheduler.NovaTransition;\n\n")
 	builder.WriteString("import android.app.Activity;\n")
+	builder.WriteString("import android.content.res.ColorStateList;\n")
 	builder.WriteString("import android.graphics.Color;\n")
 	builder.WriteString("import android.graphics.Typeface;\n")
 	builder.WriteString("import android.graphics.drawable.GradientDrawable;\n")
+	builder.WriteString("import android.graphics.drawable.StateListDrawable;\n")
 	builder.WriteString("import android.os.Bundle;\n")
 	builder.WriteString("import android.text.Editable;\n")
 	builder.WriteString("import android.text.InputType;\n")
@@ -106,6 +119,7 @@ func mainActivityFromContract(app contract.App, config targetConfig, styles []sh
 	builder.WriteString("    }\n\n")
 	builder.WriteString(renderer.renderApplyBindings(app.View.Nodes, app.View.Bindings))
 	builder.WriteString(renderer.renderUpdatePageVisibility(app.View.Nodes))
+	builder.WriteString(renderer.renderStatefulSkinMethods())
 	builder.WriteString(javaSchedulerActivityHost())
 	if len(app.Lifecycles) == 0 {
 		builder.WriteString(javaSchedulerLifecycleStubs())
@@ -181,7 +195,7 @@ func mainActivityFromContract(app contract.App, config targetConfig, styles []sh
 	return builder.String()
 }
 
-func (renderer androidContractRenderer) renderBuildNodes(nodes []contract.Node, parent string, indent string, path []int) string {
+func (renderer *Renderer) renderBuildNodes(nodes []contract.Node, parent string, indent string, path []int) string {
 	var builder strings.Builder
 	for index, node := range nodes {
 		nodePath := append(shared.CloneIntPath(path), index)
@@ -190,42 +204,40 @@ func (renderer androidContractRenderer) renderBuildNodes(nodes []contract.Node, 
 	return builder.String()
 }
 
-func (renderer androidContractRenderer) renderBuildNode(node contract.Node, parent string, indent string, path []int) string {
-	key := androidPathKey(path)
-	name := androidJavaVar("node", path)
-	switch node.Kind {
-	case "page":
-		return renderer.renderJavaContainer(node, parent, indent, path, key, name, "FrameLayout", "")
-	case "text", "#text":
-		value := shared.QuoteCodeString("")
-		if expr := strings.TrimSpace(node.Props["value"]); expr != "" {
-			value = androidJavaEvalStringExpr(expr)
-		}
-		var builder strings.Builder
-		builder.WriteString(indent + "TextView " + name + " = new TextView(this);\n")
-		builder.WriteString(indent + name + ".setText(" + value + ");\n")
-		builder.WriteString(renderer.renderStaticStyles(node, name, indent))
-		builder.WriteString(indent + "views.put(" + shared.QuoteCodeString(key) + ", " + name + ");\n")
-		builder.WriteString(indent + parent + ".addView(" + name + ");\n")
-		return builder.String()
-	case "button":
-		return renderer.renderJavaButton(node, parent, indent, path, key, name)
-	case "text_input":
-		return renderer.renderJavaInput(node, parent, indent, path, key, name, false)
-	case "number_input":
-		return renderer.renderJavaInput(node, parent, indent, path, key, name, true)
-	case "row":
-		return renderer.renderJavaRow(node, parent, indent, path, key, name)
-	case "scroll":
-		return renderer.renderJavaScroll(node, parent, indent, path, key, name)
-	case "stack":
-		return renderer.renderJavaContainer(node, parent, indent, path, key, name, "FrameLayout", "")
-	default:
-		return renderer.renderJavaContainer(node, parent, indent, path, key, name, "LinearLayout", "LinearLayout.VERTICAL")
+func (renderer *Renderer) RenderTextNode(node contract.Node, parent string, indent string, path []int, key string, name string) string {
+	value := shared.QuoteCodeString("")
+	if expr := strings.TrimSpace(node.Props["value"]); expr != "" {
+		value = androidJavaEvalStringExpr(expr)
 	}
+	var builder strings.Builder
+	builder.WriteString(indent + "TextView " + name + " = new TextView(this);\n")
+	builder.WriteString(indent + name + ".setText(" + value + ");\n")
+	builder.WriteString(renderer.RenderStaticStyles(node, key, name, indent))
+	builder.WriteString(indent + "views.put(" + shared.QuoteCodeString(key) + ", " + name + ");\n")
+	builder.WriteString(indent + parent + ".addView(" + name + ");\n")
+	return builder.String()
 }
 
-func (renderer androidContractRenderer) renderJavaInput(node contract.Node, parent string, indent string, path []int, key string, name string, number bool) string {
+func (renderer *Renderer) renderBuildNode(node contract.Node, parent string, indent string, path []int) string {
+	key := androidPathKey(path)
+	name := androidJavaVar("node", path)
+	if renderer.nodes != nil {
+		if render, ok := renderer.nodes.lookup(node.Kind); ok {
+			return render(renderer, node, parent, indent, path, key, name)
+		}
+	}
+	return renderer.renderJavaContainer(node, parent, indent, path, key, name, "LinearLayout", "LinearLayout.VERTICAL")
+}
+
+func (renderer *Renderer) RenderTextInputNode(node contract.Node, parent string, indent string, path []int, key string, name string) string {
+	return renderer.renderJavaInput(node, parent, indent, path, key, name, false)
+}
+
+func (renderer *Renderer) RenderNumberInputNode(node contract.Node, parent string, indent string, path []int, key string, name string) string {
+	return renderer.renderJavaInput(node, parent, indent, path, key, name, true)
+}
+
+func (renderer *Renderer) renderJavaInput(node contract.Node, parent string, indent string, path []int, key string, name string, number bool) string {
 	value := shared.QuoteCodeString("")
 	if expr := strings.TrimSpace(node.Props["value"]); expr != "" {
 		value = androidJavaEvalStringExpr(expr)
@@ -255,19 +267,19 @@ func (renderer androidContractRenderer) renderJavaInput(node contract.Node, pare
 		builder.WriteString(indent + "    }\n")
 		builder.WriteString(indent + "});\n")
 	}
-	builder.WriteString(renderer.renderStaticStyles(node, name, indent))
+	builder.WriteString(renderer.RenderStaticStyles(node, key, name, indent))
 	builder.WriteString(indent + "views.put(" + shared.QuoteCodeString(key) + ", " + name + ");\n")
 	builder.WriteString(indent + parent + ".addView(" + name + ");\n")
 	return builder.String()
 }
 
-func (renderer androidContractRenderer) renderJavaScroll(node contract.Node, parent string, indent string, path []int, key string, name string) string {
+func (renderer *Renderer) RenderScrollNode(node contract.Node, parent string, indent string, path []int, key string, name string) string {
 	contentName := name + "Content"
 	var builder strings.Builder
 	builder.WriteString(indent + "ScrollView " + name + " = new ScrollView(this);\n")
 	builder.WriteString(indent + "LinearLayout " + contentName + " = new LinearLayout(this);\n")
 	builder.WriteString(indent + contentName + ".setOrientation(LinearLayout.VERTICAL);\n")
-	builder.WriteString(renderer.renderStaticStyles(node, name, indent))
+	builder.WriteString(renderer.RenderStaticStyles(node, key, name, indent))
 	builder.WriteString(indent + "views.put(" + shared.QuoteCodeString(key) + ", " + name + ");\n")
 	builder.WriteString(indent + parent + ".addView(" + name + ");\n")
 	builder.WriteString(indent + name + ".addView(" + contentName + ");\n")
@@ -275,7 +287,31 @@ func (renderer androidContractRenderer) renderJavaScroll(node contract.Node, par
 	return builder.String()
 }
 
-func (renderer androidContractRenderer) renderJavaContainer(node contract.Node, parent string, indent string, path []int, key string, name string, className string, orientation string) string {
+func (renderer *Renderer) RenderPageNode(node contract.Node, parent string, indent string, path []int, key string, name string) string {
+	return renderer.renderJavaContainer(node, parent, indent, path, key, name, "FrameLayout", "")
+}
+
+func (renderer *Renderer) RenderStackNode(node contract.Node, parent string, indent string, path []int, key string, name string) string {
+	return renderer.renderJavaContainer(node, parent, indent, path, key, name, "FrameLayout", "")
+}
+
+func (renderer *Renderer) RenderSurfaceNode(node contract.Node, parent string, indent string, path []int, key string, name string) string {
+	return renderer.renderJavaContainer(node, parent, indent, path, key, name, "LinearLayout", "LinearLayout.VERTICAL")
+}
+
+func (renderer *Renderer) RenderColumnNode(node contract.Node, parent string, indent string, path []int, key string, name string) string {
+	return renderer.renderJavaContainer(node, parent, indent, path, key, name, "LinearLayout", "LinearLayout.VERTICAL")
+}
+
+func (renderer *Renderer) RenderButtonNode(node contract.Node, parent string, indent string, path []int, key string, name string) string {
+	return renderer.renderJavaButton(node, parent, indent, path, key, name)
+}
+
+func (renderer *Renderer) RenderRowNode(node contract.Node, parent string, indent string, path []int, key string, name string) string {
+	return renderer.renderJavaRow(node, parent, indent, path, key, name)
+}
+
+func (renderer *Renderer) renderJavaContainer(node contract.Node, parent string, indent string, path []int, key string, name string, className string, orientation string) string {
 	var builder strings.Builder
 	builder.WriteString(indent + className + " " + name + " = new " + className + "(this);\n")
 	if orientation != "" {
@@ -284,25 +320,25 @@ func (renderer androidContractRenderer) renderJavaContainer(node contract.Node, 
 	if node.Kind == "surface" || node.Kind == "column" || node.Kind == "page" {
 		builder.WriteString(indent + name + ".setPadding(0, dp(4), 0, dp(4));\n")
 	}
-	builder.WriteString(renderer.renderStaticStyles(node, name, indent))
+	builder.WriteString(renderer.RenderStaticStyles(node, key, name, indent))
 	builder.WriteString(indent + "views.put(" + shared.QuoteCodeString(key) + ", " + name + ");\n")
 	builder.WriteString(indent + parent + ".addView(" + name + ");\n")
 	builder.WriteString(renderer.renderBuildNodes(node.Children, name, indent, path))
 	return builder.String()
 }
 
-func (renderer androidContractRenderer) renderJavaRow(node contract.Node, parent string, indent string, path []int, key string, name string) string {
+func (renderer *Renderer) renderJavaRow(node contract.Node, parent string, indent string, path []int, key string, name string) string {
 	var builder strings.Builder
 	builder.WriteString(indent + "GridLayout " + name + " = new GridLayout(this);\n")
 	builder.WriteString(indent + name + ".setColumnCount(" + javaInt(androidContractRowColumnCount(node)) + ");\n")
-	builder.WriteString(renderer.renderStaticStyles(node, name, indent))
+	builder.WriteString(renderer.RenderStaticStyles(node, key, name, indent))
 	builder.WriteString(indent + "views.put(" + shared.QuoteCodeString(key) + ", " + name + ");\n")
 	builder.WriteString(indent + parent + ".addView(" + name + ");\n")
 	builder.WriteString(renderer.renderBuildNodes(node.Children, name, indent, path))
 	return builder.String()
 }
 
-func (renderer androidContractRenderer) renderJavaButton(node contract.Node, parent string, indent string, path []int, key string, name string) string {
+func (renderer *Renderer) renderJavaButton(node contract.Node, parent string, indent string, path []int, key string, name string) string {
 	var builder strings.Builder
 	builder.WriteString(indent + "Button " + name + " = new Button(this);\n")
 	builder.WriteString(indent + name + ".setAllCaps(false);\n")
@@ -310,7 +346,7 @@ func (renderer androidContractRenderer) renderJavaButton(node contract.Node, par
 	if route, ok := node.Events["on_press"]; ok {
 		builder.WriteString(indent + name + ".setOnClickListener(view -> dispatch(" + shared.QuoteCodeString(route.Name) + ", " + androidJavaContractEventArgs(route.Args, "") + "));\n")
 	}
-	builder.WriteString(renderer.renderStaticStyles(node, name, indent))
+	builder.WriteString(renderer.RenderStaticStyles(node, key, name, indent))
 	builder.WriteString(indent + "views.put(" + shared.QuoteCodeString(key) + ", " + name + ");\n")
 	builder.WriteString(indent + parent + ".addView(" + name + ");\n")
 	return builder.String()
@@ -327,7 +363,7 @@ func androidContractRowColumnCount(node contract.Node) int {
 	return count
 }
 
-func (renderer androidContractRenderer) renderStaticStyles(node contract.Node, target string, indent string) string {
+func (renderer *Renderer) RenderStaticStyles(node contract.Node, pathKey string, target string, indent string) string {
 	classExpr, ok := node.Props["class"]
 	if !ok {
 		return ""
@@ -336,14 +372,27 @@ func (renderer androidContractRenderer) renderStaticStyles(node contract.Node, t
 	if !ok {
 		return ""
 	}
-	style := renderer.styles.StyleForClassList(classList)
-	if style.Empty() {
+	base := renderer.styles.StyleForClassList(classList)
+	states := renderer.styles.StatesForClassList(classList)
+	if base.Empty() && len(states) == 0 {
 		return ""
 	}
-	return androidJavaStyleApplication(target, node.Kind, style, indent)
+	var builder strings.Builder
+	builder.WriteString(androidJavaStyleApplication(target, node.Kind, base, states, indent))
+	if androidStatesNeedLayoutRefresh(base, states) {
+		renderer.statefulSkins[target] = androidStatefulSkinSpec{
+			pathKey:   pathKey,
+			targetVar: target,
+			nodeKind:  node.Kind,
+			base:      base,
+			states:    states,
+		}
+		builder.WriteString(indent + "bindStatefulLayout_" + target + "(" + target + ");\n")
+	}
+	return builder.String()
 }
 
-func (renderer androidContractRenderer) renderApplyBindings(nodes []contract.Node, bindings []contract.BindingMeta) string {
+func (renderer *androidContractRenderer) renderApplyBindings(nodes []contract.Node, bindings []contract.BindingMeta) string {
 	var builder strings.Builder
 	builder.WriteString("    private void applyBindings(Set<String> invalidations) {\n")
 	for _, binding := range bindings {
@@ -368,6 +417,9 @@ func (renderer androidContractRenderer) renderApplyBindings(nodes []contract.Nod
 			builder.WriteString("                ((TextView) target).setText(" + androidJavaEvalStringExpr(expr) + ");\n")
 		case binding.Prop == "enabled":
 			builder.WriteString("                target.setEnabled(booleanValue(" + androidJavaEvalValueExpr(expr) + "));\n")
+			if skin, ok := renderer.statefulSkins[androidJavaVar("node", binding.At)]; ok {
+				builder.WriteString("                applyLayoutSkin_" + skin.targetVar + "(target);\n")
+			}
 		case binding.Prop == "label":
 			builder.WriteString("                target.setContentDescription(" + androidJavaEvalStringExpr(expr) + ");\n")
 		default:
@@ -380,7 +432,7 @@ func (renderer androidContractRenderer) renderApplyBindings(nodes []contract.Nod
 	return builder.String()
 }
 
-func (renderer androidContractRenderer) renderUpdatePageVisibility(nodes []contract.Node) string {
+func (renderer *androidContractRenderer) renderUpdatePageVisibility(nodes []contract.Node) string {
 	var builder strings.Builder
 	builder.WriteString("    private void updatePageVisibility() {\n")
 	builder.WriteString("        String activePath = activeRoutePath();\n")
@@ -390,7 +442,7 @@ func (renderer androidContractRenderer) renderUpdatePageVisibility(nodes []contr
 	return builder.String()
 }
 
-func (renderer androidContractRenderer) appendPageVisibility(builder *strings.Builder, nodes []contract.Node, path []int) {
+func (renderer *androidContractRenderer) appendPageVisibility(builder *strings.Builder, nodes []contract.Node, path []int) {
 	for index, node := range nodes {
 		nodePath := append(shared.CloneIntPath(path), index)
 		if node.Kind == "page" {
@@ -476,7 +528,7 @@ func androidContractPagePaths(view contract.View) []string {
 	return paths
 }
 
-func routesFromContract(view contract.View, config targetConfig) string {
+func RoutesFromContract(view contract.View, config androidtarget.Config) string {
 	paths := androidContractPagePaths(view)
 	if len(paths) == 0 {
 		paths = []string{"/"}
@@ -501,7 +553,7 @@ func routesFromContract(view contract.View, config targetConfig) string {
 	return builder.String()
 }
 
-func appFromContract(name string, app contract.App, config targetConfig) string {
+func AppFromContract(name string, app contract.App, config androidtarget.Config) string {
 	if strings.TrimSpace(name) == "" {
 		name = "NovaApp"
 	}
@@ -539,6 +591,14 @@ func staticStringFromJSExpr(expr string) (string, bool) {
 		return unquoted, true
 	}
 	return "", false
+}
+
+func JavaEvalStringExpr(jsExpr string) string {
+	return androidJavaEvalStringExpr(jsExpr)
+}
+
+func JavaContractEventArgs(args []string, implicitValueExpr string) string {
+	return androidJavaContractEventArgs(args, implicitValueExpr)
 }
 
 func androidJavaEvalStringExpr(jsExpr string) string {

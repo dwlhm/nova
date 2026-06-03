@@ -45,6 +45,14 @@ func (p *parser) parseImportLike(file *File) {
 		file.ExternalImports = append(file.ExternalImports, p.parseExternalImportAfterKeyword())
 		return
 	}
+	if p.match(lexer.STYLE) {
+		file.StyleImports = append(file.StyleImports, p.parseStyleImportAfterKeyword(ImportStyle))
+		return
+	}
+	if p.match(lexer.STYLESHEET) {
+		file.StyleImports = append(file.StyleImports, p.parseStyleImportAfterKeyword(ImportStylesheet))
+		return
+	}
 
 	decl := ImportDecl{Kind: ImportCapability}
 	if p.match(lexer.STATE) {
@@ -77,6 +85,13 @@ func (p *parser) parseImportLike(file *File) {
 	decl.From = p.expectLiteral(lexer.STRING, "import source")
 	p.expect(lexer.PIPE_END)
 	file.Imports = append(file.Imports, decl)
+}
+
+func (p *parser) parseStyleImportAfterKeyword(kind StyleImportKind) StyleImportDecl {
+	p.expect(lexer.FROM)
+	from := p.expectLiteral(lexer.STRING, "style import source")
+	p.expect(lexer.PIPE_END)
+	return StyleImportDecl{Kind: kind, From: from}
 }
 
 func (p *parser) parseImportAlias(kind ImportKind) string {

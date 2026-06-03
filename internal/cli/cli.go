@@ -17,6 +17,7 @@ import (
 	"github.com/dwlhm/nova/internal/core/compile"
 	"github.com/dwlhm/nova/internal/core/diagnostic"
 	novaformat "github.com/dwlhm/nova/internal/core/format"
+	"github.com/dwlhm/nova/internal/core/style"
 	"github.com/dwlhm/nova/internal/lsp"
 	"github.com/dwlhm/nova/internal/packageio"
 	"github.com/dwlhm/nova/internal/packages"
@@ -79,7 +80,7 @@ type projectPipeline struct {
 	Resolution     build.ResolutionResult
 	PackageGraph   packages.ResolvedGraph
 	LockDigest     string
-	StyleAssets    []artifact.StyleAsset
+	StyleBundle    style.Bundle
 	Files          []artifact.File
 }
 
@@ -254,9 +255,16 @@ func runProjectPipeline(cwd string, targetID string, generateArtifacts bool, pro
 	}
 	sources := build.SourcesFromProgram(program)
 
-	styleAssets, styleDiagnostics, ok := loadStyleAssets(cwd, manifest, targetID)
+	if styleListDiagnostics := manifestStyleListDiagnostics(manifest, targetID); len(styleListDiagnostics) > 0 {
+		for _, diagnostic := range styleListDiagnostics {
+			fmt.Fprintln(stderr, diagnostic)
+		}
+		return projectPipeline{}, false
+	}
+
+	styleBundle, styleDiagnostics, ok := loadStyleBundle(cwd, targetID, program.StyleImports)
 	for _, diagnostic := range styleDiagnostics {
-		fmt.Fprintln(stderr, diagnostic)
+		fmt.Fprintf(stderr, "%s: %s\n", diagnostic.Code, diagnostic.Message)
 	}
 	if !ok {
 		return projectPipeline{}, false
@@ -294,7 +302,7 @@ func runProjectPipeline(cwd string, targetID string, generateArtifacts bool, pro
 		Resolution:     resolution,
 		PackageGraph:   packageGraph,
 		LockDigest:     packageio.LockDigest(lockfile),
-		StyleAssets:    styleAssets,
+		StyleBundle:    styleBundle,
 	}
 	if !generateArtifacts {
 		return pipeline, true
@@ -319,12 +327,16 @@ func runProjectPipeline(cwd string, targetID string, generateArtifacts bool, pro
 		return projectPipeline{}, false
 	}
 
+	for _, item := range style.ValidateViewClasses(program.NovaIR.ViewIR, styleBundle) {
+		fmt.Fprintf(stderr, "%s: %s\n", item.Code, item.Message)
+	}
+
 	files, artifactDiagnostics := artifact.Generate(artifact.GenerateInput{
 		Project:                 manifest,
 		Bundle:                  program.NovaIR,
 		Plan:                    resolution.Plan,
 		TargetManifest:          targetManifest,
-		StyleAssets:             styleAssets,
+		StyleBundle:             styleBundle,
 		ExternalAdapterContents: externalAdapterContents(cwd, targetID, resolution.Plan.ExternalOperations, packageManifests),
 	})
 	if len(artifactDiagnostics) > 0 {
@@ -344,6 +356,7 @@ func initProjectFiles(name string) []artifact.File {
 	return []artifact.File{
 		{Path: "nova.toml", Content: starterManifest(name)},
 		{Path: "src/App.nova", Content: starterSource()},
+		{Path: "src/App.nova-style", Content: starterNovaStyle()},
 		{Path: "src/App.css", Content: starterCSS()},
 	}
 }
@@ -356,12 +369,14 @@ entry = "src/App.nova"
 
 [targets.web]
 renderer = "@nova/web"
-scoped_styles = ["src/App.css"]
 `
 }
 
 func starterSource() string {
-	return `<contract state Counter>
+	return `<import style from "./App.nova-style" /|
+<import stylesheet from "./App.css" /|
+
+<contract state Counter>
   count: number <- 0 {
     @increment -> count + 1;
     @decrement -> count - 1;
@@ -395,6 +410,21 @@ func starterCSS() string {
 `
 }
 
+func starterNovaStyle() string {
+	return `scope: app
+
+class counter-shell {
+  padding: 12
+  text-align: center
+}
+
+class counter-value {
+  font-size: 34sp
+  font-weight: 800
+}
+`
+}
+
 func projectNameOrDefault(name string) string {
 	name = strings.TrimSpace(name)
 	if name == "" || name == "." || name == string(filepath.Separator) {
@@ -418,9 +448,12 @@ type inspectStyleAsset struct {
 }
 
 func inspectSummary(pipeline projectPipeline) map[string]any {
-	styles := make([]inspectStyleAsset, 0, len(pipeline.StyleAssets))
-	for _, style := range pipeline.StyleAssets {
-		styles = append(styles, inspectStyleAsset{SourcePath: style.SourcePath, Scope: string(style.Scope)})
+	styles := make([]inspectStyleAsset, 0, len(pipeline.StyleBundle.Sheets)+len(pipeline.StyleBundle.WebStylesheets))
+	for _, sheet := range pipeline.StyleBundle.Sheets {
+		styles = append(styles, inspectStyleAsset{SourcePath: sheet.SourcePath, Scope: string(sheet.Scope)})
+	}
+	for _, sheet := range pipeline.StyleBundle.WebStylesheets {
+		styles = append(styles, inspectStyleAsset{SourcePath: sheet.SourcePath, Scope: string(sheet.Scope)})
 	}
 	return map[string]any{
 		"project": map[string]any{
@@ -704,47 +737,20 @@ func projectFiles(sources []compile.SourceModule) []project.File {
 	return files
 }
 
-func loadStyleAssets(cwd string, manifest project.Manifest, targetID string) ([]artifact.StyleAsset, []string, bool) {
+func manifestStyleListDiagnostics(manifest project.Manifest, targetID string) []string {
 	target := manifest.Targets[targetID]
-	assets := make([]artifact.StyleAsset, 0, len(target.Styles)+len(target.ScopedStyles))
-	diagnostics := make([]string, 0)
-	for _, stylePath := range target.Styles {
-		asset, assetDiagnostics, ok := loadStyleAsset(cwd, stylePath, artifact.StyleScopeGlobal)
-		diagnostics = append(diagnostics, assetDiagnostics...)
-		if ok {
-			assets = append(assets, asset)
-		}
+	if len(target.Styles) == 0 && len(target.ScopedStyles) == 0 {
+		return nil
 	}
-	for _, stylePath := range target.ScopedStyles {
-		asset, assetDiagnostics, ok := loadStyleAsset(cwd, stylePath, artifact.StyleScopeApp)
-		diagnostics = append(diagnostics, assetDiagnostics...)
-		if ok {
-			assets = append(assets, asset)
-		}
+	return []string{
+		fmt.Sprintf("NVA-PROJECT-005: targets.%s styles and scoped_styles are removed; use <import style> and <import stylesheet> in .nova source", targetID),
 	}
-	return assets, diagnostics, len(diagnostics) == 0
 }
 
-func loadStyleAsset(cwd string, stylePath string, scope artifact.StyleScope) (artifact.StyleAsset, []string, bool) {
-	diagnostics := make([]string, 0)
-	cleanPath, ok := cleanProjectStylePath(stylePath)
-	if !ok {
-		return artifact.StyleAsset{}, []string{fmt.Sprintf("NVA-STYLE-001: refusing unsafe stylesheet path %s", stylePath)}, false
-	}
-	content, err := os.ReadFile(filepath.Join(cwd, filepath.FromSlash(cleanPath)))
-	if err != nil {
-		diagnostics = append(diagnostics, fmt.Sprintf("NVA-STYLE-002: read stylesheet %s: %s", cleanPath, err.Error()))
-		return artifact.StyleAsset{}, diagnostics, false
-	}
-	return artifact.StyleAsset{SourcePath: cleanPath, Content: string(content), Scope: scope}, nil, true
-}
-
-func cleanProjectStylePath(stylePath string) (string, bool) {
-	cleanPath := filepath.Clean(filepath.FromSlash(stylePath))
-	if cleanPath == "." || filepath.IsAbs(cleanPath) || strings.HasPrefix(cleanPath, "..") || filepath.Ext(cleanPath) != ".css" {
-		return "", false
-	}
-	return filepath.ToSlash(cleanPath), true
+func loadStyleBundle(cwd string, targetID string, imports []style.ImportRef) (style.Bundle, []style.Diagnostic, bool) {
+	return style.BuildBundle(targetID, imports, func(path string) ([]byte, error) {
+		return os.ReadFile(filepath.Join(cwd, filepath.FromSlash(path)))
+	})
 }
 
 func writeArtifactFiles(root string, files []artifact.File) error {

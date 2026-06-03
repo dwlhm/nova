@@ -3,6 +3,7 @@ package shared
 import (
 	"github.com/dwlhm/nova/internal/core/diagnostic"
 	"github.com/dwlhm/nova/internal/core/ir"
+	"github.com/dwlhm/nova/internal/core/style"
 	"github.com/dwlhm/nova/internal/project"
 	"github.com/dwlhm/nova/internal/provider/build"
 )
@@ -20,19 +21,6 @@ type File struct {
 	Content string
 }
 
-type StyleAsset struct {
-	SourcePath string
-	Content    string
-	Scope      StyleScope
-}
-
-type StyleScope string
-
-const (
-	StyleScopeGlobal StyleScope = "global"
-	StyleScopeApp    StyleScope = "app"
-)
-
 type Diagnostic = diagnostic.Diagnostic
 
 type GenerateInput struct {
@@ -40,7 +28,7 @@ type GenerateInput struct {
 	Bundle                  ir.Bundle
 	Plan                    build.BuildPlan
 	TargetManifest          build.TargetManifest
-	StyleAssets             []StyleAsset
+	StyleBundle             style.Bundle
 	ExternalAdapterContents map[string]string
 }
 

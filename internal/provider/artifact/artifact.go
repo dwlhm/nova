@@ -12,15 +12,8 @@ import (
 
 type (
 	File          = shared.File
-	StyleAsset    = shared.StyleAsset
-	StyleScope    = shared.StyleScope
 	Diagnostic    = shared.Diagnostic
 	GenerateInput = shared.GenerateInput
-)
-
-const (
-	StyleScopeGlobal = shared.StyleScopeGlobal
-	StyleScopeApp    = shared.StyleScopeApp
 )
 
 func Generate(input GenerateInput) ([]File, []Diagnostic) {

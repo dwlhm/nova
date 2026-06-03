@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	viewandroid "github.com/dwlhm/nova/internal/provider/capability/view/android"
 	"github.com/dwlhm/nova/internal/provider/shared"
 	"github.com/dwlhm/nova/internal/provider/target"
 )
@@ -58,19 +59,16 @@ func files(input shared.GenerateInput, config targetConfig, versions shared.Mani
 		{Path: "build/android/build.gradle.kts", Content: rootGradle(input.Project.Project.Name, config)},
 		{Path: "build/android/app/build.gradle.kts", Content: appGradle(config)},
 		{Path: "build/android/app/src/main/AndroidManifest.xml", Content: androidManifestXML(config, input.Plan.Permissions)},
-		{Path: "build/android/app/src/main/res/values/styles.xml", Content: stylesXML(config)},
 	}
+
+	viewFiles, viewDiagnostics := viewandroid.Compose(input)
+	if len(viewDiagnostics) > 0 {
+		return nil, viewDiagnostics
+	}
+
 	sourceRoot := "build/android/app/src/main/java/" + strings.ReplaceAll(config.Namespace, ".", "/")
 	out = append(out, schedulerFiles...)
-	out = append(out,
-		shared.File{Path: sourceRoot + "/MainActivity.java", Content: mainActivity(app, config, input.StyleAssets)},
-		shared.File{Path: sourceRoot + "/NovaRuntime.java", Content: runtimeJava(config)},
-		shared.File{Path: sourceRoot + "/NovaPrimitiveRegistry.java", Content: primitiveRegistry(config)},
-		shared.File{Path: sourceRoot + "/NovaRendererExtensions.java", Content: rendererExtensionsJava(input.Plan.Renderer.Extensions, config)},
-		shared.File{Path: "build/android/generated/NovaApp.java", Content: appFromContract(input.Project.Project.Name, app, config)},
-		shared.File{Path: "build/android/generated/NovaRoutes.java", Content: routesFromContract(app.View, config)},
-		shared.File{Path: "build/android/generated/NovaExternalBindings.java", Content: externalBindings(input.Plan.ExternalOperations, config)},
-	)
+	out = append(out, viewFiles...)
 	out = append(out, rendererAdapterFiles(input.Plan.Renderer.Extensions)...)
 	out = append(out, externalAdapterFiles(input.Plan.ExternalOperations, sourceRoot, input.ExternalAdapterContents)...)
 	return out, nil

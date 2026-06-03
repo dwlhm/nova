@@ -108,10 +108,11 @@ func assignManifestValue(manifest Manifest, section string, dictionaryIndex int,
 			switch key {
 			case "renderer":
 				target.Renderer = parseString(value, diagnostics, lineNumber)
-			case "styles":
-				target.Styles = parseTargetStyles(value, diagnostics, lineNumber)
-			case "scoped_styles":
-				target.ScopedStyles = parseTargetStyles(value, diagnostics, lineNumber)
+			case "styles", "scoped_styles":
+				*diagnostics = append(*diagnostics, Diagnostic{
+					Code:    "NVA-PROJECT-005",
+					Message: fmt.Sprintf("targets.%s %s is removed; declare styles with <import style> or <import stylesheet> in .nova source", targetID, key),
+				})
 			default:
 				target.Options[key] = parseScalar(value, diagnostics, lineNumber)
 			}

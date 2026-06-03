@@ -167,6 +167,27 @@ func TestParseRejectsEventsWithoutSchedulerPrefix(t *testing.T) {
 	}
 }
 
+func TestParseStyleImports(t *testing.T) {
+	input := `<import style from "./Counter.nova-style" /|
+<import stylesheet from "./Counter.css" /|
+<template>
+  <text value <- "Hello" /|
+/|`
+	file, diagnostics := Parse(lexer.Tokenize(input))
+	if len(diagnostics) != 0 {
+		t.Fatalf("unexpected diagnostics: %v", diagnostics)
+	}
+	if len(file.StyleImports) != 2 {
+		t.Fatalf("style imports = %d, want 2", len(file.StyleImports))
+	}
+	if file.StyleImports[0].Kind != ImportStyle || file.StyleImports[0].From != "./Counter.nova-style" {
+		t.Fatalf("first style import = %+v", file.StyleImports[0])
+	}
+	if file.StyleImports[1].Kind != ImportStylesheet || file.StyleImports[1].From != "./Counter.css" {
+		t.Fatalf("second style import = %+v", file.StyleImports[1])
+	}
+}
+
 func TestParseEventImportAliasRequiresSchedulerPrefix(t *testing.T) {
 	input := `<import event @submit as @cart_submit from "./Cart.nova" /|`
 

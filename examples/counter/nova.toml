@@ -5,11 +5,9 @@ entry = "src/App.nova"
 
 [targets.web]
 renderer = "@nova/web"
-styles = ["src/Counter.css"]
 
 [targets.android]
 renderer = "@nova/android"
-styles = ["src/Counter.css"]
 application_id = "dev.nova.example.counter"
 namespace = "nova.generated.counter"
 compile_sdk = 35

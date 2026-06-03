@@ -88,24 +88,12 @@ build/web/bundle-manifest.json
 
 `index.html` bisa dibuka langsung di browser.
 
-CSS project bisa didaftarkan per target sebagai stylesheet global atau app-scoped dari manifest:
-
-```toml
-[targets.web]
-renderer = "@nova/web"
-styles = ["src/Counter.css"]
-scoped_styles = ["src/App.css"]
-
-[targets.android]
-renderer = "@nova/android"
-styles = ["src/Counter.css"]
-```
-
-File CSS web disalin ke artifact web dan di-link setelah runtime base CSS. `scoped_styles`
-diprefix ke root app web (`#nova-root[data-nova-style-scope~="app"]`) dan dicatat di
-`build/web/style-manifest.json`. Target Android memakai subset class CSS statis untuk native View
-styling dasar seperti warna, font, padding, border, background, dan min-height. Detail CSS module
-dan style per capability masih area lanjutan; lihat ADR-005 (style di artifact/provider).
+**Style (ADR-012):** daftarkan skin di source `.nova`, bukan di `nova.toml` (`styles` /
+`scoped_styles` ditolak dengan `NVA-PROJECT-005`). Portable skin:
+`<import style from "./Counter.nova-style" />` (satu scope per file: `scope: global` atau
+`scope: app`). Web-only CSS: `<import stylesheet from "./effects.css" />` (Android build
+mengabaikan `.css` dengan info `NVA-STYLE-013`). Impor style mengikuti module graph dari
+`entry` (transitive). Panduan: [docs/style-format.md](docs/style-format.md).
 
 ## Dev Web
 

@@ -12,6 +12,7 @@ import (
 	"github.com/dwlhm/nova/internal/core/plan"
 	"github.com/dwlhm/nova/internal/core/security"
 	"github.com/dwlhm/nova/internal/core/semantic"
+	"github.com/dwlhm/nova/internal/core/style"
 )
 
 // Diagnostic is a compiler diagnostic from any core pipeline stage.
@@ -35,10 +36,11 @@ const (
 
 // Program is the output of the core compiler pipeline for a project slice.
 type Program struct {
-	Raw     []ast.RawModule
-	Checked []ast.CheckedModule
-	Plan    plan.Core
-	NovaIR  ir.NovaIR
+	Raw          []ast.RawModule
+	Checked      []ast.CheckedModule
+	Plan         plan.Core
+	StyleImports []style.ImportRef
+	NovaIR       ir.NovaIR
 }
 
 // SourceModule is an input Nova source unit for the core pipeline.
@@ -184,6 +186,12 @@ func Lower(input LowerInput) (Program, []Diagnostic) {
 		return Program{}, diagnostics
 	}
 
+	styleImports, styleDiagnostics := style.CollectImports(resolution.Plan, ast.FileMap(input.Modules))
+	diagnostics = append(diagnostics, styleDiagnosticsToCompile(styleDiagnostics)...)
+	if len(styleDiagnostics) > 0 {
+		return Program{}, diagnostics
+	}
+
 	return Program{
 		Checked: input.Modules,
 		Plan: plan.Core{
@@ -192,8 +200,21 @@ func Lower(input LowerInput) (Program, []Diagnostic) {
 			Modules:  resolution.Plan.Modules,
 			Template: resolution.Plan.Template,
 		},
-		NovaIR: bundle,
+		StyleImports: styleImports,
+		NovaIR:       bundle,
 	}, nil
+}
+
+func styleDiagnosticsToCompile(items []style.Diagnostic) []Diagnostic {
+	out := make([]Diagnostic, 0, len(items))
+	for _, item := range items {
+		out = append(out, Diagnostic{
+			Stage:   StagePlan,
+			Code:    item.Code,
+			Message: item.Message,
+		})
+	}
+	return out
 }
 
 func irLowerInput(input LowerInput, partial plan.Partial) ir.LowerInput {
