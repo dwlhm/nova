@@ -342,7 +342,7 @@ Tasks:
 
 Status: `[ ]` (spec locked; not implemented)
 
-Scope: header `func name(params) -> Type:` only. Body expression grammar: ADR-016 (eval ADR-013).
+Scope: header `func name(params) -> Type:` only. Body expression grammar: ADR-016.
 
 Tasks:
 

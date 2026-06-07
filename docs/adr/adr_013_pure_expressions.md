@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (implementation in progress)
+Deprecated — referensi historis eval/lowering (`internal/core/expr`). Spesifikasi aktif: [ADR-014](adr_014_func_declaration.md)–[ADR-016](adr_016_expression_pipeline.md).
 
 ## Depends on
 
@@ -28,4 +28,4 @@ prefix atoms; final arg spans rest) remains until parser migrates to ADR-016 par
 
 ## Related
 
-- [ADR-016](adr_016_expression_pipeline.md) — grammar ekspresi, pipeline, special forms
+- [ADR-014](adr_014_func_declaration.md)–[ADR-016](adr_016_expression_pipeline.md) — spesifikasi aktif

@@ -6,7 +6,7 @@ Accepted (locked)
 
 ## Depends on
 
-ADR-001, ADR-004, ADR-013, ADR-014, ADR-015
+ADR-001, ADR-004, ADR-014, ADR-015
 
 ## Scope
 
@@ -18,8 +18,8 @@ ADR-001, ADR-004, ADR-013, ADR-014, ADR-015
 
 ## Context
 
-ADR-014 mengunci **deklarasi** named `func`; ADR-013 mengunci evaluasi/lowering pure expression.
-Grammar isi body — pemanggilan, cabang, pipeline, koleksi — belum normatif.
+ADR-014 mengunci **deklarasi** named `func`. Grammar isi body dan pipeline — ADR ini.
+Evaluasi/lowering ada di `internal/core/expr` (legacy [ADR-013](adr_013_pure_expressions.md), deprecated).
 
 Keputusan desain:
 
@@ -270,10 +270,8 @@ func ledgerFromRows(rows: unknown[]) -> string[]:
 - **Parser:** `PipeStage` dengan shorthand vs `AnonFunc`; deprecate ternary; combinator keywords.
 - **Validator:** zona purity; pipe chain typing; shorthand binder resolution.
 - **Lowering:** shorthand desugar ke anon/internal temps; combinators → runtime helpers;
-  named func → `NovaExpr.*` (ADR-013).
-- **ADR-013:** eval/lowering architecture tetap; grammar call arity legacy superseded untuk
-  pipeline oleh ADR ini.
-- **ADR-014:** Related link ke ADR-016; body grammar tidak lagi “future spec”.
+  named func → `NovaExpr.*` (`internal/core/expr`).
+- **ADR-014 / ADR-015:** body grammar; deklarasi header unchanged.
 - **Migrasi:** finance ternary → `if`; audiolab pipe whitespace → paren/shorthand.
 
 ## Alignment
@@ -284,6 +282,6 @@ Selaras [design-philosophy.md](../design-philosophy.md) (pure by default, expres
 
 ## Related
 
-- [ADR-013](adr_013_pure_expressions.md) — evaluasi dan lowering
+- [ADR-013](adr_013_pure_expressions.md) — eval/lowering legacy (deprecated)
 - [ADR-014](adr_014_func_declaration.md) — deklarasi named func
 - [ADR-015](adr_015_template_declaration.md) — deklarasi template; expr di binding argumen

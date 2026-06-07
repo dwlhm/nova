@@ -12,21 +12,20 @@ ADR mencatat keputusan yang mengikat implementasi. Ringkas; detail operasional d
 ## Mulai di sini
 
 1. [language-design.md](../language-design.md)
-2. ADR aktif [013](adr_013_pure_expressions.md)–[016](adr_016_expression_pipeline.md)
-3. ADR deprecated (000–012) hanya referensi historis runtime, build, ViewIR, dll.
+2. ADR aktif [014](adr_014_func_declaration.md)–[016](adr_016_expression_pipeline.md)
+3. ADR deprecated (000–013) hanya referensi historis
 
 ## Indeks — aktif
 
 | ADR | Topik | Status |
 | --- | --- | --- |
-| [013](adr_013_pure_expressions.md) | Pure expression eval, lowering | Accepted |
 | [014](adr_014_func_declaration.md) | Deklarasi `func` (header, `:`, signature) | Proposed (locked) |
 | [015](adr_015_template_declaration.md) | Deklarasi `template` (header, `entry`, `NodeType`) | Proposed (locked) |
 | [016](adr_016_expression_pipeline.md) | Ekspresi pure, pipeline `\|>`, special forms, anon | Accepted (locked) |
 
 ## Indeks — deprecated
 
-ADR 000–012 **tidak** menjadi sumber kebenaran grammar bahasa; implementasi legacy masih di kode.
+ADR 000–013 **tidak** menjadi sumber kebenaran grammar bahasa; implementasi legacy masih di kode.
 
 | ADR | Topik |
 | --- | --- |
@@ -43,6 +42,7 @@ ADR 000–012 **tidak** menjadi sumber kebenaran grammar bahasa; implementasi le
 | [010](adr_010_packages.md) | `@nova/*`, `@env/*` |
 | [011](adr_011_tooling.md) | CLI, test, conformance, dev |
 | [012](adr_012_style_format.md) | `.nova-style`, import discovery, core/style |
+| [013](adr_013_pure_expressions.md) | Pure expression eval, lowering (legacy) |
 
 ## Istilah
 
@@ -65,7 +65,7 @@ renderer = "@nova/android"
 ## ADR baru
 
 Salin [TEMPLATE.md](TEMPLATE.md). Link ADR terkait; jangan duplikasi panjang. Perubahan grammar
-ekspresi/deklarasi masuk ADR aktif (013–016) atau ADR baru yang menggantikan bagian spesifik.
+ekspresi/deklarasi masuk ADR aktif (014–016) atau ADR baru yang menggantikan bagian spesifik.
 
 ## ADR lama (dihapus)
 

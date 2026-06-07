@@ -6,12 +6,12 @@ Proposed (locked)
 
 ## Depends on
 
-ADR-001, ADR-004, ADR-013
+ADR-001, ADR-004, ADR-016
 
 ## Scope
 
 - **In scope:** keyword `func`, signature (`name`, parameters, return type), body delimiter `:`, penutup `/|`, formatting, migrasi dari `<func>`, aturan modul/registry di level deklarasi.
-- **Out of scope:** grammar isi body func (ekspresi, pipeline, special forms) — ADR-016; lowering runtime detail — ADR-013; `template` — ADR-015.
+- **Out of scope:** grammar isi body func (ekspresi, pipeline, special forms) — ADR-016; lowering runtime — `internal/core/expr`; `template` — ADR-015.
 
 ## Context
 
@@ -87,11 +87,11 @@ Parameter hanya mendeklarasikan nama dan tipe (ADR-004). Semantik pemanggilan da
 - Body dimulai pada baris setelah `:` (indent +1 setelah format).
 - `:` di header **bukan** `:` pada named argument di dalam body (konteks parser membedakan).
 
-Isi legal `FuncBody` **tidak** didefinisikan di ADR ini. Satu zona pure: ekspresi tunggal menurut ADR-016 (eval/lowering ADR-013).
+Isi legal `FuncBody` **tidak** didefinisikan di ADR ini. Satu zona pure: ekspresi tunggal menurut ADR-016.
 
 ### 5. Zona pure (deklarasi)
 
-Func adalah construct **pure** (ADR-001). Batas perilaku body (larangan state read, emit, external) tetap mengikat; detail validasi body mengacu ADR-013.
+Func adalah construct **pure** (ADR-001). Batas perilaku body (larangan state read, emit, external) tetap mengikat; detail validasi body mengacu ADR-016.
 
 ### 6. Modul dan registry
 
@@ -125,7 +125,7 @@ Tidak ada backward compatibility untuk tag `<func>`. Migrasi massal `examples/` 
 | `nova_func_duplicate_name` | Nama func bentrok di registry |
 | `nova_func_invalid_return_type` | Return type bukan tipe data (mis. `Surface`) |
 
-Validasi isi body (`nova_func_state_read`, `nova_expr_impure`, …) — ADR-016 / ADR-013.
+Validasi isi body (`nova_func_state_read`, `nova_expr_impure`, …) — ADR-016.
 
 ## Consequences
 
@@ -134,7 +134,7 @@ Validasi isi body (`nova_func_state_read`, `nova_expr_impure`, …) — ADR-016 
 - Validator: cek `:` dan return type sebelum parse body sebagai ekspresi.
 - LSP / fmt: signature `func name(a: T, b: U) -> R`.
 - ADR-001: bagian deklarasi `<func>` superseded oleh ADR ini setelah implementasi.
-- ADR-016: grammar isi body func; ADR-013: eval/lowering.
+- ADR-016: grammar isi body func; eval/lowering di `internal/core/expr`.
 
 ## Alignment
 
@@ -142,6 +142,5 @@ Selaras dengan [design-philosophy.md](../design-philosophy.md) (pure by default,
 
 ## Related
 
-- [ADR-013](adr_013_pure_expressions.md) — evaluasi dan lowering
 - [ADR-015](adr_015_template_declaration.md) — deklarasi `template` (header paralel)
 - [ADR-016](adr_016_expression_pipeline.md) — grammar ekspresi, pipeline, special forms
