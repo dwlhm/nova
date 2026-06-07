@@ -12,7 +12,7 @@ ADR mencatat keputusan yang mengikat implementasi. Ringkas; detail operasional d
 ## Mulai di sini
 
 1. [language-design.md](../language-design.md)
-2. ADR aktif [014](adr_014_func_declaration.md)–[016](adr_016_expression_pipeline.md)
+2. ADR aktif [014](adr_014_func_declaration.md)–[017](adr_017_contract_declarations.md)
 3. ADR deprecated (000–013) hanya referensi historis
 
 ## Indeks — aktif
@@ -22,6 +22,7 @@ ADR mencatat keputusan yang mengikat implementasi. Ringkas; detail operasional d
 | [014](adr_014_func_declaration.md) | Deklarasi `func` (header, `:`, signature) | Proposed (locked) |
 | [015](adr_015_template_declaration.md) | Deklarasi `template` (header, `entry`, `NodeType`) | Proposed (locked) |
 | [016](adr_016_expression_pipeline.md) | Ekspresi pure, pipeline `\|>`, special forms, anon | Accepted (locked) |
+| [017](adr_017_contract_declarations.md) | `type`, `state`, `emits`, `component`, `external`, `lifecycle`, `import` | Accepted (locked) |
 
 ## Indeks — deprecated
 
@@ -65,7 +66,7 @@ renderer = "@nova/android"
 ## ADR baru
 
 Salin [TEMPLATE.md](TEMPLATE.md). Link ADR terkait; jangan duplikasi panjang. Perubahan grammar
-ekspresi/deklarasi masuk ADR aktif (014–016) atau ADR baru yang menggantikan bagian spesifik.
+ekspresi/deklarasi masuk ADR aktif (014–017) atau ADR baru yang menggantikan bagian spesifik.
 
 ## ADR lama (dihapus)
 

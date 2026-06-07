@@ -2,7 +2,7 @@
 
 ## Status
 
-Deprecated — referensi historis runtime/scheduler. Spesifikasi bahasa aktif: [ADR-014](adr_014_func_declaration.md)–[ADR-016](adr_016_expression_pipeline.md).
+Deprecated — referensi historis runtime/scheduler. Spesifikasi bahasa aktif: [ADR-014](adr_014_func_declaration.md)–[ADR-017](adr_017_contract_declarations.md).
 
 ## Depends on
 

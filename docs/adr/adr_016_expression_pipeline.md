@@ -6,7 +6,7 @@ Accepted (locked)
 
 ## Depends on
 
-ADR-001, ADR-004, ADR-014, ADR-015
+ADR-014, ADR-015, ADR-017
 
 ## Scope
 
@@ -285,3 +285,4 @@ Selaras [design-philosophy.md](../design-philosophy.md) (pure by default, expres
 - [ADR-013](adr_013_pure_expressions.md) — eval/lowering legacy (deprecated)
 - [ADR-014](adr_014_func_declaration.md) — deklarasi named func
 - [ADR-015](adr_015_template_declaration.md) — deklarasi template; expr di binding argumen
+- [ADR-017](adr_017_contract_declarations.md) — `state` transisi, `lifecycle` expr

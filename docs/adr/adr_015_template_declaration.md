@@ -6,7 +6,7 @@ Proposed (locked)
 
 ## Depends on
 
-ADR-001, ADR-004, ADR-005, ADR-014
+ADR-014, ADR-016, ADR-017
 
 ## Scope
 
@@ -85,7 +85,7 @@ Template berparameter memodelkan komponen reusable; parameter = props/input temp
 - **Wajib** eksplisit.
 - Tipe **nominal node akar** yang diproduksi body, bukan `View` generik.
 - Contoh: `Surface`, `Page`, `Scroll`, `Column`, `Row`, `Button`, `Text`.
-- Dideklarasikan sebagai `contract type Surface opaque` (dan seterusnya) atau lewat registry primitive `@nova/ui` — detail tipe di ADR-004 / package registry.
+- Dideklarasikan sebagai `type Surface: opaque` (ADR-017) atau lewat registry primitive `@nova/ui`.
 
 Validator (di spesifikasi body): tipe node paling luar body harus **kompatibel** dengan `NodeType` header. Detail aturan kompatibilitas dan child matrix ada di spesifikasi isi template, bukan di ADR ini.
 
@@ -168,3 +168,4 @@ Header paralel ADR-014; routing tetap event-driven (ADR-002). Isi template dan i
 - [ADR-002](adr_002_runtime.md) — route sebagai state + event
 - Spesifikasi isi template (future) — node calls, children blocks, outlet / `match route`, child matrix
 - [ADR-016](adr_016_expression_pipeline.md) — ekspresi di argumen binding / attr
+- [ADR-017](adr_017_contract_declarations.md) — `component`, `type` opaque node

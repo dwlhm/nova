@@ -6,7 +6,7 @@ Proposed (locked)
 
 ## Depends on
 
-ADR-001, ADR-004, ADR-016
+ADR-016, ADR-017
 
 ## Scope
 
@@ -78,7 +78,7 @@ Parameter hanya mendeklarasikan nama dan tipe (ADR-004). Semantik pemanggilan da
 
 ### 3. Return type
 
-- Tipe data menurut ADR-004: primitif (`string`, `number`, `boolean`), record bernama, union, opaque.
+- Tipe data menurut ADR-017 §10: primitif (`string`, `number`, `boolean`), record bernama, union, opaque.
 - **Bukan** tipe node UI (`Surface`, `Button`, …) — itu domain `template` (ADR-015).
 
 ### 4. Body delimiter (`:`)
@@ -144,3 +144,4 @@ Selaras dengan [design-philosophy.md](../design-philosophy.md) (pure by default,
 
 - [ADR-015](adr_015_template_declaration.md) — deklarasi `template` (header paralel)
 - [ADR-016](adr_016_expression_pipeline.md) — grammar ekspresi, pipeline, special forms
+- [ADR-017](adr_017_contract_declarations.md) — `type` dan modul declarations

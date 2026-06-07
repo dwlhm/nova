@@ -2,7 +2,7 @@
 
 ## Status
 
-Deprecated — superseded oleh [ADR-014](adr_014_func_declaration.md)–[ADR-016](adr_016_expression_pipeline.md) untuk grammar ekspresi/deklarasi; referensi historis construct bahasa.
+Deprecated — superseded oleh [ADR-014](adr_014_func_declaration.md)–[ADR-017](adr_017_contract_declarations.md) untuk grammar ekspresi/deklarasi; referensi historis construct bahasa.
 
 ## Depends on
 
