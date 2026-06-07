@@ -95,6 +95,9 @@ func ParseDocument(sourcePath string, content string) (Sheet, []Diagnostic) {
 				})
 				continue
 			}
+			if !validateTokenIdent(name) {
+				diagnostics = append(diagnostics, diagnosticInvalidIdent("NVA-STYLE-010", "token", name))
+			}
 			sheet.Tokens[name] = value
 			continue
 		}
@@ -107,6 +110,8 @@ func ParseDocument(sourcePath string, content string) (Sheet, []Diagnostic) {
 					Code:    "NVA-STYLE-010",
 					Message: "class name is required",
 				})
+			} else if !validateClassIdent(blockName) {
+				diagnostics = append(diagnostics, diagnosticInvalidIdent("NVA-STYLE-010", "class", blockName))
 			}
 			continue
 		}
@@ -123,6 +128,15 @@ func ParseDocument(sourcePath string, content string) (Sheet, []Diagnostic) {
 			blockKind = "state"
 			blockName = parts[0]
 			blockPseudo = parts[1]
+			if !validateClassIdent(blockName) {
+				diagnostics = append(diagnostics, diagnosticInvalidIdent("NVA-STYLE-010", "class", blockName))
+			}
+			if !validatePseudo(blockPseudo) {
+				diagnostics = append(diagnostics, Diagnostic{
+					Code:    "NVA-STYLE-010",
+					Message: fmt.Sprintf("invalid pseudo %q", blockPseudo),
+				})
+			}
 			continue
 		}
 		if line == "}" {
@@ -155,6 +169,9 @@ func ParseDocument(sourcePath string, content string) (Sheet, []Diagnostic) {
 
 	if len(diagnostics) == 0 {
 		diagnostics = append(diagnostics, resolveSheetTokens(&sheet)...)
+	}
+	if len(diagnostics) == 0 {
+		diagnostics = append(diagnostics, ValidateSheet(sheet)...)
 	}
 	return sheet, diagnostics
 }
@@ -223,42 +240,57 @@ func resolveSheetTokens(sheet *Sheet) []Diagnostic {
 		sheet.Tokens[name] = resolved
 	}
 
-	resolveProperty := func(value string) string {
-		if isLiteralValue(value) {
-			return value
-		}
-		if resolved, ok := sheet.Tokens[value]; ok {
-			return resolved
-		}
-		return value
-	}
-
 	for className, rule := range sheet.Classes {
 		for prop, value := range rule.Properties {
-			rule.Properties[prop] = resolveProperty(value)
+			rule.Properties[prop] = resolvePropertyValue(value, sheet.Tokens)
 		}
 		sheet.Classes[className] = rule
 	}
 	for index, state := range sheet.States {
 		for prop, value := range state.Properties {
-			state.Properties[prop] = resolveProperty(value)
+			state.Properties[prop] = resolvePropertyValue(value, sheet.Tokens)
 		}
 		sheet.States[index] = state
 	}
 	return diagnostics
 }
 
+func resolvePropertyValue(value string, tokens map[string]string) string {
+	fields := strings.Fields(strings.TrimSpace(value))
+	if len(fields) == 0 {
+		return value
+	}
+	if len(fields) == 1 && !isLiteralField(fields[0]) {
+		if resolved, ok := tokens[fields[0]]; ok {
+			return resolved
+		}
+	}
+	resolved := make([]string, 0, len(fields))
+	for _, field := range fields {
+		if isLiteralField(field) {
+			resolved = append(resolved, field)
+			continue
+		}
+		if tokenValue, ok := tokens[field]; ok {
+			resolved = append(resolved, strings.Fields(tokenValue)...)
+			continue
+		}
+		resolved = append(resolved, field)
+	}
+	return strings.Join(resolved, " ")
+}
+
 func isLiteralValue(value string) bool {
-	if value == "" {
+	fields := strings.Fields(strings.TrimSpace(value))
+	if len(fields) == 0 {
 		return false
 	}
-	if strings.HasPrefix(value, "#") {
-		return true
+	for _, field := range fields {
+		if !isLiteralField(field) {
+			return false
+		}
 	}
-	if value[0] >= '0' && value[0] <= '9' {
-		return true
-	}
-	return false
+	return true
 }
 
 func stripComment(line string) string {

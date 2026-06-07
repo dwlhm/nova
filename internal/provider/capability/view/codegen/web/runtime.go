@@ -10,10 +10,21 @@ func WebRuntime() string {
 
 window.NovaRuntime = (() => {
   const ROUTE_CHANGED_EVENT = "@route_changed";
+  const NAVIGATION_APPLY = "` + contract.NavigationApplyExpression + `";
+
+  function createEvaluate(runtime) {
+    return function evaluate(expression, state, payload) {
+      const trimmed = (expression || "").trim();
+      if (trimmed === NAVIGATION_APPLY) {
+        return applyNavigationRoute(runtime, state, payload || {});
+      }
+      if (!trimmed) return "";
+      return Function("state", "payload", "\"use strict\"; return (" + expression + ");")(state, payload || {});
+    };
+  }
 
   function evaluate(expression, state, payload) {
-    if (!expression || !expression.trim()) return "";
-    return Function("state", "payload", "\"use strict\"; return (" + expression + ");")(state, payload || {});
+    return createEvaluate(null)(expression, state, payload);
   }
 
   function bindingExpression(binding) {
@@ -30,45 +41,19 @@ window.NovaRuntime = (() => {
     return state;
   }
 
-  function externalOperationSpec(app, effectId) {
-    return ((app.externalOperations || []).find((entry) => entry.id === effectId)) || null;
-  }
-
-  function effectPermissions(app, effectId) {
-    const spec = externalOperationSpec(app, effectId);
-    if (spec && spec.permissions) return spec.permissions;
-    const effect = ((app.effects || []).find((entry) => entry.id === effectId));
-    return (effect && effect.permissions) || [];
-  }
-
-  function hasProjectPermission(app, permission) {
-    return (app.permissions || []).includes(permission);
-  }
-
-  function validateExternalOutput(app, effectId, output) {
-    const spec = externalOperationSpec(app, effectId);
-    if (spec && spec.output === "void" && output != null) {
-      throw new Error("external operation " + effectId + " expected void output");
-    }
-    if (spec && spec.output === "string" && output != null && typeof output !== "string") {
-      throw new Error("external operation " + effectId + " expected string output");
-    }
-    return output;
-  }
-
   function invokeExternalOperation(runtime, request, pending) {
-    const permissions = effectPermissions(runtime.app, request.effectId);
-    for (const permission of permissions) {
-      if (!hasProjectPermission(runtime.app, permission)) {
-        if (request.onFailure) {
-          runtime.scheduler.enqueue(request.owner, request.onFailure, ["permission denied: " + permission]);
-          runtime.scheduler.drain();
-        }
-        return;
+    try {
+      NovaExternal.checkPermission(runtime.app, request.effectId);
+    } catch (error) {
+      const message = error && error.message ? error.message : String(error);
+      if (request.onFailure) {
+        runtime.scheduler.enqueue(request.owner, request.onFailure, [message]);
+        runtime.scheduler.drain();
       }
+      return;
     }
     Promise.resolve(executeExternal(runtime.app, request))
-      .then((output) => validateExternalOutput(runtime.app, request.effectId, output))
+      .then((output) => NovaExternal.validateOutput(runtime.app, request.effectId, output))
       .then((output) => {
         if (!request.onSuccess) return;
         runtime.scheduler.enqueue(request.owner, request.onSuccess, output == null ? [] : [output]);
@@ -90,12 +75,50 @@ window.NovaRuntime = (() => {
     throw new Error("NovaExternal adapter module is required for " + request.effectId);
   }
 
+  function invokeExternalSync(runtime, effectId, input) {
+    NovaExternal.checkPermission(runtime.app, effectId);
+    const output = executeExternal(runtime.app, { effectId, input: input || {} });
+    if (output && typeof output.then === "function") {
+      throw new Error("hydration restore requires synchronous external " + effectId);
+    }
+    return NovaExternal.validateOutput(runtime.app, effectId, output);
+  }
+
+  function evaluateHydrationInput(input, runtime) {
+    const out = {};
+    for (const [key, expr] of Object.entries(input || {})) {
+      out[key] = evaluate(expr, runtime.state, {});
+    }
+    return out;
+  }
+
+  function restorePersistedState(runtime) {
+    const manifest = runtime.app.persistence;
+    if (!manifest || !manifest.loads || !manifest.loads.length) return;
+    for (const step of manifest.loads) {
+      try {
+        const output = invokeExternalSync(runtime, step.effectId, evaluateHydrationInput(step.input, runtime));
+        runtime.scheduler.commitTransition(step.successEvent, output == null ? [] : [output]);
+      } catch (error) {
+        const message = error && error.message ? error.message : String(error);
+        if (step.failureEvent) {
+          runtime.scheduler.commitTransition(step.failureEvent, [message]);
+        }
+        return;
+      }
+    }
+    if (manifest.terminalEvent) {
+      runtime.scheduler.commitTransition(manifest.terminalEvent, []);
+    }
+  }
+
   function schedulerHost(runtime) {
+    const evaluateForHost = createEvaluate(runtime);
     return {
       app: runtime.app,
       state: () => runtime.state,
       commitState: (state) => { runtime.state = state; },
-      evaluate,
+      evaluate: evaluateForHost,
       cloneState,
       stateInvalidations: (beforeState, afterState) => stateInvalidations(runtime, beforeState, afterState),
       hasRouteState: () => hasRouteState(runtime),
@@ -104,7 +127,12 @@ window.NovaRuntime = (() => {
       routeValueForShape: (route, shape) => routeValueForShape(route, shape, runtime),
       update: (invalidations) => update(runtime, invalidations),
       reconcileNavigation: (beforeRoute, options) => reconcileNavigation(runtime, beforeRoute, options),
-      invokeExternal: (request, pending) => invokeExternalOperation(runtime, request, pending)
+      invokeExternal: (request, pending) => invokeExternalOperation(runtime, request, pending),
+      shouldSkipLifecycleAfter: (eventName) => {
+        if (!runtime.mounting) return false;
+        const skip = ((runtime.app.persistence || {}).skipAfterEvents) || [];
+        return skip.includes(eventName);
+      }
     };
   }
 
@@ -275,6 +303,9 @@ window.NovaRuntime = (() => {
       updateNodeBinding(text, node, "value", runtime);
       return text;
     }
+    if (kind === "select") {
+      return renderSelectInput(node, props, events, runtime, path);
+    }
     const custom = rendererPrimitive(runtime, kind);
     if (custom) {
       return renderCustomNode(custom, node, props, events, children, runtime, path);
@@ -290,6 +321,26 @@ window.NovaRuntime = (() => {
     if (kind === "text" && !children.length && props.value) {
       updateNodeBinding(element, node, "value", runtime);
     }
+    return element;
+  }
+
+  function renderSelectInput(node, props, events, runtime, path) {
+    const element = document.createElement("select");
+    runtime.refs.set(pathKey(path), element);
+    element.dataset.novaKind = "select";
+    const options = String(evaluate(bindingExpression(props.options), runtime.state, {}) || "")
+      .split("|")
+      .map((item) => item.trim())
+      .filter(Boolean);
+    for (const optionValue of options) {
+      const option = document.createElement("option");
+      option.value = optionValue;
+      option.textContent = optionValue;
+      element.appendChild(option);
+    }
+    applyProps(element, props, runtime);
+    applyEvents(element, events, runtime);
+    updateNodeBinding(element, node, "value", runtime);
     return element;
   }
 
@@ -376,22 +427,130 @@ window.NovaRuntime = (() => {
   }
 
   function setupNavigation(runtime) {
-    if (!canUseHistory(runtime)) return;
+    runtime.routeBackStack = [];
+    runtime.applyingDeepLink = false;
+    runtime.applyingSystemBack = false;
+    if (!hasRouteState(runtime)) return;
+    if (!canUseHistory(runtime)) {
+      initializeRouteBackStack(runtime);
+      return;
+    }
     const platformRoute = routeObjectFromLocation(window.location);
     if (isExplicitPlatformRoute(window.location)) {
-      runtime.state.route = routeValueForShape(platformRoute, runtime.state.route, runtime);
+      runtime.applyingDeepLink = true;
+      try {
+        runtime.state.route = routeValueForShape(platformRoute, runtime.state.route, runtime);
+      } finally {
+        runtime.applyingDeepLink = false;
+      }
     }
     reconcileRouteState(runtime);
+    initializeRouteBackStack(runtime);
     writeHistoryState(runtime, "replace");
-    window.addEventListener("popstate", (event) => {
-      const route = event && event.state && event.state.novaRoute
-        ? routeObject(event.state.novaRoute)
-        : routeObjectFromLocation(window.location);
+    window.addEventListener("popstate", () => {
+      if (hasTransition(runtime, "@navigate") && canNavigateBack(runtime)) {
+        runtime.applyingSystemBack = true;
+        try {
+          dispatch(runtime, "@navigate", [{ kind: "back" }], { source: "platform" });
+        } finally {
+          runtime.applyingSystemBack = false;
+        }
+        return;
+      }
+      const route = routeObjectFromLocation(window.location);
       dispatch(runtime, ROUTE_CHANGED_EVENT, [routeValueForShape(route, runtime.state.route, runtime)], { source: "platform" });
     });
   }
 
+  function hasTransition(runtime, eventName) {
+    for (const cell of (runtime.app.model || {}).states || []) {
+      for (const transition of cell.transitions || []) {
+        if (transition.event === eventName) return true;
+      }
+    }
+    return false;
+  }
+
+  function canNavigateBack(runtime) {
+    return !!(runtime.routeBackStack && runtime.routeBackStack.length > 1);
+  }
+
+  function initializeRouteBackStack(runtime) {
+    if (!hasRouteState(runtime) || (runtime.routeBackStack && runtime.routeBackStack.length)) return;
+    runtime.routeBackStack = [cloneRouteValue(runtime.state.route, runtime)];
+  }
+
+  function cloneRouteValue(value, runtime) {
+    return routeValueForShape(routeObject(value), value, runtime);
+  }
+
+  function parseNavigationAction(payload) {
+    let data = payload;
+    if (payload && typeof payload === "object" && payload.action != null) {
+      data = payload.action;
+    }
+    if (!data || typeof data !== "object" || Array.isArray(data)) {
+      throw new Error("navigation action must be a record");
+    }
+    const kind = data.kind;
+    if (!kind) throw new Error("navigation action requires kind");
+    let route = null;
+    if (data.route != null) {
+      route = routeObject(data.route);
+    }
+    if ((kind === "push" || kind === "replace") && !route) {
+      throw new Error(kind + " navigation requires route");
+    }
+    return { kind, route };
+  }
+
+  function applyNavigationRoute(runtime, state, payload) {
+    const action = parseNavigationAction(payload);
+    if (!runtime.routeBackStack || !runtime.routeBackStack.length) {
+      initializeRouteBackStack(runtime);
+    }
+    const current = routeValueForShape(routeObject(state.route), state.route, runtime);
+    runtime.routeBackStack[runtime.routeBackStack.length - 1] = cloneRouteValue(current, runtime);
+    if (action.kind === "push") {
+      const next = routeValueForShape(action.route, state.route, runtime);
+      runtime.routeBackStack.push(cloneRouteValue(next, runtime));
+      return next;
+    }
+    if (action.kind === "replace") {
+      const next = routeValueForShape(action.route, state.route, runtime);
+      runtime.routeBackStack[runtime.routeBackStack.length - 1] = cloneRouteValue(next, runtime);
+      return next;
+    }
+    if (action.kind === "back") {
+      if (runtime.routeBackStack.length <= 1) {
+        throw new Error("back navigation rejected by route state");
+      }
+      runtime.routeBackStack.pop();
+      return cloneRouteValue(runtime.routeBackStack[runtime.routeBackStack.length - 1], runtime);
+    }
+    throw new Error("unsupported navigation action " + action.kind);
+  }
+
+  function reconcileRouteBackStack(runtime, beforeRoute) {
+    if (!hasRouteState(runtime)) return;
+    if (runtime.applyingDeepLink) {
+      runtime.routeBackStack = [cloneRouteValue(runtime.state.route, runtime)];
+      return;
+    }
+    if (!runtime.routeBackStack || !runtime.routeBackStack.length) {
+      initializeRouteBackStack(runtime);
+      return;
+    }
+    const afterRoute = routeKey(runtime);
+    if (beforeRoute === afterRoute || runtime.applyingSystemBack) return;
+    const last = runtime.routeBackStack[runtime.routeBackStack.length - 1];
+    if (routeURL(routeObject(last)) !== afterRoute) {
+      runtime.routeBackStack.push(cloneRouteValue(runtime.state.route, runtime));
+    }
+  }
+
   function reconcileNavigation(runtime, beforeRoute, options) {
+    reconcileRouteBackStack(runtime, beforeRoute);
     if (!canUseHistory(runtime)) return;
     const afterRoute = routeKey(runtime);
     if (beforeRoute === afterRoute) return;
@@ -630,6 +789,7 @@ window.NovaRuntime = (() => {
     if (kind === "text") return "span";
     if (kind === "button") return "button";
     if (kind === "text_input" || kind === "number_input") return "input";
+    if (kind === "select") return "select";
     if (/^[a-z][a-z0-9-]*$/.test(kind)) return kind;
     return "div";
   }
@@ -679,7 +839,8 @@ window.NovaRuntime = (() => {
         });
       }
       if (slot === "on_change") {
-        element.addEventListener("input", () => {
+        const domEvent = element.tagName === "SELECT" ? "change" : "input";
+        element.addEventListener(domEvent, () => {
           const current = inputEventValue(element);
           const values = args.length
             ? args.map((arg) => evaluateContractArg(arg, runtime, current))
@@ -721,9 +882,18 @@ window.NovaRuntime = (() => {
     const runtime = { app, root, state: initialState(app), renderer: window.NovaRenderer };
     runtime.scheduler = window.NovaScheduler.create(schedulerHost(runtime));
     window.__NOVA_RUNTIME__ = runtime;
+    if (window.NovaAppLifecycle && typeof window.NovaAppLifecycle.bind === "function") {
+      window.NovaAppLifecycle.bind(runtime);
+    }
     setupNavigation(runtime);
     render(runtime);
-    runtime.scheduler.runLifecycle("mount", "", []);
+    runtime.mounting = true;
+    try {
+      runtime.scheduler.runLifecycle("mount", "", []);
+      restorePersistedState(runtime);
+    } finally {
+      runtime.mounting = false;
+    }
     window.addEventListener("beforeunload", () => {
       runtime.scheduler.runLifecycle("dispose", "", []);
     });

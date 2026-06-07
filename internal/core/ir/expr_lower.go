@@ -2,8 +2,9 @@ package ir
 
 import (
 	"encoding/json"
-	"strings"
+	"fmt"
 
+	"github.com/dwlhm/nova/internal/core/expr"
 	"github.com/dwlhm/nova/internal/core/lexer"
 	"github.com/dwlhm/nova/internal/core/parser"
 	"github.com/dwlhm/nova/internal/core/view"
@@ -27,9 +28,11 @@ type loweredTransitionModel struct {
 	Expression string   `json:"expression"`
 }
 
-func buildLoweredAppModel(modules []ModuleRef, sources map[string]parser.File) loweredAppModel {
+func buildLoweredAppModel(modules []ModuleRef, sources map[string]parser.File) (loweredAppModel, []Diagnostic) {
 	stateNames := collectModelStateNames(modules, sources)
+	registry := buildExprRegistry(sources)
 	states := make([]loweredStateModel, 0)
+	var diagnostics []Diagnostic
 	for _, module := range modules {
 		file, ok := sources[module.Path]
 		if !ok {
@@ -37,31 +40,38 @@ func buildLoweredAppModel(modules []ModuleRef, sources map[string]parser.File) l
 		}
 		for _, contract := range file.ContractStates {
 			for _, state := range contract.States {
+				initial, initialDiags := lowerExpressionJS(state.Initial, registry, stateNames, nil)
+				diagnostics = append(diagnostics, initialDiags...)
+				transitions, transitionDiags := transitionModels(state.Transitions, registry, stateNames)
+				diagnostics = append(diagnostics, transitionDiags...)
 				states = append(states, loweredStateModel{
 					Owner:       contract.Name,
 					Name:        state.Name,
 					Type:        state.Type.Text,
-					Initial:     expressionToJS(state.Initial, stateNames, nil),
-					Transitions: transitionModels(state.Transitions, stateNames),
+					Initial:     initial,
+					Transitions: transitions,
 				})
 			}
 		}
 	}
-	return loweredAppModel{States: states}
+	return loweredAppModel{States: states}, diagnostics
 }
 
-func transitionModels(transitions []parser.TransitionRule, stateNames map[string]bool) []loweredTransitionModel {
+func transitionModels(transitions []parser.TransitionRule, registry *expr.Registry, stateNames map[string]bool) ([]loweredTransitionModel, []Diagnostic) {
 	out := make([]loweredTransitionModel, 0, len(transitions))
+	var diagnostics []Diagnostic
 	for _, transition := range transitions {
 		params := eventParamNames(transition.Event)
 		paramSet := stringSet(params)
+		expression, diags := lowerExpressionJS(transition.Expr, registry, stateNames, paramSet)
+		diagnostics = append(diagnostics, diags...)
 		out = append(out, loweredTransitionModel{
 			Event:      transition.Event.Name,
 			Params:     params,
-			Expression: expressionToJS(transition.Expr, stateNames, paramSet),
+			Expression: expression,
 		})
 	}
-	return out
+	return out, diagnostics
 }
 
 func eventParamNames(pattern parser.EventPattern) []string {
@@ -112,146 +122,30 @@ func collectStateNames(sources []SourceFile) map[string]bool {
 	return names
 }
 
-func expressionToJS(tokens []lexer.Token, stateNames map[string]bool, paramNames map[string]bool) string {
+func buildExprRegistry(sources map[string]parser.File) *expr.Registry {
+	files := make([]parser.File, 0, len(sources))
+	for _, file := range sources {
+		files = append(files, file)
+	}
+	return expr.BuildRegistry(files)
+}
+
+func lowerExpressionJS(tokens []lexer.Token, registry *expr.Registry, stateNames map[string]bool, paramNames map[string]bool) (string, []Diagnostic) {
 	tokens = trimExpressionTokens(tokens)
-	if record, ok := recordLiteralToJS(tokens, stateNames, paramNames); ok {
-		return record
+	if len(tokens) == 0 {
+		return `""`, nil
 	}
-
-	parts := make([]string, 0, len(tokens))
-	for _, tok := range tokens {
-		parts = append(parts, tokenToJS(tok, stateNames, paramNames))
+	lowered, err := expr.LowerJS(tokens, registry, stateNames, paramNames)
+	if err != nil {
+		return "", []Diagnostic{exprDiagnostic(err)}
 	}
-	return strings.Join(parts, " ")
+	return lowered, nil
 }
 
-func recordLiteralToJS(tokens []lexer.Token, stateNames map[string]bool, paramNames map[string]bool) (string, bool) {
-	fields, ok := parseRecordExpressionFields(tokens)
-	if !ok {
-		return "", false
-	}
-
-	parts := make([]string, 0, len(fields))
-	for _, field := range fields {
-		parts = append(parts, field.Name.Literal+": "+expressionToJS(field.Value, stateNames, paramNames))
-	}
-	return "({ " + strings.Join(parts, ", ") + " })", true
-}
-
-type recordExpressionField struct {
-	Name  lexer.Token
-	Value []lexer.Token
-}
-
-func parseRecordExpressionFields(tokens []lexer.Token) ([]recordExpressionField, bool) {
-	if len(tokens) < 2 || tokens[0].Type != lexer.LBRACE || tokens[len(tokens)-1].Type != lexer.RBRACE {
-		return nil, false
-	}
-
-	body := tokens[1 : len(tokens)-1]
-	fields := make([]recordExpressionField, 0)
-	pos := 0
-	for pos < len(body) {
-		for pos < len(body) && isRecordExpressionSeparator(body[pos].Type) {
-			pos++
-		}
-		if pos >= len(body) {
-			break
-		}
-
-		name := body[pos]
-		if !isRecordExpressionName(name.Type) {
-			return nil, false
-		}
-		pos++
-		if pos >= len(body) || body[pos].Type != lexer.ASSIGN_IN {
-			return nil, false
-		}
-		pos++
-
-		start := pos
-		depth := 0
-		for pos < len(body) {
-			tok := body[pos]
-			if depth == 0 && isRecordExpressionSeparator(tok.Type) {
-				break
-			}
-			depth = expressionDepth(depth, tok.Type)
-			pos++
-		}
-		value := trimExpressionTokens(body[start:pos])
-		if len(value) == 0 {
-			return nil, false
-		}
-		fields = append(fields, recordExpressionField{Name: name, Value: value})
-	}
-	return fields, len(fields) > 0
-}
-
-func trimExpressionTokens(tokens []lexer.Token) []lexer.Token {
-	start := 0
-	for start < len(tokens) && (tokens[start].Type == lexer.EOF || tokens[start].Type == lexer.COMMENT || tokens[start].Type == lexer.SEMICOLON) {
-		start++
-	}
-	end := len(tokens)
-	for end > start && (tokens[end-1].Type == lexer.EOF || tokens[end-1].Type == lexer.COMMENT || tokens[end-1].Type == lexer.SEMICOLON) {
-		end--
-	}
-	return tokens[start:end]
-}
-
-func isRecordExpressionSeparator(typ lexer.TokenType) bool {
-	return typ == lexer.SEMICOLON || typ == lexer.COMMA || typ == lexer.COMMENT
-}
-
-func isRecordExpressionName(typ lexer.TokenType) bool {
-	switch typ {
-	case lexer.IDENT, lexer.TYPE, lexer.STATE, lexer.EVENT, lexer.CAPABILITY, lexer.EXTERNAL,
-		lexer.OPERATION, lexer.INPUT, lexer.OUTPUT, lexer.PROPS, lexer.EMITS, lexer.RETURNS,
-		lexer.TARGET, lexer.MOUNT, lexer.DISPOSE, lexer.BEFORE, lexer.AFTER, lexer.ERROR:
-		return true
-	default:
-		return false
-	}
-}
-
-func expressionDepth(depth int, typ lexer.TokenType) int {
-	switch typ {
-	case lexer.LPAREN, lexer.LBRACKET, lexer.LBRACE:
-		return depth + 1
-	case lexer.RPAREN, lexer.RBRACKET, lexer.RBRACE:
-		if depth > 0 {
-			return depth - 1
-		}
-	}
-	return depth
-}
-
-func tokenToJS(tok lexer.Token, stateNames map[string]bool, paramNames map[string]bool) string {
-	switch tok.Type {
-	case lexer.STRING:
-		return quoteJS(tok.Literal)
-	case lexer.IDENT:
-		switch {
-		case stateNames[tok.Literal]:
-			return "state." + tok.Literal
-		case paramNames[tok.Literal]:
-			return "payload." + tok.Literal
-		default:
-			return tok.Literal
-		}
-	case lexer.NUMBER:
-		return tok.Literal
-	case lexer.TRUE:
-		return "true"
-	case lexer.FALSE:
-		return "false"
-	case lexer.NULL:
-		return "null"
-	case lexer.VOID:
-		return "undefined"
-	default:
-		return tok.Literal
+func exprDiagnostic(err error) Diagnostic {
+	return Diagnostic{
+		Code:    "NVA-EXPR-001",
+		Message: fmt.Sprintf("expression lowering failed: %v", err),
 	}
 }
 
@@ -282,4 +176,28 @@ func stateNamesFromModel(model loweredAppModel) map[string]bool {
 		names[state.Name] = true
 	}
 	return names
+}
+
+func trimExpressionTokens(tokens []lexer.Token) []lexer.Token {
+	start := 0
+	for start < len(tokens) && (tokens[start].Type == lexer.EOF || tokens[start].Type == lexer.COMMENT || tokens[start].Type == lexer.SEMICOLON) {
+		start++
+	}
+	end := len(tokens)
+	for end > start && (tokens[end-1].Type == lexer.EOF || tokens[end-1].Type == lexer.COMMENT || tokens[end-1].Type == lexer.SEMICOLON) {
+		end--
+	}
+	return tokens[start:end]
+}
+
+func expressionDepth(depth int, typ lexer.TokenType) int {
+	switch typ {
+	case lexer.LPAREN, lexer.LBRACKET, lexer.LBRACE:
+		return depth + 1
+	case lexer.RPAREN, lexer.RBRACKET, lexer.RBRACE:
+		if depth > 0 {
+			return depth - 1
+		}
+	}
+	return depth
 }

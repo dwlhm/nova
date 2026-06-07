@@ -15,7 +15,7 @@ func TestExternalAdaptersBundleKnownSources(t *testing.T) {
 	if !bundle.Enabled {
 		t.Fatal("expected external adapter bundle")
 	}
-	for _, token := range []string{"NovaExternal", "@env/storage", "@env/network", "isSerializable"} {
+	for _, token := range []string{"NovaExternal", "NovaExternalCore", "@env/storage", "@env/network", "checkPermission", "isSerializable"} {
 		if !strings.Contains(bundle.Content, token) {
 			t.Fatalf("bundle missing %q", token)
 		}

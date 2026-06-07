@@ -57,10 +57,6 @@ func BuildBundle(targetID string, imports []ImportRef, read ReadFile) (Bundle, [
 				filtered, stateDiags := FilterAndroidStates(sheet.States)
 				diagnostics = append(diagnostics, stateDiags...)
 				sheet.States = filtered
-				for _, item := range ValidatePortableSubset(sheet) {
-					diagnostics = append(diagnostics, item)
-					refFailed = true
-				}
 			}
 			if refFailed {
 				failed = true
@@ -74,6 +70,11 @@ func BuildBundle(targetID string, imports []ImportRef, read ReadFile) (Bundle, [
 				Content:    string(content),
 			})
 		}
+	}
+
+	for _, item := range ValidateBundle(bundle) {
+		diagnostics = append(diagnostics, item)
+		failed = true
 	}
 
 	sort.Slice(bundle.Sheets, func(i, j int) bool {

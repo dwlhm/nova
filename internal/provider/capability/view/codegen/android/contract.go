@@ -30,7 +30,8 @@ func MainActivityFromContract(app contract.App, config androidtarget.Config, bun
 	}
 	var builder strings.Builder
 	builder.WriteString("package " + config.Namespace + ";\n\n")
-	builder.WriteString("import static " + config.Namespace + ".NovaRuntime.*;\n\n")
+	builder.WriteString("import static " + config.Namespace + ".NovaRuntime.*;\n")
+	builder.WriteString("import " + config.Namespace + ".NovaExpr;\n\n")
 	builder.WriteString("import nova.scheduler.NovaScheduler;\n")
 	builder.WriteString("import nova.scheduler.NovaTransition;\n\n")
 	builder.WriteString("import android.app.Activity;\n")
@@ -39,6 +40,10 @@ func MainActivityFromContract(app contract.App, config androidtarget.Config, bun
 	builder.WriteString("import android.graphics.Typeface;\n")
 	builder.WriteString("import android.graphics.drawable.GradientDrawable;\n")
 	builder.WriteString("import android.graphics.drawable.StateListDrawable;\n")
+	if len(routePatterns) > 0 {
+		builder.WriteString("import android.content.Intent;\n")
+		builder.WriteString("import android.net.Uri;\n")
+	}
 	builder.WriteString("import android.os.Bundle;\n")
 	builder.WriteString("import android.text.Editable;\n")
 	builder.WriteString("import android.text.InputType;\n")
@@ -46,7 +51,10 @@ func MainActivityFromContract(app contract.App, config androidtarget.Config, bun
 	builder.WriteString("import android.util.TypedValue;\n")
 	builder.WriteString("import android.view.Gravity;\n")
 	builder.WriteString("import android.view.View;\n")
+	builder.WriteString("import android.widget.Spinner;\n")
+	builder.WriteString("import android.widget.ArrayAdapter;\n")
 	builder.WriteString("import android.view.ViewGroup;\n")
+	builder.WriteString("import android.widget.AdapterView;\n")
 	builder.WriteString("import android.widget.Button;\n")
 	builder.WriteString("import android.widget.EditText;\n")
 	builder.WriteString("import android.widget.FrameLayout;\n")
@@ -67,8 +75,11 @@ func MainActivityFromContract(app contract.App, config androidtarget.Config, bun
 	builder.WriteString("    private final Map<String, View> views = new LinkedHashMap<>();\n")
 	builder.WriteString("    private final List<Object> routeBackStack = new ArrayList<>();\n")
 	builder.WriteString("    private final NovaScheduler scheduler = new NovaScheduler(this);\n")
-	builder.WriteString("    private final NovaPrimitiveRegistry primitiveRegistry = NovaRendererExtensions.register(new NovaPrimitiveRegistry());\n")
+	builder.WriteString("    private final NovaRenderer novaRenderer = NovaRendererExtensions.register(NovaRenderer.create());\n")
 	builder.WriteString("    private boolean applyingSystemBack = false;\n")
+	if len(routePatterns) > 0 {
+		builder.WriteString("    private boolean applyingDeepLink = false;\n")
+	}
 	if len(app.Lifecycles) > 0 {
 		builder.WriteString("    private boolean mounting = false;\n")
 		builder.WriteString("    private final Set<String> mountInvalidations = new LinkedHashSet<>();\n")
@@ -78,13 +89,52 @@ func MainActivityFromContract(app contract.App, config androidtarget.Config, bun
 	builder.WriteString("    protected void onCreate(Bundle savedInstanceState) {\n")
 	builder.WriteString("        super.onCreate(savedInstanceState);\n")
 	builder.WriteString("        initializeState();\n")
+	builder.WriteString("        restoreSavedSnapshot(savedInstanceState);\n")
 	builder.WriteString("        initializeNavigationStack();\n")
+	if len(routePatterns) > 0 {
+		builder.WriteString("        handleDeepLinkIntent(getIntent());\n")
+	}
 	builder.WriteString("        schedulerMountLifecycles();\n")
 	builder.WriteString("        setContentView(buildViewTree());\n")
+	builder.WriteString("        enqueueAppLifecycle(\"@app_started\");\n")
 	builder.WriteString("    }\n\n")
+	builder.WriteString("    @Override\n")
+	builder.WriteString("    protected void onResume() {\n")
+	builder.WriteString("        super.onResume();\n")
+	builder.WriteString("        enqueueAppLifecycle(\"@app_resumed\");\n")
+	builder.WriteString("    }\n\n")
+	builder.WriteString("    @Override\n")
+	builder.WriteString("    protected void onPause() {\n")
+	builder.WriteString("        enqueueAppLifecycle(\"@app_paused\");\n")
+	builder.WriteString("        super.onPause();\n")
+	builder.WriteString("    }\n\n")
+	builder.WriteString("    @Override\n")
+	builder.WriteString("    protected void onStop() {\n")
+	builder.WriteString("        enqueueAppLifecycle(\"@app_stopped\");\n")
+	builder.WriteString("        super.onStop();\n")
+	builder.WriteString("    }\n\n")
+	builder.WriteString("    @Override\n")
+	builder.WriteString("    protected void onSaveInstanceState(Bundle outState) {\n")
+	builder.WriteString("        super.onSaveInstanceState(outState);\n")
+	builder.WriteString("        String encoded = NovaRuntime.encodeSnapshotPayload(state);\n")
+	builder.WriteString("        if (encoded != null && !encoded.isEmpty()) outState.putString(\"nova_snapshot\", encoded);\n")
+	builder.WriteString("    }\n\n")
+	if len(routePatterns) > 0 {
+		builder.WriteString("    @Override\n")
+		builder.WriteString("    protected void onNewIntent(Intent intent) {\n")
+		builder.WriteString("        super.onNewIntent(intent);\n")
+		builder.WriteString("        setIntent(intent);\n")
+		builder.WriteString("        handleDeepLinkIntent(intent);\n")
+		builder.WriteString("    }\n\n")
+	}
 	builder.WriteString("    @Override\n")
 	builder.WriteString("    public void onBackPressed() {\n")
 	builder.WriteString("        if (canNavigateBack()) handleSystemBack(); else super.onBackPressed();\n")
+	builder.WriteString("    }\n\n")
+	builder.WriteString("    @Override\n")
+	builder.WriteString("    protected void onDestroy() {\n")
+	builder.WriteString("        schedulerDisposeLifecycles();\n")
+	builder.WriteString("        super.onDestroy();\n")
 	builder.WriteString("    }\n\n")
 	builder.WriteString("    private void initializeState() {\n")
 	builder.WriteString("        if (!state.isEmpty()) return;\n")
@@ -94,8 +144,8 @@ func MainActivityFromContract(app contract.App, config androidtarget.Config, bun
 	builder.WriteString("        views.clear();\n")
 	builder.WriteString("        LinearLayout root = new LinearLayout(this);\n")
 	builder.WriteString("        root.setOrientation(LinearLayout.VERTICAL);\n")
-	builder.WriteString("        root.setGravity(Gravity.CENTER);\n")
-	builder.WriteString("        root.setPadding(dp(24), dp(24), dp(24), dp(24));\n")
+	builder.WriteString("        root.setGravity(Gravity.TOP | Gravity.START);\n")
+	builder.WriteString("        root.setPadding(dp(8), dp(8), dp(8), dp(8));\n")
 	builder.WriteString("        root.setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));\n")
 	builder.WriteString(renderer.renderBuildNodes(app.View.Nodes, "root", "        ", nil))
 	builder.WriteString("        applyBindings(null);\n")
@@ -103,11 +153,8 @@ func MainActivityFromContract(app contract.App, config androidtarget.Config, bun
 	builder.WriteString("        return root;\n")
 	builder.WriteString("    }\n\n")
 	builder.WriteString(androidContractTransitionTable(app.Model.States))
-	hydration, hydrationOK := detectStorageHydrationChain(app.Lifecycles)
-	if hydrationOK {
-		builder.WriteString(androidContractStorageHydration(hydration))
-	}
-	builder.WriteString(androidContractLifecycleHooks(app, hydration))
+	builder.WriteString(androidContractLifecycleHooks(app))
+	builder.WriteString(androidAppLifecycleHooks())
 	builder.WriteString(androidJavaRoutePatternTable(routePatterns))
 	builder.WriteString("    private List<String> stateNames() {\n")
 	builder.WriteString("        return Arrays.asList(\n")
@@ -121,14 +168,12 @@ func MainActivityFromContract(app contract.App, config androidtarget.Config, bun
 	builder.WriteString(renderer.renderUpdatePageVisibility(app.View.Nodes))
 	builder.WriteString(renderer.renderStatefulSkinMethods())
 	builder.WriteString(javaSchedulerActivityHost())
+	builder.WriteString(androidContractEventValidation(app))
 	if len(app.Lifecycles) == 0 {
 		builder.WriteString(javaSchedulerLifecycleStubs())
-	} else {
-		builder.WriteString("    protected void schedulerDisposeLifecycles() {}\n\n")
 	}
 	builder.WriteString("    private void applyStateCommit(Set<String> invalidations) {\n")
-	builder.WriteString("        if (invalidations.isEmpty()) return;\n")
-	builder.WriteString("        applyBindings(invalidations);\n")
+	builder.WriteString("        if (!invalidations.isEmpty()) applyBindings(invalidations);\n")
 	builder.WriteString("        updatePageVisibility();\n")
 	builder.WriteString("    }\n\n")
 	builder.WriteString("    private boolean hasRouteState() { return state.containsKey(\"route\"); }\n\n")
@@ -167,6 +212,11 @@ func MainActivityFromContract(app contract.App, config androidtarget.Config, bun
 	builder.WriteString("    }\n\n")
 	builder.WriteString("    private void reconcileRouteBackStack(Object beforeRoute, Object afterRoute) {\n")
 	builder.WriteString("        if (!hasRouteState()) return;\n")
+	builder.WriteString("        if (applyingDeepLink) {\n")
+	builder.WriteString("            routeBackStack.clear();\n")
+	builder.WriteString("            routeBackStack.add(cloneRoute(afterRoute));\n")
+	builder.WriteString("            return;\n")
+	builder.WriteString("        }\n")
 	builder.WriteString("        if (routeBackStack.isEmpty()) {\n")
 	builder.WriteString("            routeBackStack.add(cloneRoute(afterRoute));\n")
 	builder.WriteString("            return;\n")
@@ -180,6 +230,23 @@ func MainActivityFromContract(app contract.App, config androidtarget.Config, bun
 	builder.WriteString("        state.put(\"route\", routeValueForShape(state.get(\"route\"), routePatterns()));\n")
 	builder.WriteString("        routeBackStack.add(cloneRoute(state.get(\"route\")));\n")
 	builder.WriteString("    }\n\n")
+	if len(routePatterns) > 0 {
+		builder.WriteString("    private void handleDeepLinkIntent(Intent intent) {\n")
+		builder.WriteString("        if (intent == null || !hasRouteState()) return;\n")
+		builder.WriteString("        Uri data = intent.getData();\n")
+		builder.WriteString("        if (data == null) return;\n")
+		builder.WriteString("        Object route = routeValueForShape(data.toString(), routePatterns());\n")
+		builder.WriteString("        Object beforeRoute = cloneRoute(state.get(\"route\"));\n")
+		builder.WriteString("        applyingDeepLink = true;\n")
+		builder.WriteString("        try {\n")
+		builder.WriteString("            scheduler.dispatch(\"platform\", \"@route_changed\", Collections.singletonList(route));\n")
+		builder.WriteString("            scheduler.drain();\n")
+		builder.WriteString("        } finally {\n")
+		builder.WriteString("            applyingDeepLink = false;\n")
+		builder.WriteString("        }\n")
+		builder.WriteString("        reconcileRouteBackStack(beforeRoute, state.get(\"route\"));\n")
+		builder.WriteString("    }\n\n")
+	}
 	builder.WriteString("    private String activeRoutePath() { return pathOf(state.get(\"route\")); }\n\n")
 	builder.WriteString("    private boolean shouldApply(Set<String> invalidations, List<String> states) {\n")
 	builder.WriteString("        if (invalidations == null) return true;\n")
@@ -188,7 +255,6 @@ func MainActivityFromContract(app contract.App, config androidtarget.Config, bun
 	builder.WriteString("        }\n")
 	builder.WriteString("        return false;\n")
 	builder.WriteString("    }\n\n")
-	builder.WriteString("    private boolean booleanValue(Object value) { return Boolean.TRUE.equals(value) || \"true\".equals(String.valueOf(value)); }\n\n")
 	builder.WriteString("    private double inputNumber(String value) { try { return Double.parseDouble(value); } catch (NumberFormatException ignored) { return 0.0; } }\n\n")
 	builder.WriteString("    private int dp(int value) { return (int) (value * getResources().getDisplayMetrics().density); }\n")
 	builder.WriteString("}\n")
@@ -237,6 +303,57 @@ func (renderer *Renderer) RenderNumberInputNode(node contract.Node, parent strin
 	return renderer.renderJavaInput(node, parent, indent, path, key, name, true)
 }
 
+func (renderer *Renderer) RenderSelectInputNode(node contract.Node, parent string, indent string, path []int, key string, name string) string {
+	options := []string{}
+	if expr := strings.TrimSpace(node.Props["options"]); expr != "" {
+		if static, ok := staticStringFromJSExpr(expr); ok {
+			for _, item := range strings.Split(static, "|") {
+				item = strings.TrimSpace(item)
+				if item != "" {
+					options = append(options, item)
+				}
+			}
+		}
+	}
+	value := shared.QuoteCodeString("")
+	if expr := strings.TrimSpace(node.Props["value"]); expr != "" {
+		value = androidJavaEvalStringExpr(expr)
+	}
+	var builder strings.Builder
+	builder.WriteString(indent + "Spinner " + name + " = new Spinner(this);\n")
+	builder.WriteString(indent + name + ".setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, new String[] {")
+	quoted := make([]string, 0, len(options))
+	for _, option := range options {
+		quoted = append(quoted, shared.QuoteCodeString(option))
+	}
+	builder.WriteString(strings.Join(quoted, ", "))
+	builder.WriteString("}));\n")
+	builder.WriteString(indent + name + ".setTag(" + shared.QuoteCodeString(strings.Join(options, "|")) + ");\n")
+	builder.WriteString(indent + "{\n")
+	builder.WriteString(indent + "    String current = " + value + ";\n")
+	builder.WriteString(indent + "    ArrayAdapter<?> adapter = (ArrayAdapter<?>) " + name + ".getAdapter();\n")
+	builder.WriteString(indent + "    for (int index = 0; index < adapter.getCount(); index++) {\n")
+	builder.WriteString(indent + "        if (String.valueOf(adapter.getItem(index)).equals(current)) {\n")
+	builder.WriteString(indent + "            " + name + ".setSelection(index, false);\n")
+	builder.WriteString(indent + "            break;\n")
+	builder.WriteString(indent + "        }\n")
+	builder.WriteString(indent + "    }\n")
+	builder.WriteString(indent + "}\n")
+	if route, ok := node.Events["on_change"]; ok {
+		builder.WriteString(indent + name + ".setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {\n")
+		builder.WriteString(indent + "    @Override public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {\n")
+		builder.WriteString(indent + "        Object selected = parent.getItemAtPosition(position);\n")
+		builder.WriteString(indent + "        dispatch(" + shared.QuoteCodeString(route.Name) + ", " + androidJavaContractEventArgs(route.Args, "selected == null ? \"\" : selected.toString()") + ");\n")
+		builder.WriteString(indent + "    }\n")
+		builder.WriteString(indent + "    @Override public void onNothingSelected(AdapterView<?> parent) {}\n")
+		builder.WriteString(indent + "});\n")
+	}
+	builder.WriteString(renderer.RenderStaticStyles(node, key, name, indent))
+	builder.WriteString(indent + "views.put(" + shared.QuoteCodeString(key) + ", " + name + ");\n")
+	builder.WriteString(indent + parent + ".addView(" + name + ");\n")
+	return builder.String()
+}
+
 func (renderer *Renderer) renderJavaInput(node contract.Node, parent string, indent string, path []int, key string, name string, number bool) string {
 	value := shared.QuoteCodeString("")
 	if expr := strings.TrimSpace(node.Props["value"]); expr != "" {
@@ -280,9 +397,11 @@ func (renderer *Renderer) RenderScrollNode(node contract.Node, parent string, in
 	builder.WriteString(indent + "LinearLayout " + contentName + " = new LinearLayout(this);\n")
 	builder.WriteString(indent + contentName + ".setOrientation(LinearLayout.VERTICAL);\n")
 	builder.WriteString(renderer.RenderStaticStyles(node, key, name, indent))
+	builder.WriteString(androidJavaFillHorizontal(indent, name))
 	builder.WriteString(indent + "views.put(" + shared.QuoteCodeString(key) + ", " + name + ");\n")
 	builder.WriteString(indent + parent + ".addView(" + name + ");\n")
 	builder.WriteString(indent + name + ".addView(" + contentName + ");\n")
+	builder.WriteString(androidJavaFillHorizontal(indent, contentName))
 	builder.WriteString(renderer.renderBuildNodes(node.Children, contentName, indent, path))
 	return builder.String()
 }
@@ -321,6 +440,9 @@ func (renderer *Renderer) renderJavaContainer(node contract.Node, parent string,
 		builder.WriteString(indent + name + ".setPadding(0, dp(4), 0, dp(4));\n")
 	}
 	builder.WriteString(renderer.RenderStaticStyles(node, key, name, indent))
+	if androidJavaBlockContainerKind(node.Kind) {
+		builder.WriteString(androidJavaFillHorizontal(indent, name))
+	}
 	builder.WriteString(indent + "views.put(" + shared.QuoteCodeString(key) + ", " + name + ");\n")
 	builder.WriteString(indent + parent + ".addView(" + name + ");\n")
 	builder.WriteString(renderer.renderBuildNodes(node.Children, name, indent, path))
@@ -332,9 +454,33 @@ func (renderer *Renderer) renderJavaRow(node contract.Node, parent string, inden
 	builder.WriteString(indent + "GridLayout " + name + " = new GridLayout(this);\n")
 	builder.WriteString(indent + name + ".setColumnCount(" + javaInt(androidContractRowColumnCount(node)) + ");\n")
 	builder.WriteString(renderer.RenderStaticStyles(node, key, name, indent))
+	builder.WriteString(androidJavaFillHorizontal(indent, name))
 	builder.WriteString(indent + "views.put(" + shared.QuoteCodeString(key) + ", " + name + ");\n")
 	builder.WriteString(indent + parent + ".addView(" + name + ");\n")
-	builder.WriteString(renderer.renderBuildNodes(node.Children, name, indent, path))
+	for index, child := range node.Children {
+		childPath := append(shared.CloneIntPath(path), index)
+		builder.WriteString(renderer.renderBuildNode(child, name, indent, childPath))
+		childKey := androidPathKey(childPath)
+		builder.WriteString(indent + "{\n")
+		builder.WriteString(indent + "    View child = views.get(" + shared.QuoteCodeString(childKey) + ");\n")
+		builder.WriteString(indent + "    if (child != null) {\n")
+		builder.WriteString(indent + "        GridLayout.LayoutParams params;\n")
+		builder.WriteString(indent + "        ViewGroup.LayoutParams raw = child.getLayoutParams();\n")
+		builder.WriteString(indent + "        if (raw instanceof GridLayout.LayoutParams) {\n")
+		builder.WriteString(indent + "            params = (GridLayout.LayoutParams) raw;\n")
+		builder.WriteString(indent + "        } else if (raw instanceof ViewGroup.MarginLayoutParams) {\n")
+		builder.WriteString(indent + "            params = new GridLayout.LayoutParams((ViewGroup.MarginLayoutParams) raw);\n")
+		builder.WriteString(indent + "        } else {\n")
+		builder.WriteString(indent + "            params = new GridLayout.LayoutParams();\n")
+		builder.WriteString(indent + "        }\n")
+		builder.WriteString(indent + "        params.width = 0;\n")
+		builder.WriteString(indent + "        params.height = GridLayout.LayoutParams.WRAP_CONTENT;\n")
+		builder.WriteString(indent + "        params.columnSpec = GridLayout.spec(" + strconv.Itoa(index) + ", 1f);\n")
+		builder.WriteString(indent + "        params.rowSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f);\n")
+		builder.WriteString(indent + "        child.setLayoutParams(params);\n")
+		builder.WriteString(indent + "    }\n")
+		builder.WriteString(indent + "}\n")
+	}
 	return builder.String()
 }
 
@@ -416,12 +562,28 @@ func (renderer *androidContractRenderer) renderApplyBindings(nodes []contract.No
 		case binding.Prop == "value" && (node.Kind == "text" || node.Kind == "#text"):
 			builder.WriteString("                ((TextView) target).setText(" + androidJavaEvalStringExpr(expr) + ");\n")
 		case binding.Prop == "enabled":
-			builder.WriteString("                target.setEnabled(booleanValue(" + androidJavaEvalValueExpr(expr) + "));\n")
+			builder.WriteString("                target.setEnabled(NovaRuntime.booleanValue(" + androidJavaEvalValueExpr(expr) + "));\n")
 			if skin, ok := renderer.statefulSkins[androidJavaVar("node", binding.At)]; ok {
-				builder.WriteString("                applyLayoutSkin_" + skin.targetVar + "(target);\n")
+				builder.WriteString("                NovaStyle.applyLayoutSkin(target, " + shared.QuoteCodeString(skin.nodeKind) + ", layoutSpec_" + skin.targetVar + "(), this::dp);\n")
 			}
 		case binding.Prop == "label":
 			builder.WriteString("                target.setContentDescription(" + androidJavaEvalStringExpr(expr) + ");\n")
+		case binding.Prop == "class":
+			builder.WriteString("                NovaStyle.applyDynamicClasses(target, " + shared.QuoteCodeString(node.Kind) + ", " + androidJavaEvalStringExpr(expr) + ", NovaStyleRules.CLASS_RULES, this::dp);\n")
+		case binding.Prop == "value" && node.Kind == "select":
+			builder.WriteString("                if (target instanceof Spinner) {\n")
+			builder.WriteString("                    Spinner spinner = (Spinner) target;\n")
+			builder.WriteString("                    String next = " + androidJavaEvalStringExpr(expr) + ";\n")
+			builder.WriteString("                    ArrayAdapter<?> adapter = (ArrayAdapter<?>) spinner.getAdapter();\n")
+			builder.WriteString("                    if (adapter != null) {\n")
+			builder.WriteString("                        for (int index = 0; index < adapter.getCount(); index++) {\n")
+			builder.WriteString("                            if (String.valueOf(adapter.getItem(index)).equals(next)) {\n")
+			builder.WriteString("                                spinner.setSelection(index, false);\n")
+			builder.WriteString("                                break;\n")
+			builder.WriteString("                            }\n")
+			builder.WriteString("                        }\n")
+			builder.WriteString("                    }\n")
+			builder.WriteString("                }\n")
 		default:
 			builder.WriteString("                target.setTag(" + androidJavaEvalStringExpr(expr) + ");\n")
 		}
@@ -477,7 +639,7 @@ func androidContractButtonLabel(node contract.Node) string {
 func androidContractStateInitializers(states []contract.State) string {
 	var builder strings.Builder
 	for _, state := range states {
-		builder.WriteString("        state.put(" + shared.QuoteCodeString(state.Name) + ", " + androidJavaInitialValue(state.Initial) + ");\n")
+		builder.WriteString("        state.put(" + shared.QuoteCodeString(state.Name) + ", " + androidJavaEvalValueExpr(state.Initial) + ");\n")
 	}
 	return builder.String()
 }
@@ -559,12 +721,17 @@ func AppFromContract(name string, app contract.App, config androidtarget.Config)
 	}
 	perms := androidJavaStringList(app.Permissions)
 	return "package " + config.Namespace + ";\n\n" +
+		"import java.util.Arrays;\n" +
+		"import java.util.Collections;\n" +
+		"import java.util.LinkedHashMap;\n\n" +
 		"public final class NovaApp {\n" +
 		"    public static final int CONTRACT_VERSION = " + strconv.Itoa(app.V) + ";\n" +
 		"    public final String name = " + shared.QuoteCodeString(name) + ";\n" +
 		"    public final String target = " + shared.QuoteCodeString(app.Target) + ";\n" +
 		"    public final String entry = " + shared.QuoteCodeString(app.Entry) + ";\n" +
 		"    public final java.util.List<String> permissions = " + perms + ";\n" +
+		androidAppLifecycleField(app) +
+		androidAppHydrationField(app) +
 		"    private NovaApp() {}\n" +
 		"}\n"
 }
@@ -628,7 +795,125 @@ func androidJavaContractEventArgs(args []string, implicitValueExpr string) strin
 	return "Arrays.<Object>asList(" + strings.Join(values, ", ") + ")"
 }
 
-func androidContractLifecycleHooks(app contract.App, hydration storageHydrationChain) string {
+func androidAppLifecycleField(app contract.App) string {
+	events := app.AppLifecycle
+	if len(events) == 0 {
+		events = []string{"@app_started", "@app_resumed", "@app_paused", "@app_stopped", "@app_restored"}
+	}
+	return "    public static final java.util.List<String> APP_LIFECYCLE = " + androidJavaStringList(events) + ";\n"
+}
+
+func androidAppLifecycleHooks() string {
+	return "    private void enqueueAppLifecycle(String eventName) {\n" +
+		"        enqueueAppLifecyclePayload(eventName, null);\n" +
+		"    }\n\n" +
+		"    private void enqueueAppLifecyclePayload(String eventName, Object payload) {\n" +
+		"        if (eventName == null || eventName.isEmpty() || !NovaApp.APP_LIFECYCLE.contains(eventName)) return;\n" +
+		"        List<Object> args = payload == null ? Collections.emptyList() : Collections.singletonList(payload);\n" +
+		"        scheduler.enqueue(\"@nova/app\", eventName, args);\n" +
+		"        scheduler.drain();\n" +
+		"    }\n\n" +
+		"    private void restoreSavedSnapshot(Bundle savedInstanceState) {\n" +
+		"        if (savedInstanceState == null || !NovaApp.APP_LIFECYCLE.contains(\"@app_restored\")) return;\n" +
+		"        Map<String, Object> snapshot = NovaRuntime.decodeSnapshotPayload(savedInstanceState.getString(\"nova_snapshot\"));\n" +
+		"        if (snapshot == null || snapshot.isEmpty()) return;\n" +
+		"        Object savedState = snapshot.get(\"state\");\n" +
+		"        if (savedState instanceof Map<?, ?>) {\n" +
+		"            for (Map.Entry<?, ?> entry : ((Map<?, ?>) savedState).entrySet()) {\n" +
+		"                state.put(String.valueOf(entry.getKey()), entry.getValue());\n" +
+		"            }\n" +
+		"        }\n" +
+		"        enqueueAppLifecyclePayload(\"@app_restored\", snapshot);\n" +
+		"    }\n\n"
+}
+
+func androidAppHydrationField(app contract.App) string {
+	if app.Persistence == nil {
+		return "    public static final NovaHydration.HydrationManifest HYDRATION = null;\n"
+	}
+	var builder strings.Builder
+	builder.WriteString("    public static final NovaHydration.HydrationManifest HYDRATION = new NovaHydration.HydrationManifest(\n")
+	builder.WriteString("        " + shared.QuoteCodeString(app.Persistence.BootstrapEvent) + ",\n")
+	builder.WriteString("        Arrays.asList(\n")
+	for index, load := range app.Persistence.Loads {
+		builder.WriteString("            new NovaHydration.HydrationLoadStep(\n")
+		builder.WriteString("                " + shared.QuoteCodeString(load.TriggerEvent) + ",\n")
+		builder.WriteString("                " + shared.QuoteCodeString(load.EffectID) + ",\n")
+		builder.WriteString("                " + androidJavaHydrationInputMap(load.Input) + ",\n")
+		builder.WriteString("                " + shared.QuoteCodeString(load.SuccessEvent) + ",\n")
+		builder.WriteString("                " + shared.QuoteCodeString(load.FailureEvent) + "\n")
+		builder.WriteString("            )")
+		if index+1 < len(app.Persistence.Loads) {
+			builder.WriteString(",")
+		}
+		builder.WriteString("\n")
+	}
+	builder.WriteString("        ),\n")
+	builder.WriteString("        " + shared.QuoteCodeString(app.Persistence.TerminalEvent) + ",\n")
+	builder.WriteString("        " + androidJavaStringList(app.Persistence.SkipAfterEvents) + "\n")
+	builder.WriteString("    );\n")
+	return builder.String()
+}
+
+func androidJavaHydrationInputMap(input map[string]string) string {
+	if len(input) == 0 {
+		return "Collections.emptyMap()"
+	}
+	if len(input) == 1 {
+		for name, value := range input {
+			return "Collections.singletonMap(" + shared.QuoteCodeString(name) + ", " + shared.QuoteCodeString(value) + ")"
+		}
+	}
+	names := make([]string, 0, len(input))
+	for name := range input {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	var builder strings.Builder
+	builder.WriteString("new LinkedHashMap<String, String>() {{ ")
+	for index, name := range names {
+		if index > 0 {
+			builder.WriteString(" ")
+		}
+		builder.WriteString("put(" + shared.QuoteCodeString(name) + ", " + shared.QuoteCodeString(input[name]) + ");")
+	}
+	builder.WriteString(" }}")
+	return builder.String()
+}
+
+func androidContractEventValidation(app contract.App) string {
+	if len(app.Events) == 0 {
+		return ""
+	}
+	var builder strings.Builder
+	builder.WriteString("    @Override\n")
+	builder.WriteString("    public String schedulerValidateEvent(String source, String eventName, List<Object> args) {\n")
+	builder.WriteString("        if (!NovaScheduler.isSerializableData(args)) {\n")
+	builder.WriteString("            return \"event payload must be a serializable Nova data value\";\n")
+	builder.WriteString("        }\n")
+	builder.WriteString("        if (\"@route_changed\".equals(eventName) && args != null && !args.isEmpty()) {\n")
+	builder.WriteString("            String routeError = NovaRuntime.validateRouteData(args.get(0));\n")
+	builder.WriteString("            if (routeError != null) return routeError;\n")
+	builder.WriteString("        }\n")
+	builder.WriteString("        switch (eventName) {\n")
+	for _, event := range app.Events {
+		builder.WriteString("            case " + shared.QuoteCodeString(event.Name) + ":\n")
+		if len(event.Emitters) > 0 {
+			emitters := androidJavaStringList(event.Emitters)
+			builder.WriteString("                if (!" + emitters + ".contains(source)) {\n")
+			builder.WriteString("                    return source + \" cannot emit scheduler event \" + eventName;\n")
+			builder.WriteString("                }\n")
+		}
+		builder.WriteString("                return null;\n")
+	}
+	builder.WriteString("            default:\n")
+	builder.WriteString("                return \"undeclared scheduler event \" + eventName;\n")
+	builder.WriteString("        }\n")
+	builder.WriteString("    }\n\n")
+	return builder.String()
+}
+
+func androidContractLifecycleHooks(app contract.App) string {
 	if len(app.Lifecycles) == 0 {
 		return ""
 	}
@@ -647,8 +932,13 @@ func androidContractLifecycleHooks(app contract.App, hydration storageHydrationC
 	builder.WriteString("        try {\n")
 	builder.WriteString("            runContractLifecycles(\"mount\", \"\", Collections.emptyMap());\n")
 	builder.WriteString("            scheduler.drain();\n")
-	if hydration.AfterSkipEvents != nil {
-		builder.WriteString("            hydratePersistedState();\n")
+	if app.Persistence != nil {
+		builder.WriteString("            NovaHydration.restorePersistedState(\n")
+		builder.WriteString("                NovaApp.HYDRATION,\n")
+		builder.WriteString("                scheduler,\n")
+		builder.WriteString("                expr -> evaluate(expr, state, Collections.emptyMap()),\n")
+		builder.WriteString("                (effectId, input) -> NovaExternal.invokeSync(this, effectId, input)\n")
+		builder.WriteString("            );\n")
 	}
 	builder.WriteString("        } finally {\n")
 	builder.WriteString("            mounting = false;\n")
@@ -662,10 +952,18 @@ func androidContractLifecycleHooks(app contract.App, hydration storageHydrationC
 	builder.WriteString("    }\n\n")
 	builder.WriteString("    @Override\n")
 	builder.WriteString("    public void schedulerAfterEvent(String eventName, List<Object> args) {\n")
-	if hydration.AfterSkipEvents != nil {
-		builder.WriteString("        if (mounting && HYDRATION_SKIP_AFTER.contains(eventName)) return;\n")
+	if app.Persistence != nil {
+		builder.WriteString("        if (mounting && NovaHydration.shouldSkipAfterEvent(NovaApp.HYDRATION, eventName)) return;\n")
 	}
 	builder.WriteString("        runContractLifecycles(\"after\", eventName, schedulerPayload(eventName, args));\n")
+	builder.WriteString("    }\n\n")
+	builder.WriteString("    @Override\n")
+	builder.WriteString("    public void schedulerOnTransitionError(String eventName, List<Object> args, List<NovaScheduler.TransitionError> errors) {\n")
+	builder.WriteString("        runContractLifecycles(\"error\", eventName, schedulerPayload(eventName, args));\n")
+	builder.WriteString("    }\n\n")
+	builder.WriteString("    protected void schedulerDisposeLifecycles() {\n")
+	builder.WriteString("        runContractLifecycles(\"dispose\", \"\", Collections.emptyMap());\n")
+	builder.WriteString("        scheduler.drain();\n")
 	builder.WriteString("    }\n\n")
 	builder.WriteString("    private Map<String, Object> schedulerPayload(String eventName, List<Object> args) {\n")
 	builder.WriteString("        Map<String, Object> payload = new LinkedHashMap<>();\n")
@@ -708,16 +1006,7 @@ func androidContractLifecycleHooks(app contract.App, hydration storageHydrationC
 	}
 	builder.WriteString("    }\n\n")
 	builder.WriteString("    private void invokeExternal(String owner, String effectId, Map<String, Object> input, String onSuccess, String onFailure) {\n")
-	builder.WriteString("        try {\n")
-	builder.WriteString("            Object output = NovaExternalAdapters.invoke(this, effectId, input);\n")
-	builder.WriteString("            if (onSuccess != null && !onSuccess.isEmpty()) {\n")
-	builder.WriteString("                scheduler.enqueueLifecycle(owner, onSuccess, output == null ? Collections.emptyList() : Collections.singletonList(output));\n")
-	builder.WriteString("            }\n")
-	builder.WriteString("        } catch (Exception error) {\n")
-	builder.WriteString("            if (onFailure != null && !onFailure.isEmpty()) {\n")
-	builder.WriteString("                scheduler.enqueueLifecycle(owner, onFailure, Collections.singletonList(error.getMessage()));\n")
-	builder.WriteString("            }\n")
-	builder.WriteString("        }\n")
+	builder.WriteString("        NovaExternal.invoke(this, scheduler, owner, effectId, input, onSuccess, onFailure);\n")
 	builder.WriteString("    }\n\n")
 	return builder.String()
 }

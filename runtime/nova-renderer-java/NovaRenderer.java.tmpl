@@ -1,0 +1,27 @@
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+public final class NovaRenderer {
+    private final Map<String, Object> primitives = new LinkedHashMap<>();
+
+    private NovaRenderer() {}
+
+    public static NovaRenderer create() {
+        return new NovaRenderer();
+    }
+
+    public void definePrimitive(String kind, Object adapter) {
+        if (kind == null || kind.isEmpty()) {
+            return;
+        }
+        primitives.put(kind, adapter);
+    }
+
+    public boolean hasPrimitive(String kind) {
+        return kind != null && !kind.isEmpty() && primitives.containsKey(kind);
+    }
+
+    public Object primitive(String kind) {
+        return kind == null ? null : primitives.get(kind);
+    }
+}

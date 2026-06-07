@@ -1,0 +1,23 @@
+<contract type Route>
+  path: string;
+/|
+
+<contract state Router>
+  route: Route <- { path <- "/"; } {
+    @route_changed(next: Route) -> next;
+  };
+/|
+
+<template target <- web>
+  <surface>
+    <page path <- "/">
+      <text value <- route.path /|
+    /|
+    <page path <- "/settings">
+      <text value <- "settings" /|
+    /|
+    <page path <- "/profile">
+      <text value <- "profile" /|
+    /|
+  /|
+/|

@@ -2,7 +2,7 @@
 
 ## Status
 
-Implemented / Accepted
+Deprecated — referensi historis diagnostic codes. Kode baru ekspresi/pipeline: [ADR-016](adr_016_expression_pipeline.md).
 
 ## Depends on
 

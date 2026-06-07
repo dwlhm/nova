@@ -29,7 +29,7 @@ type conformanceExternalPort struct{}
 func (conformanceExternalPort) Invoke(_ context.Context, request scheduler.ExternalOperationRequest) (scheduler.ExternalOperationResult, error) {
 	switch request.Capability + "#" + request.Operation {
 	case "storage#load", "storage#get":
-		return scheduler.ExternalOperationResult{Output: "stub-value"}, nil
+		return scheduler.ExternalOperationResult{Output: map[string]scheduler.DataValue{"value": "stub-value"}}, nil
 	case "storage#set", "storage#remove", "storage#clear":
 		return scheduler.ExternalOperationResult{Output: nil}, nil
 	default:

@@ -143,10 +143,14 @@ func ParseSource(path string, content string) (ast.RawModule, []Diagnostic) {
 
 // CheckModules runs semantic analysis on raw modules.
 func CheckModules(raw []ast.RawModule) ([]ast.CheckedModule, []Diagnostic) {
+	modulesByPath := make(map[string]parser.File, len(raw))
+	for _, module := range raw {
+		modulesByPath[module.Path] = module.File
+	}
 	checked := make([]ast.CheckedModule, 0, len(raw))
 	diagnostics := make([]Diagnostic, 0)
 	for _, module := range raw {
-		item, moduleDiagnostics := semantic.AnalyzeModule(module)
+		item, moduleDiagnostics := semantic.AnalyzeModule(module, modulesByPath)
 		for _, diagnostic := range moduleDiagnostics {
 			diagnostics = append(diagnostics, Diagnostic{
 				Stage:   StageSemantic,

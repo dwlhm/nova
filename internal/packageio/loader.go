@@ -54,6 +54,7 @@ func LoadProjectManifests(root string, targetID string, rendererDeps []packages.
 		diagnostics = append(diagnostics, adapterDiagnostics...)
 		manifests = append(manifests, manifest)
 	}
+	manifests = assignContentHashes(root, manifests)
 	return manifests, diagnostic.StableSort(diagnostics)
 }
 

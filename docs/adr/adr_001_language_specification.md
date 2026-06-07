@@ -2,7 +2,7 @@
 
 ## Status
 
-Implemented / Accepted
+Deprecated — superseded oleh [ADR-013](adr_013_pure_expressions.md)–[ADR-016](adr_016_expression_pipeline.md) untuk grammar ekspresi/deklarasi; referensi historis construct bahasa.
 
 ## Depends on
 

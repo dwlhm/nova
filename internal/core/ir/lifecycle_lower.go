@@ -6,13 +6,15 @@ import (
 	"strings"
 
 	"github.com/dwlhm/nova/internal/core/contract"
+	"github.com/dwlhm/nova/internal/core/expr"
 	"github.com/dwlhm/nova/internal/core/lexer"
 	"github.com/dwlhm/nova/internal/core/parser"
 	"github.com/dwlhm/nova/internal/core/security"
 )
 
-func buildContractLifecycles(modules []ModuleRef, sources map[string]parser.File, stateNames map[string]bool) []contract.Lifecycle {
+func buildContractLifecycles(modules []ModuleRef, sources map[string]parser.File, registry *expr.Registry, stateNames map[string]bool) ([]contract.Lifecycle, []Diagnostic) {
 	lifecycles := make([]contract.Lifecycle, 0)
+	var diagnostics []Diagnostic
 	for _, module := range modules {
 		file, ok := sources[module.Path]
 		if !ok {
@@ -23,7 +25,9 @@ func buildContractLifecycles(modules []ModuleRef, sources map[string]parser.File
 		for _, lifecycle := range file.Lifecycles {
 			steps := make([]contract.LifecycleStep, 0)
 			for _, statement := range lifecycle.Statements {
-				steps = append(steps, lowerLifecycleSteps(statement.Tokens, stateNames, aliases)...)
+				loweredSteps, stepDiagnostics := lowerLifecycleSteps(statement.Tokens, registry, stateNames, aliases)
+				steps = append(steps, loweredSteps...)
+				diagnostics = append(diagnostics, stepDiagnostics...)
 			}
 			if len(steps) == 0 {
 				continue
@@ -45,30 +49,35 @@ func buildContractLifecycles(modules []ModuleRef, sources map[string]parser.File
 		}
 		return lifecycles[i].Event < lifecycles[j].Event
 	})
-	return lifecycles
+	return lifecycles, diagnostics
 }
 
-func lowerLifecycleSteps(tokens []lexer.Token, stateNames map[string]bool, aliases map[string]string) []contract.LifecycleStep {
+func lowerLifecycleSteps(tokens []lexer.Token, registry *expr.Registry, stateNames map[string]bool, aliases map[string]string) ([]contract.LifecycleStep, []Diagnostic) {
 	tokens = trimExpressionTokens(tokens)
 	if len(tokens) == 0 {
-		return nil
+		return nil, nil
 	}
 	if source, capability, operation, inputs, ok := parsePipeStatement(tokens); ok {
+		var diagnostics []Diagnostic
+		onSuccess := lifecycleCompletionEventFromTokens(inputs, "onSuccess")
+		onFailure := lifecycleCompletionEventFromTokens(inputs, "onFailure")
 		inputExprs := make(map[string]string, len(inputs))
 		for name, exprTokens := range inputs {
-			inputExprs[name] = expressionToJS(exprTokens, stateNames, nil)
+			exprValue, diags := lowerExpressionJS(exprTokens, registry, stateNames, nil)
+			diagnostics = append(diagnostics, diags...)
+			inputExprs[name] = exprValue
 		}
 		if len(source) > 0 {
 			if _, exists := inputExprs["value"]; !exists {
-				inputExprs["value"] = expressionToJS(source, stateNames, nil)
+				exprValue, diags := lowerExpressionJS(source, registry, stateNames, nil)
+				diagnostics = append(diagnostics, diags...)
+				inputExprs["value"] = exprValue
 			}
 		}
 		capabilitySource := aliases[capability]
 		if capabilitySource == "" {
 			capabilitySource = capability
 		}
-		onSuccess := lifecycleCompletionEvent(inputExprs, "onSuccess")
-		onFailure := lifecycleCompletionEvent(inputExprs, "onFailure")
 		return []contract.LifecycleStep{{
 			External: &contract.LifecycleExternal{
 				EffectID:  effectID(capabilitySource, operation),
@@ -76,13 +85,14 @@ func lowerLifecycleSteps(tokens []lexer.Token, stateNames map[string]bool, alias
 				OnSuccess: onSuccess,
 				OnFailure: onFailure,
 			},
-		}}
+		}}, diagnostics
 	}
-	return lowerEmitSteps(tokens, stateNames)
+	return lowerEmitSteps(tokens, registry, stateNames)
 }
 
-func lowerEmitSteps(tokens []lexer.Token, stateNames map[string]bool) []contract.LifecycleStep {
+func lowerEmitSteps(tokens []lexer.Token, registry *expr.Registry, stateNames map[string]bool) ([]contract.LifecycleStep, []Diagnostic) {
 	steps := make([]contract.LifecycleStep, 0)
+	var diagnostics []Diagnostic
 	for _, emission := range findLifecycleEmits(tokens) {
 		args := emission.Args
 		if len(args) == 0 && emission.SourceArity == 1 {
@@ -90,7 +100,9 @@ func lowerEmitSteps(tokens []lexer.Token, stateNames map[string]bool) []contract
 		}
 		argExprs := make([]string, 0, len(args))
 		for _, arg := range args {
-			argExprs = append(argExprs, expressionToJS(arg, stateNames, nil))
+			exprValue, diags := lowerExpressionJS(arg, registry, stateNames, nil)
+			diagnostics = append(diagnostics, diags...)
+			argExprs = append(argExprs, exprValue)
 		}
 		steps = append(steps, contract.LifecycleStep{
 			Emit: &contract.LifecycleEmit{
@@ -99,7 +111,7 @@ func lowerEmitSteps(tokens []lexer.Token, stateNames map[string]bool) []contract
 			},
 		})
 	}
-	return steps
+	return steps, diagnostics
 }
 
 type lifecycleEmit struct {
@@ -220,13 +232,22 @@ func effectID(source string, operation string) string {
 	return source + "#" + operation
 }
 
-func lifecycleCompletionEvent(input map[string]string, name string) string {
-	expr, ok := input[name]
+func lifecycleCompletionEventFromTokens(inputs map[string][]lexer.Token, name string) string {
+	tokens, ok := inputs[name]
 	if !ok {
 		return ""
 	}
-	delete(input, name)
-	return strings.Trim(expr, `"`)
+	delete(inputs, name)
+	tokens = trimExpressionTokens(tokens)
+	if len(tokens) != 1 {
+		return ""
+	}
+	switch tokens[0].Type {
+	case lexer.SIGNAL, lexer.STRING:
+		return tokens[0].Literal
+	default:
+		return ""
+	}
 }
 
 func capabilityAliasMap(file parser.File) map[string]string {

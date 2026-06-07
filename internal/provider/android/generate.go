@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/dwlhm/nova/internal/core/contract"
 	viewandroid "github.com/dwlhm/nova/internal/provider/capability/view/android"
 	"github.com/dwlhm/nova/internal/provider/shared"
 	"github.com/dwlhm/nova/internal/provider/target"
@@ -58,7 +59,7 @@ func files(input shared.GenerateInput, config targetConfig, versions shared.Mani
 		{Path: "build/android/gradle.properties", Content: gradleProperties(config)},
 		{Path: "build/android/build.gradle.kts", Content: rootGradle(input.Project.Project.Name, config)},
 		{Path: "build/android/app/build.gradle.kts", Content: appGradle(config)},
-		{Path: "build/android/app/src/main/AndroidManifest.xml", Content: androidManifestXML(config, input.Plan.Permissions)},
+		{Path: "build/android/app/src/main/AndroidManifest.xml", Content: androidManifestXML(config, input.Plan.Permissions, hasRouteState(input.Bundle.App))},
 	}
 
 	viewFiles, viewDiagnostics := viewandroid.Compose(input)
@@ -72,4 +73,13 @@ func files(input shared.GenerateInput, config targetConfig, versions shared.Mani
 	out = append(out, rendererAdapterFiles(input.Plan.Renderer.Extensions)...)
 	out = append(out, externalAdapterFiles(input.Plan.ExternalOperations, sourceRoot, input.ExternalAdapterContents)...)
 	return out, nil
+}
+
+func hasRouteState(app contract.App) bool {
+	for _, state := range app.Model.States {
+		if state.Name == "route" {
+			return true
+		}
+	}
+	return false
 }

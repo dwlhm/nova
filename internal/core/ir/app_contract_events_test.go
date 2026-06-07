@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/dwlhm/nova/internal/core/capability"
+	"github.com/dwlhm/nova/internal/core/contract"
 	"github.com/dwlhm/nova/internal/core/lexer"
 	"github.com/dwlhm/nova/internal/core/parser"
 )
@@ -17,7 +18,7 @@ func TestContractEventsIncludesLifecycleOwnersForCompletionAndEmit(t *testing.T)
 				Type:    parser.TypeRef{Text: "string"},
 				Initial: []lexer.Token{{Type: lexer.STRING, Literal: "demo"}},
 				Transitions: []parser.TransitionRule{{
-					Event: parser.EventPattern{Name: "@loaded"},
+					Event: parser.EventPattern{Name: "@ledger_hydrated", Params: []parser.FieldDecl{{Name: "value", Type: parser.TypeRef{Text: "unknown"}}}},
 					Expr:  []lexer.Token{{Type: lexer.IDENT, Literal: "payload"}},
 				}},
 			}},
@@ -36,16 +37,16 @@ func TestContractEventsIncludesLifecycleOwnersForCompletionAndEmit(t *testing.T)
 					{Type: lexer.VOID}, {Type: lexer.PIPE_FWD},
 					{Type: lexer.IDENT, Literal: "storage"}, {Type: lexer.DOT}, {Type: lexer.IDENT, Literal: "load"},
 					{Type: lexer.IDENT, Literal: "key"}, {Type: lexer.ASSIGN_IN}, {Type: lexer.STRING, Literal: "demo"},
-					{Type: lexer.IDENT, Literal: "onSuccess"}, {Type: lexer.ASSIGN_IN}, {Type: lexer.SIGNAL, Literal: "@loaded"},
+					{Type: lexer.IDENT, Literal: "onSuccess"}, {Type: lexer.ASSIGN_IN}, {Type: lexer.SIGNAL, Literal: "@ledger_hydrated"},
 					{Type: lexer.IDENT, Literal: "onFailure"}, {Type: lexer.ASSIGN_IN}, {Type: lexer.SIGNAL, Literal: "@load_failed"},
 				},
 			}},
 		}, {
 			Phase: "after",
-			Event: "@loaded_all_line4",
+			Event: "@ledger_hydrated",
 			Statements: []parser.Statement{{
 				Tokens: []lexer.Token{
-					{Type: lexer.VOID}, {Type: lexer.MAP_ARROW}, {Type: lexer.SIGNAL, Literal: "@ledger_ready"},
+					{Type: lexer.VOID}, {Type: lexer.MAP_ARROW}, {Type: lexer.SIGNAL, Literal: "@ledger_synced"},
 				},
 			}},
 		}},
@@ -54,14 +55,19 @@ func TestContractEventsIncludesLifecycleOwnersForCompletionAndEmit(t *testing.T)
 		capability.BuildManifest("src/FinanceStore.nova", store),
 		capability.BuildManifest("src/FinancePersistence.nova", persistence),
 	}
-	lifecycles := buildContractLifecycles(
+	sources := map[string]parser.File{
+		"src/FinanceStore.nova":       store,
+		"src/FinancePersistence.nova": persistence,
+	}
+	lifecycles, diagnostics := buildContractLifecycles(
 		[]ModuleRef{{Path: "src/FinanceStore.nova"}, {Path: "src/FinancePersistence.nova"}},
-		map[string]parser.File{
-			"src/FinanceStore.nova":       store,
-			"src/FinancePersistence.nova": persistence,
-		},
+		sources,
+		buildExprRegistry(sources),
 		map[string]bool{"payload": true},
 	)
+	if len(diagnostics) > 0 {
+		t.Fatalf("diagnostics = %+v", diagnostics)
+	}
 	events := contractEvents(
 		[]string{"src/FinanceStore.nova", "src/FinancePersistence.nova"},
 		manifests,
@@ -72,14 +78,37 @@ func TestContractEventsIncludesLifecycleOwnersForCompletionAndEmit(t *testing.T)
 	for _, event := range events {
 		emitters[event.Name] = append([]string(nil), event.Emitters...)
 	}
-	if !containsString(emitters["@loaded"], "FinancePersistence") {
-		t.Fatalf("@loaded emitters = %v, want FinancePersistence", emitters["@loaded"])
+	if !containsString(emitters["@ledger_hydrated"], "FinancePersistence") {
+		t.Fatalf("@ledger_hydrated emitters = %v, want FinancePersistence", emitters["@ledger_hydrated"])
 	}
-	if !containsString(emitters["@loaded"], "src/FinanceStore.nova") {
-		t.Fatalf("@loaded emitters = %v, want FinanceStore", emitters["@loaded"])
+	if !containsString(emitters["@ledger_hydrated"], "src/FinanceStore.nova") {
+		t.Fatalf("@ledger_hydrated emitters = %v, want FinanceStore", emitters["@ledger_hydrated"])
 	}
-	if !containsString(emitters["@ledger_ready"], "FinancePersistence") {
-		t.Fatalf("@ledger_ready emitters = %v, want FinancePersistence", emitters["@ledger_ready"])
+	if !containsString(emitters["@ledger_synced"], "FinancePersistence") {
+		t.Fatalf("@ledger_synced emitters = %v, want FinancePersistence", emitters["@ledger_synced"])
+	}
+}
+
+func TestMergeNavigationPlatformEmittersAddsRuntimeSources(t *testing.T) {
+	events := mergeNavigationPlatformEmitters([]contract.EventContract{{
+		Name:     "@route_changed",
+		Emitters: []string{"src/App.nova"},
+	}}, contract.Model{States: []contract.State{{Name: "route"}}})
+
+	var routeChanged contract.EventContract
+	for _, event := range events {
+		if event.Name == "@route_changed" {
+			routeChanged = event
+			break
+		}
+	}
+	if routeChanged.Name == "" {
+		t.Fatalf("missing @route_changed in %+v", events)
+	}
+	for _, want := range []string{"platform", "renderer", "@nova/navigation", "src/App.nova"} {
+		if !containsString(routeChanged.Emitters, want) {
+			t.Fatalf("emitters = %v, want %s", routeChanged.Emitters, want)
+		}
 	}
 }
 

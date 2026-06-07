@@ -9,7 +9,7 @@ import (
 func emitWebArtifacts(ctx external.Context) ([]shared.File, []shared.Diagnostic) {
 	app := ctx.Input.Bundle.App
 	return []shared.File{
-		{Path: "build/web/assets/nova-runtime.js", Content: webcodegen.WebRuntime()},
+		{Path: "build/web/assets/nova-runtime.js", Content: webcodegen.WebRuntime() + "\n" + ctx.Input.Bundle.NovaExprJS},
 		{Path: "build/web/app.bundle.js", Content: webcodegen.WebBundle(app)},
 	}, nil
 }

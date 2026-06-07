@@ -4,8 +4,34 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dwlhm/nova/internal/core/style"
 	"github.com/dwlhm/nova/internal/provider/shared"
 )
+
+func androidJavaBlockContainerKind(kind string) bool {
+	switch kind {
+	case "surface", "page", "column", "row", "scroll":
+		return true
+	default:
+		return false
+	}
+}
+
+func androidJavaFillHorizontal(indent string, viewName string) string {
+	return indent + "{\n" +
+		indent + "    ViewGroup.LayoutParams raw = " + viewName + ".getLayoutParams();\n" +
+		indent + "    ViewGroup.MarginLayoutParams params;\n" +
+		indent + "    if (raw instanceof ViewGroup.MarginLayoutParams) {\n" +
+		indent + "        params = (ViewGroup.MarginLayoutParams) raw;\n" +
+		indent + "    } else if (raw != null) {\n" +
+		indent + "        params = new ViewGroup.MarginLayoutParams(raw);\n" +
+		indent + "    } else {\n" +
+		indent + "        params = new ViewGroup.MarginLayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);\n" +
+		indent + "    }\n" +
+		indent + "    params.width = ViewGroup.LayoutParams.MATCH_PARENT;\n" +
+		indent + "    " + viewName + ".setLayoutParams(params);\n" +
+		indent + "}\n"
+}
 
 func androidJavaRoutePatternTable(patterns []string) string {
 	var builder strings.Builder
@@ -132,134 +158,71 @@ func androidJavaStringList(values []string) string {
 	return "Arrays.asList(" + strings.Join(quoted, ", ") + ")"
 }
 
-func androidCSSColorProperty(style androidResolvedStyle, names ...string) (string, bool) {
-	for _, name := range names {
-		value, ok := style.Value(name)
-		if !ok {
-			continue
-		}
-		if color, ok := androidCSSColor(value); ok {
-			return color, true
-		}
-	}
-	return "", false
-}
-
-func androidCSSColor(value string) (string, bool) {
-	for _, field := range strings.Fields(strings.TrimSpace(value)) {
-		cleaned := strings.Trim(field, ",")
-		if strings.HasPrefix(cleaned, "#") || androidCSSNamedColor(cleaned) {
-			return "Color.parseColor(" + shared.QuoteCodeString(cleaned) + ")", true
-		}
-	}
-	return "", false
-}
-
-func androidCSSNamedColor(value string) bool {
-	switch strings.ToLower(value) {
-	case "black", "blue", "cyan", "darkgray", "gray", "green", "lightgray", "magenta", "red", "white", "yellow":
-		return true
-	default:
-		return false
-	}
-}
-
-func androidCSSIntProperty(style androidResolvedStyle, name string) (int, bool) {
-	value, ok := style.Value(name)
+func androidCSSColorProperty(resolved style.ResolvedStyle, names ...string) (string, bool) {
+	literal, ok := resolved.ColorLiteral(names...)
 	if !ok {
-		return 0, false
+		return "", false
 	}
-	return androidCSSInt(value)
+	return style.AndroidColorExpr(literal), true
 }
 
-func androidCSSInt(value string) (int, bool) {
-	cleaned := strings.TrimSpace(value)
-	for _, suffix := range []string{"px", "dp", "sp"} {
-		cleaned = strings.TrimSuffix(cleaned, suffix)
-	}
-	number, err := strconv.ParseFloat(cleaned, 64)
-	if err != nil {
-		return 0, false
-	}
-	return int(number + 0.5), true
+func androidCSSIntProperty(resolved style.ResolvedStyle, name string) (int, bool) {
+	return resolved.Length(name)
 }
 
-func androidCSSBoxProperty(style androidResolvedStyle, name string) ([4]int, bool) {
-	value, ok := style.Value(name)
+func androidCSSBoxProperty(resolved style.ResolvedStyle, name string) ([4]int, bool) {
+	var box style.BoxSides
+	var ok bool
+	switch name {
+	case "padding":
+		box, ok = resolved.Padding()
+	case "margin":
+		box, ok = resolved.Margin()
+	default:
+		return [4]int{}, false
+	}
 	if !ok {
 		return [4]int{}, false
 	}
-	fields := strings.Fields(value)
-	if len(fields) == 0 || len(fields) > 4 {
-		return [4]int{}, false
-	}
-	values := make([]int, 0, len(fields))
-	for _, field := range fields {
-		size, ok := androidCSSInt(field)
-		if !ok {
-			return [4]int{}, false
-		}
-		values = append(values, size)
-	}
-	switch len(values) {
-	case 1:
-		return [4]int{values[0], values[0], values[0], values[0]}, true
-	case 2:
-		return [4]int{values[0], values[1], values[0], values[1]}, true
-	case 3:
-		return [4]int{values[0], values[1], values[2], values[1]}, true
-	default:
-		return [4]int{values[0], values[1], values[2], values[3]}, true
-	}
+	return style.AndroidPaddingArray(box), true
 }
 
-func androidCSSBorderWidth(style androidResolvedStyle) (int, bool) {
-	if width, ok := androidCSSIntProperty(style, "border-width"); ok {
-		return width, true
-	}
-	value, ok := style.Value("border")
-	if !ok {
-		return 0, false
-	}
-	for _, field := range strings.Fields(value) {
-		if width, ok := androidCSSInt(field); ok {
-			return width, true
-		}
-	}
-	return 0, false
+func androidJavaApplyMargins(viewExpr string, sides [4]int, indent string) string {
+	return indent + "{\n" +
+		indent + "    ViewGroup.LayoutParams raw = " + viewExpr + ".getLayoutParams();\n" +
+		indent + "    ViewGroup.MarginLayoutParams params;\n" +
+		indent + "    if (raw instanceof ViewGroup.MarginLayoutParams) {\n" +
+		indent + "        params = (ViewGroup.MarginLayoutParams) raw;\n" +
+		indent + "    } else if (raw != null) {\n" +
+		indent + "        params = new ViewGroup.MarginLayoutParams(raw);\n" +
+		indent + "    } else {\n" +
+		indent + "        params = new ViewGroup.MarginLayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);\n" +
+		indent + "    }\n" +
+		indent + "    params.setMargins(dp(" + javaInt(sides[0]) + "), dp(" + javaInt(sides[1]) + "), dp(" + javaInt(sides[2]) + "), dp(" + javaInt(sides[3]) + "));\n" +
+		indent + "    " + viewExpr + ".setLayoutParams(params);\n" +
+		indent + "}\n"
 }
 
-func androidCSSBorderColor(style androidResolvedStyle) (string, bool) {
-	if color, ok := androidCSSColorProperty(style, "border-color"); ok {
-		return color, true
-	}
-	value, ok := style.Value("border")
+func androidCSSBorderWidth(resolved style.ResolvedStyle) (int, bool) {
+	return resolved.BorderWidth()
+}
+
+func androidCSSBorderColor(resolved style.ResolvedStyle) (string, bool) {
+	literal, ok := resolved.BorderColorLiteral()
 	if !ok {
 		return "", false
 	}
-	return androidCSSColor(value)
+	return style.AndroidColorExpr(literal), true
 }
 
-func androidCSSBoldWeight(value string) bool {
-	cleaned := strings.TrimSpace(strings.ToLower(value))
-	if cleaned == "bold" || cleaned == "bolder" {
-		return true
-	}
-	weight, err := strconv.Atoi(cleaned)
-	return err == nil && weight >= 600
+func androidCSSBoldWeight(resolved style.ResolvedStyle) bool {
+	bold, ok := resolved.Bold()
+	return ok && bold
 }
 
-func androidCSSLineHeight(style androidResolvedStyle) (string, bool) {
-	value, ok := style.Value("line-height")
+func androidCSSLineHeight(resolved style.ResolvedStyle) (string, bool) {
+	number, ok := resolved.LineHeightMultiplier()
 	if !ok {
-		return "", false
-	}
-	cleaned := strings.TrimSpace(strings.TrimSuffix(value, "em"))
-	if strings.HasSuffix(cleaned, "px") {
-		return "", false
-	}
-	number, err := strconv.ParseFloat(cleaned, 64)
-	if err != nil || number <= 0 {
 		return "", false
 	}
 	return strconv.FormatFloat(number, 'f', -1, 64), true

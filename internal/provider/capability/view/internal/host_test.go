@@ -22,6 +22,7 @@ func TestDefaultCapabilityRegistryIncludesIntegratedPrimitives(t *testing.T) {
 		"column",
 		"text_input",
 		"number_input",
+		"select",
 	} {
 		if !ids[want] {
 			t.Fatalf("registry missing capability %q", want)

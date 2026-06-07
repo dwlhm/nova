@@ -21,6 +21,7 @@ type manifestAsset struct {
 }
 
 func webStyleBundle(bundle style.Bundle) bundleResult {
+	bundle = style.NormalizeBundle(bundle, "web")
 	files := make([]shared.File, 0, len(bundle.Sheets)+len(bundle.WebStylesheets))
 	manifestAssets := make([]manifestAsset, 0, len(bundle.Sheets)+len(bundle.WebStylesheets))
 	seen := make(map[string]bool)
@@ -47,8 +48,9 @@ func webStyleBundle(bundle style.Bundle) bundleResult {
 		order++
 	}
 
+	emitted := style.EmitBundleCSS(bundle)
 	for _, sheet := range bundle.Sheets {
-		appendAsset(sheet.SourcePath, style.EmitCSS(sheet), sheet.Scope)
+		appendAsset(sheet.SourcePath, emitted[sheet.SourcePath], sheet.Scope)
 	}
 	for _, sheet := range bundle.WebStylesheets {
 		appendAsset(sheet.SourcePath, sheet.Content, sheet.Scope)

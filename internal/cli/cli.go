@@ -15,6 +15,7 @@ import (
 	"github.com/dwlhm/nova/internal/bundler"
 	"github.com/dwlhm/nova/internal/conformance"
 	"github.com/dwlhm/nova/internal/core/compile"
+	"github.com/dwlhm/nova/internal/core/contract"
 	"github.com/dwlhm/nova/internal/core/diagnostic"
 	novaformat "github.com/dwlhm/nova/internal/core/format"
 	"github.com/dwlhm/nova/internal/core/style"
@@ -28,7 +29,7 @@ import (
 
 func Run(args []string, cwd string, stdout io.Writer, stderr io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(stderr, "usage: nova init|check|build|dev|test|inspect|fmt|lsp")
+		fmt.Fprintln(stderr, "usage: nova init|check|build|dev|test|inspect|lock|fmt|lsp")
 		return 2
 	}
 	switch args[0] {
@@ -44,6 +45,8 @@ func Run(args []string, cwd string, stdout io.Writer, stderr io.Writer) int {
 		return runTest(args[1:], cwd, stdout, stderr)
 	case "inspect":
 		return runInspect(args[1:], cwd, stdout, stderr)
+	case "lock":
+		return runLock(args[1:], cwd, stdout, stderr)
 	case "fmt":
 		return runFmt(args[1:], cwd, stdout, stderr)
 	case "lsp":
@@ -81,6 +84,7 @@ type projectPipeline struct {
 	PackageGraph   packages.ResolvedGraph
 	LockDigest     string
 	StyleBundle    style.Bundle
+	AppContract    contract.App
 	Files          []artifact.File
 }
 
@@ -327,6 +331,8 @@ func runProjectPipeline(cwd string, targetID string, generateArtifacts bool, pro
 		return projectPipeline{}, false
 	}
 
+	pipeline.AppContract = program.NovaIR.App
+
 	for _, item := range style.ValidateViewClasses(program.NovaIR.ViewIR, styleBundle) {
 		fmt.Fprintf(stderr, "%s: %s\n", item.Code, item.Message)
 	}
@@ -337,6 +343,7 @@ func runProjectPipeline(cwd string, targetID string, generateArtifacts bool, pro
 		Plan:                    resolution.Plan,
 		TargetManifest:          targetManifest,
 		StyleBundle:             styleBundle,
+		Sources:                 sources,
 		ExternalAdapterContents: externalAdapterContents(cwd, targetID, resolution.Plan.ExternalOperations, packageManifests),
 	})
 	if len(artifactDiagnostics) > 0 {
@@ -447,6 +454,18 @@ type inspectStyleAsset struct {
 	Scope      string `json:"scope"`
 }
 
+type inspectStateCell struct {
+	Owner string `json:"owner"`
+	Name  string `json:"name"`
+	Type  string `json:"type,omitempty"`
+}
+
+type inspectEventRoute struct {
+	Slot  string `json:"slot"`
+	Event string `json:"event"`
+	Kind  string `json:"kind"`
+}
+
 func inspectSummary(pipeline projectPipeline) map[string]any {
 	styles := make([]inspectStyleAsset, 0, len(pipeline.StyleBundle.Sheets)+len(pipeline.StyleBundle.WebStylesheets))
 	for _, sheet := range pipeline.StyleBundle.Sheets {
@@ -467,12 +486,48 @@ func inspectSummary(pipeline projectPipeline) map[string]any {
 		"template":           pipeline.Resolution.Plan.Template,
 		"permissions":        pipeline.Resolution.Plan.Permissions,
 		"externalOperations": pipeline.Resolution.Plan.ExternalOperations,
+		"stateCells":         inspectStateCells(pipeline.AppContract),
+		"eventRoutes":        inspectEventRoutes(pipeline.AppContract),
+		"lifecycles":         pipeline.AppContract.Lifecycles,
+		"appLifecycle":       pipeline.AppContract.AppLifecycle,
 		"packageGraph":       pipeline.PackageGraph.Packages,
+		"rendererExtensions": pipeline.PackageGraph.RendererExtensions,
 		"permissionSources":  pipeline.PackageGraph.PermissionSources,
 		"lockDigest":         pipeline.LockDigest,
 		"renderer":           pipeline.Resolution.Plan.Renderer,
 		"styles":             styles,
 	}
+}
+
+func inspectStateCells(app contract.App) []inspectStateCell {
+	cells := make([]inspectStateCell, 0, len(app.Model.States))
+	for _, state := range app.Model.States {
+		cells = append(cells, inspectStateCell{
+			Owner: state.Owner,
+			Name:  state.Name,
+			Type:  state.Type,
+		})
+	}
+	return cells
+}
+
+func inspectEventRoutes(app contract.App) []inspectEventRoute {
+	routes := make([]inspectEventRoute, 0)
+	var walk func([]contract.Node)
+	walk = func(nodes []contract.Node) {
+		for _, node := range nodes {
+			for slot, event := range node.Events {
+				routes = append(routes, inspectEventRoute{
+					Slot:  slot,
+					Event: event.Name,
+					Kind:  node.Kind,
+				})
+			}
+			walk(node.Children)
+		}
+	}
+	walk(app.View.Nodes)
+	return routes
 }
 
 func fmtPaths(cwd string, requested []string) ([]string, error) {

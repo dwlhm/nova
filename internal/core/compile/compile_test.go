@@ -1,6 +1,10 @@
 package compile
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestCompilePipelineSuccess(t *testing.T) {
 	input := CompileInput{
@@ -60,5 +64,31 @@ func TestCompilePipelineReturnsParseDiagnostics(t *testing.T) {
 	}
 	if diagnostics[0].Stage != StageParser {
 		t.Fatalf("diagnostic stage = %s, want %s", diagnostics[0].Stage, StageParser)
+	}
+}
+
+func TestCompileFinanceConformanceWithoutExprDiagnostics(t *testing.T) {
+	root := filepath.Join("..", "..", "..", "tests", "conformance", "web", "finance")
+	paths := []string{
+		"src/App.nova",
+		"src/FinancePure.nova",
+		"src/FinanceStore.nova",
+		"src/FinancePersistence.nova",
+	}
+	sources := make([]SourceModule, 0, len(paths))
+	for _, path := range paths {
+		content, err := os.ReadFile(filepath.Join(root, path))
+		if err != nil {
+			t.Fatal(err)
+		}
+		sources = append(sources, SourceModule{Path: path, Content: string(content)})
+	}
+	_, diagnostics := Compile(CompileInput{
+		Profile: "web",
+		Entry:   "src/App.nova",
+		Sources: sources,
+	})
+	for _, diag := range diagnostics {
+		t.Errorf("%s: %s", diag.Code, diag.Message)
 	}
 }

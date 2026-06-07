@@ -20,9 +20,13 @@ type externalOperation struct {
 }
 
 func Validate(file parser.File) []Diagnostic {
+	return ValidateWithImports(file, nil)
+}
+
+func ValidateWithImports(file parser.File, imports []parser.File) []Diagnostic {
 	diagnostics := make([]Diagnostic, 0)
 	diagnostics = append(diagnostics, validateLocalSymbols(file)...)
-	symbols, symbolDiagnostics := buildSymbols(file)
+	symbols, symbolDiagnostics := buildSymbolsWithImports(file, imports)
 	diagnostics = append(diagnostics, symbolDiagnostics...)
 	stateScope := novatypes.Scope(symbols.StateTypes)
 

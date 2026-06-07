@@ -9,6 +9,7 @@ import (
 	"github.com/dwlhm/nova/internal/provider/capability/view/external/row"
 	"github.com/dwlhm/nova/internal/provider/capability/view/external/runtime"
 	"github.com/dwlhm/nova/internal/provider/capability/view/external/scroll"
+	selectprimitive "github.com/dwlhm/nova/internal/provider/capability/view/external/select"
 	"github.com/dwlhm/nova/internal/provider/capability/view/external/stack"
 	"github.com/dwlhm/nova/internal/provider/capability/view/external/style"
 	"github.com/dwlhm/nova/internal/provider/capability/view/external/surface"
@@ -31,5 +32,6 @@ func defaultModules() []external.Module {
 		column.Module,
 		textinput.Module,
 		numberinput.Module,
+		selectprimitive.Module,
 	}
 }

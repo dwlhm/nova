@@ -141,31 +141,150 @@ func normalizeTraceDataValue(value scheduler.DataValue) scheduler.DataValue {
 		return float64(typed)
 	case float32:
 		return float64(typed)
+	case map[string]scheduler.DataValue:
+		out := make(map[string]any, len(typed))
+		for key, value := range typed {
+			out[key] = normalizeTraceDataValue(value)
+		}
+		return out
+	case map[string]any:
+		return normalizeTraceStringMap(typed)
 	default:
 		return value
 	}
 }
 
-func CompareTrace(expected Trace, actual Trace) []Diagnostic {
+func normalizeTraceStringMap(values map[string]any) map[string]any {
+	if values == nil {
+		return nil
+	}
+	out := make(map[string]any, len(values))
+	for key, value := range values {
+		out[key] = normalizeTraceDataValue(value)
+	}
+	return out
+}
+
+type CompareTraceOptions struct {
+	IgnoreErrors bool
+}
+
+func CompareTrace(expected Trace, actual Trace, options ...CompareTraceOptions) []Diagnostic {
+	opts := CompareTraceOptions{}
+	if len(options) > 0 {
+		opts = options[0]
+	}
 	expected = normalizeTrace(expected)
 	actual = normalizeTrace(actual)
 	diagnostics := make([]Diagnostic, 0)
-	if !reflect.DeepEqual(expected.Events, actual.Events) {
+	if len(expected.Events) > 0 && !reflect.DeepEqual(expected.Events, actual.Events) {
 		diagnostics = append(diagnostics, mismatch("NVA-CONFORMANCE-001", "scheduler events", expected.Events, actual.Events))
 	}
-	if !reflect.DeepEqual(expected.Commits, actual.Commits) {
-		diagnostics = append(diagnostics, mismatch("NVA-CONFORMANCE-002", "state commits", expected.Commits, actual.Commits))
+	if len(expected.Commits) > 0 {
+		diagnostics = append(diagnostics, compareCommitTraces(expected.Commits, actual.Commits)...)
 	}
-	if !reflect.DeepEqual(expected.LifecycleCalls, actual.LifecycleCalls) {
+	if len(expected.LifecycleCalls) > 0 && !reflect.DeepEqual(expected.LifecycleCalls, actual.LifecycleCalls) {
 		diagnostics = append(diagnostics, mismatch("NVA-CONFORMANCE-003", "lifecycle calls", expected.LifecycleCalls, actual.LifecycleCalls))
 	}
-	if !reflect.DeepEqual(expected.ExternalCalls, actual.ExternalCalls) {
-		diagnostics = append(diagnostics, mismatch("NVA-CONFORMANCE-004", "external calls", expected.ExternalCalls, actual.ExternalCalls))
+	if len(expected.ExternalCalls) > 0 {
+		diagnostics = append(diagnostics, compareExternalCallTraces(expected.ExternalCalls, actual.ExternalCalls)...)
 	}
-	if !reflect.DeepEqual(expected.Errors, actual.Errors) {
+	if !opts.IgnoreErrors && len(expected.Errors) > 0 && !reflect.DeepEqual(expected.Errors, actual.Errors) {
 		diagnostics = append(diagnostics, mismatch("NVA-CONFORMANCE-005", "runtime errors", expected.Errors, actual.Errors))
 	}
 	return diagnostic.StableSort(diagnostics)
+}
+
+func compareCommitTraces(expected []CommitTrace, actual []CommitTrace) []Diagnostic {
+	diagnostics := make([]Diagnostic, 0)
+	for _, expectedCommit := range expected {
+		actualCommit, ok := findCommitTrace(actual, expectedCommit.Sequence, expectedCommit.Event)
+		if !ok {
+			diagnostics = append(diagnostics, mismatch("NVA-CONFORMANCE-002", "state commits", expectedCommit, actual))
+			continue
+		}
+		if expectedCommit.Committed != actualCommit.Committed {
+			diagnostics = append(diagnostics, mismatch("NVA-CONFORMANCE-002", "state commits", expectedCommit, actualCommit))
+			continue
+		}
+		for _, expectedChange := range expectedCommit.Changes {
+			actualChange, ok := findStateChange(actualCommit.Changes, expectedChange.Key)
+			if !ok || !stateChangeMatches(expectedChange, actualChange) {
+				diagnostics = append(diagnostics, mismatch("NVA-CONFORMANCE-002", "state commits", expectedChange, actualChange))
+			}
+		}
+		for _, expectedKey := range expectedCommit.Invalidations {
+			if !containsStateKey(actualCommit.Invalidations, expectedKey) {
+				diagnostics = append(diagnostics, mismatch("NVA-CONFORMANCE-002", "state commits", expectedKey, actualCommit.Invalidations))
+			}
+		}
+	}
+	return diagnostics
+}
+
+func compareExternalCallTraces(expected []ExternalCallTrace, actual []ExternalCallTrace) []Diagnostic {
+	diagnostics := make([]Diagnostic, 0)
+	for index, expectedCall := range expected {
+		if index >= len(actual) {
+			diagnostics = append(diagnostics, mismatch("NVA-CONFORMANCE-004", "external calls", expectedCall, actual))
+			continue
+		}
+		actualCall := actual[index]
+		if expectedCall.Source != actualCall.Source ||
+			expectedCall.Capability != actualCall.Capability ||
+			expectedCall.Operation != actualCall.Operation ||
+			expectedCall.OutputType != actualCall.OutputType ||
+			expectedCall.OnSuccess != actualCall.OnSuccess ||
+			expectedCall.OnFailure != actualCall.OnFailure {
+			diagnostics = append(diagnostics, mismatch("NVA-CONFORMANCE-004", "external calls", expectedCall, actualCall))
+			continue
+		}
+		for key, expectedValue := range expectedCall.Input {
+			actualValue, ok := actualCall.Input[key]
+			if !ok || !reflect.DeepEqual(normalizeTraceDataValue(expectedValue), normalizeTraceDataValue(actualValue)) {
+				diagnostics = append(diagnostics, mismatch("NVA-CONFORMANCE-004", "external calls", expectedCall.Input, actualCall.Input))
+				break
+			}
+		}
+	}
+	return diagnostics
+}
+
+func findCommitTrace(commits []CommitTrace, sequence scheduler.LogicalSequence, event scheduler.SchedulerEvent) (CommitTrace, bool) {
+	for _, commit := range commits {
+		if commit.Sequence == sequence && commit.Event == event {
+			return commit, true
+		}
+	}
+	return CommitTrace{}, false
+}
+
+func findStateChange(changes []StateChangeTrace, key StateKeyTrace) (StateChangeTrace, bool) {
+	for _, change := range changes {
+		if change.Key == key {
+			return change, true
+		}
+	}
+	return StateChangeTrace{}, false
+}
+
+func stateChangeMatches(expected StateChangeTrace, actual StateChangeTrace) bool {
+	if expected.Before != nil && !reflect.DeepEqual(normalizeTraceDataValue(expected.Before), normalizeTraceDataValue(actual.Before)) {
+		return false
+	}
+	if expected.After != nil && !reflect.DeepEqual(normalizeTraceDataValue(expected.After), normalizeTraceDataValue(actual.After)) {
+		return false
+	}
+	return true
+}
+
+func containsStateKey(keys []StateKeyTrace, want StateKeyTrace) bool {
+	for _, key := range keys {
+		if key == want {
+			return true
+		}
+	}
+	return false
 }
 
 func normalizeTrace(trace Trace) Trace {

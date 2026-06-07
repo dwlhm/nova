@@ -114,13 +114,22 @@ func appGradle(config targetConfig) string {
 	return "plugins {\n    id(\"com.android.application\")\n}\n\nandroid {\n    namespace = " + shared.QuoteCodeString(config.Namespace) + "\n    compileSdk = " + config.CompileSDK + "\n\n    defaultConfig {\n        applicationId = " + shared.QuoteCodeString(config.ApplicationID) + "\n        minSdk = " + config.MinSDK + "\n        targetSdk = " + config.TargetSDK + "\n        versionCode = " + config.VersionCode + "\n        versionName = " + shared.QuoteCodeString(config.VersionName) + "\n    }\n\n    compileOptions {\n        sourceCompatibility = " + javaVersion + "\n        targetCompatibility = " + javaVersion + "\n    }\n}\n\ndependencies {\n    implementation(project(\":nova-scheduler\"))\n}\n"
 }
 
-func androidManifestXML(config targetConfig, permissions []security.Permission) string {
+func androidManifestXML(config targetConfig, permissions []security.Permission, enableDeepLinks bool) string {
 	manifestPermissions := target.AndroidManifestPermissions(permissions)
 	var usesPermissions strings.Builder
 	for _, permission := range manifestPermissions {
 		usesPermissions.WriteString("    <uses-permission android:name=\"")
 		usesPermissions.WriteString(escapeXML(permission))
 		usesPermissions.WriteString("\" />\n")
+	}
+	deepLinkFilter := ""
+	if enableDeepLinks {
+		deepLinkFilter = "            <intent-filter>\n" +
+			"                <action android:name=\"android.intent.action.VIEW\" />\n" +
+			"                <category android:name=\"android.intent.category.DEFAULT\" />\n" +
+			"                <category android:name=\"android.intent.category.BROWSABLE\" />\n" +
+			"                <data android:scheme=\"nova\" android:host=\"app\" />\n" +
+			"            </intent-filter>\n"
 	}
 	return "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\">\n" +
 		usesPermissions.String() +
@@ -130,6 +139,7 @@ func androidManifestXML(config targetConfig, permissions []security.Permission) 
 		"                <action android:name=\"android.intent.action.MAIN\" />\n" +
 		"                <category android:name=\"android.intent.category.LAUNCHER\" />\n" +
 		"            </intent-filter>\n" +
+		deepLinkFilter +
 		"        </activity>\n" +
 		"    </application>\n" +
 		"</manifest>\n"

@@ -7,7 +7,21 @@ import (
 )
 
 // EmitCSS renders a parsed sheet as standard CSS (before web app scoping).
+// States are emitted in deterministic class/pseudo order.
 func EmitCSS(sheet Sheet) string {
+	return emitCSSSheet(sheet)
+}
+
+// EmitBundleCSS renders all portable sheets in a bundle (callers should pass NormalizeBundle output).
+func EmitBundleCSS(bundle Bundle) map[string]string {
+	out := make(map[string]string, len(bundle.Sheets))
+	for _, sheet := range bundle.Sheets {
+		out[sheet.SourcePath] = emitCSSSheet(sheet)
+	}
+	return out
+}
+
+func emitCSSSheet(sheet Sheet) string {
 	var out strings.Builder
 	classNames := make([]string, 0, len(sheet.Classes))
 	for name := range sheet.Classes {
@@ -18,7 +32,8 @@ func EmitCSS(sheet Sheet) string {
 		rule := sheet.Classes[name]
 		writeRule(&out, "."+name, rule.Properties)
 	}
-	for _, state := range sheet.States {
+	states := sortStateRules(sheet.States)
+	for _, state := range states {
 		selector := "." + state.Class + ":" + state.Pseudo
 		writeRule(&out, selector, state.Properties)
 	}
@@ -70,26 +85,5 @@ func ValidatePortableSubset(sheet Sheet) []Diagnostic {
 }
 
 func portableProperties() map[string]bool {
-	names := []string{
-		"color",
-		"font-size",
-		"font-weight",
-		"text-align",
-		"text-transform",
-		"line-height",
-		"padding",
-		"min-height",
-		"background",
-		"background-color",
-		"border",
-		"border-color",
-		"border-width",
-		"border-radius",
-		"align-content",
-	}
-	out := make(map[string]bool, len(names))
-	for _, name := range names {
-		out[name] = true
-	}
-	return out
+	return portablePropertyNames()
 }

@@ -2,7 +2,7 @@
 
 ## Status
 
-Implemented / Accepted
+Deprecated — referensi historis ViewIR/template authoring. Deklarasi template aktif: [ADR-015](adr_015_template_declaration.md); ekspresi: [ADR-016](adr_016_expression_pipeline.md).
 
 ## Depends on
 

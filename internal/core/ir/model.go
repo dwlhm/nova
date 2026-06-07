@@ -48,6 +48,8 @@ type Bundle struct {
 	Modules             []string
 	CapabilityManifests []capability.Manifest
 	Routes              []RouteModel
+	// NovaExprJS is emitted pure func helpers for web/Android expression evaluation.
+	NovaExprJS string
 }
 
 type RouteModel struct {

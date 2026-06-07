@@ -54,6 +54,7 @@ func files(input shared.GenerateInput, versions shared.ManifestVersions) ([]shar
 		{Path: "build/web/index.html", Content: indexHTML(input.Project.Project.Name, stylcap.StyleHrefs(styleBundle.Files), styleBundle.RootScope, extensions.Enabled, externalAdaptersBundle.Enabled)},
 		{Path: "build/web/assets/nova-runtime.css", Content: webCSS()},
 		{Path: "build/web/assets/nova-scheduler.js", Content: schedulerModule()},
+		{Path: "build/web/assets/nova-app-lifecycle.js", Content: appLifecycleModule()},
 		{Path: "build/web/assets/nova-renderer.js", Content: rendererModule()},
 		{Path: "build/web/app.contract.json", Content: shared.MustJSON(app)},
 		{Path: "build/web/build.manifest.json", Content: shared.MustJSON(manifest)},

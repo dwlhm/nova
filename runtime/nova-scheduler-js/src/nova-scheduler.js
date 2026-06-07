@@ -22,6 +22,22 @@ var NovaScheduler = (() => {
       enqueuePending(scheduler, host, pending);
       drain(scheduler, host);
     };
+    scheduler.commitTransition = (event, args) => {
+      if (!isSchedulerEvent(event)) return;
+      const eventArgs = (args || []).slice();
+      const envelope = {
+        name: event,
+        args: eventArgs,
+        payload: payloadFor(host.app, event, eventArgs)
+      };
+      const commit = planStateCommit(host, envelope, host.cloneState(host.state()));
+      if (commit.errors.length) {
+        scheduler.errors.push(...commit.errors);
+        return;
+      }
+      host.commitState(commit.state);
+      host.update(commit.invalidations);
+    };
     return scheduler;
   }
 
@@ -54,6 +70,43 @@ var NovaScheduler = (() => {
     return ((app.events || []).find((contract) => contract.name === name)) || null;
   }
 
+  function validateRouteData(value) {
+    if (value === undefined || value === null) {
+      return "route payload required";
+    }
+    let rawPath;
+    if (typeof value === "string") {
+      rawPath = value.trim() || "/";
+    } else if (typeof value === "object" && !Array.isArray(value)) {
+      rawPath = value.path == null ? "/" : String(value.path);
+    } else {
+      return "route payload must be serializable Nova data";
+    }
+    if (!rawPath.startsWith("/")) {
+      return "route path must start with /";
+    }
+    const route = normalizeRouteValue(value);
+    if (!isSerializableNovaData(route)) {
+      return "route payload must be serializable Nova data";
+    }
+    return null;
+  }
+
+  function normalizeRouteValue(value) {
+    if (value === undefined || value === null) {
+      return { path: "/" };
+    }
+    if (typeof value === "string") {
+      const path = value.trim() || "/";
+      return { path: path.startsWith("/") ? path : "/" + path };
+    }
+    if (typeof value === "object" && !Array.isArray(value)) {
+      const path = value.path == null ? "/" : String(value.path);
+      return { ...value, path: path.startsWith("/") ? path : "/" + path };
+    }
+    return { path: "/" };
+  }
+
   function validateHostEvent(app, source, event, args) {
     const contracts = app.events || [];
     if (contracts.length === 0) return null;
@@ -64,6 +117,10 @@ var NovaScheduler = (() => {
     }
     if (!isSerializableNovaData(args)) {
       return "event payload must be a serializable Nova data value";
+    }
+    if (event === "@route_changed" && args.length > 0) {
+      const routeError = validateRouteData(args[0]);
+      if (routeError) return routeError;
     }
     return null;
   }
@@ -125,6 +182,9 @@ var NovaScheduler = (() => {
   }
 
   function runLifecyclePhase(host, phase, envelope, snapshot, routedError) {
+    if (phase === "after" && typeof host.shouldSkipLifecycleAfter === "function" && host.shouldSkipLifecycleAfter(envelope.name)) {
+      return [];
+    }
     const handlers = matchingLifecycles(host.app, phase, envelope.name);
     const pending = [];
     for (const handler of handlers) {

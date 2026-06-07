@@ -16,6 +16,25 @@ type App struct {
 	Events             []EventContract     `json:"events,omitempty"`
 	Lifecycles         []Lifecycle         `json:"lifecycles,omitempty"`
 	ExternalOperations []ExternalOperation `json:"externalOperations,omitempty"`
+	Persistence        *HydrationManifest  `json:"persistence,omitempty"`
+	AppLifecycle       []string            `json:"appLifecycle,omitempty"`
+}
+
+// HydrationManifest describes storage restore steps lowered from lifecycle metadata.
+type HydrationManifest struct {
+	BootstrapEvent  string              `json:"bootstrapEvent,omitempty"`
+	Loads           []HydrationLoadStep `json:"loads,omitempty"`
+	TerminalEvent   string              `json:"terminalEvent,omitempty"`
+	SkipAfterEvents []string            `json:"skipAfterEvents,omitempty"`
+}
+
+// HydrationLoadStep is one storage load executed during mount restore.
+type HydrationLoadStep struct {
+	TriggerEvent string            `json:"triggerEvent"`
+	EffectID     string            `json:"effectId"`
+	Input        map[string]string `json:"input,omitempty"`
+	SuccessEvent string            `json:"successEvent"`
+	FailureEvent string            `json:"failureEvent,omitempty"`
 }
 
 type Model struct {

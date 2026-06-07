@@ -39,7 +39,11 @@ func (events eventTable) Signature(name string) (eventSignature, bool) {
 }
 
 func buildSymbols(file parser.File) (symbolTable, []Diagnostic) {
-	typeEnv, typeDiagnostics := novatypes.BuildEnvironment(file)
+	return buildSymbolsWithImports(file, nil)
+}
+
+func buildSymbolsWithImports(file parser.File, imports []parser.File) (symbolTable, []Diagnostic) {
+	typeEnv, diagnostics := buildTypeEnvironment(file, imports)
 	symbols := symbolTable{
 		StateNames:         collectStateNames(file),
 		StateTypes:         make(map[string]novatypes.Type),
@@ -47,7 +51,6 @@ func buildSymbols(file parser.File) (symbolTable, []Diagnostic) {
 		Events:             make(eventTable),
 		TypeEnv:            typeEnv,
 	}
-	diagnostics := convertTypeDiagnostics(typeDiagnostics)
 	symbols.StateTypes = collectStateTypes(file, typeEnv, &diagnostics)
 
 	for _, decl := range file.Imports {

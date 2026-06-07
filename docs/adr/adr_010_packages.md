@@ -2,7 +2,7 @@
 
 ## Status
 
-Implemented / Accepted
+Deprecated — referensi historis package registry. Spesifikasi bahasa aktif: [ADR-013](adr_013_pure_expressions.md)–[ADR-016](adr_016_expression_pipeline.md).
 
 ## Depends on
 

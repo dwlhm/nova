@@ -9,6 +9,79 @@ import (
 	"github.com/dwlhm/nova/internal/core/view"
 )
 
+// ValidateSheet runs portable subset and semantic value checks on a parsed sheet.
+func ValidateSheet(sheet Sheet) []Diagnostic {
+	diagnostics := make([]Diagnostic, 0)
+	diagnostics = append(diagnostics, ValidatePortableSubset(sheet)...)
+
+	for className := range sheet.Classes {
+		if !validateClassIdent(className) {
+			diagnostics = append(diagnostics, diagnosticInvalidIdent("NVA-STYLE-010", "class", className))
+		}
+	}
+	for name := range sheet.Tokens {
+		if !validateTokenIdent(name) {
+			diagnostics = append(diagnostics, diagnosticInvalidIdent("NVA-STYLE-010", "token", name))
+		}
+	}
+	for _, state := range sheet.States {
+		if !validateClassIdent(state.Class) {
+			diagnostics = append(diagnostics, diagnosticInvalidIdent("NVA-STYLE-010", "class", state.Class))
+		}
+		if !validatePseudo(state.Pseudo) {
+			diagnostics = append(diagnostics, Diagnostic{
+				Code:    "NVA-STYLE-010",
+				Message: fmt.Sprintf("invalid pseudo %q on state %s", state.Pseudo, state.Class),
+			})
+		}
+		if _, ok := sheet.Classes[state.Class]; !ok {
+			diagnostics = append(diagnostics, Diagnostic{
+				Code:    "NVA-STYLE-010",
+				Message: fmt.Sprintf("state %s %s references unknown class %q", state.Class, state.Pseudo, state.Class),
+			})
+		}
+	}
+
+	for className, rule := range sheet.Classes {
+		diagnostics = append(diagnostics, ValidatePropertyValues("class "+className, rule.Properties)...)
+	}
+	for _, state := range sheet.States {
+		diagnostics = append(diagnostics, ValidatePropertyValues(
+			fmt.Sprintf("state %s %s", state.Class, state.Pseudo),
+			state.Properties,
+		)...)
+	}
+	return diagnostics
+}
+
+// ValidateBundle reports duplicate classes in the same scope across merged sheets.
+func ValidateBundle(bundle Bundle) []Diagnostic {
+	type classKey struct {
+		scope Scope
+		name  string
+	}
+	seen := make(map[classKey]string)
+	diagnostics := make([]Diagnostic, 0)
+	for _, sheet := range bundle.Sheets {
+		scope := NormalizeScope(sheet.Scope)
+		for className := range sheet.Classes {
+			key := classKey{scope: scope, name: className}
+			if prior, ok := seen[key]; ok {
+				diagnostics = append(diagnostics, Diagnostic{
+					Code:    "NVA-STYLE-004",
+					Message: fmt.Sprintf("duplicate class %q in scope %s (%s and %s)", className, scope, prior, sheet.SourcePath),
+				})
+				continue
+			}
+			seen[key] = sheet.SourcePath
+		}
+	}
+	sort.Slice(diagnostics, func(i, j int) bool {
+		return diagnostics[i].Message < diagnostics[j].Message
+	})
+	return diagnostics
+}
+
 // ValidateViewClasses checks template class bindings against merged .nova-style sheets.
 func ValidateViewClasses(viewIR view.IR, bundle Bundle) []Diagnostic {
 	if len(bundle.Sheets) == 0 {

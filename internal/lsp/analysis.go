@@ -82,10 +82,11 @@ func analyzeDocument(uri string, text string, version int) document {
 		diagnostics = append(diagnostics, lspDiagnostic(text, parserDiagnosticCode, item.Message, item.Token))
 	}
 	if len(parserDiagnostics) == 0 {
-		if _, semanticDiagnostics := semantic.Analyze(file); len(semanticDiagnostics) > 0 {
-			for _, item := range semanticDiagnostics {
-				diagnostics = append(diagnostics, lspDiagnostic(text, semanticDiagnosticCode, item.Message, item.Token))
-			}
+		modulePath := modulePathFromURI(uri)
+		modules := loadProjectNovaFiles(findProjectRootForURI(uri))
+		importFiles := semantic.CapabilityImports(modulePath, file, modules)
+		for _, item := range semantic.ValidateWithImports(file, importFiles) {
+			diagnostics = append(diagnostics, lspDiagnostic(text, semanticDiagnosticCode, item.Message, item.Token))
 		}
 	}
 

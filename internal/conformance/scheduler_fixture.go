@@ -14,6 +14,7 @@ type ExpectedScheduler struct {
 	CompleteExternals  bool                  `json:"completeExternals,omitempty"`
 	ExternalStub       string                `json:"externalStub,omitempty"`
 	RuntimePermissions []security.Permission `json:"runtimePermissions,omitempty"`
+	IgnoreTraceErrors  bool                  `json:"ignoreTraceErrors,omitempty"`
 	Trace              Trace                 `json:"trace"`
 }
 
@@ -81,7 +82,7 @@ func runSchedulerFixture(plan build.BuildPlan, sources []build.SourceFile, proje
 	if !traceSpecified(expected.Trace) {
 		return nil, actual, true
 	}
-	return CompareTrace(expected.Trace, actual), actual, true
+	return CompareTrace(expected.Trace, actual, CompareTraceOptions{IgnoreErrors: expected.IgnoreTraceErrors}), actual, true
 }
 
 func mergeTrace(left Trace, right Trace) Trace {

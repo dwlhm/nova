@@ -7,14 +7,18 @@ import (
 
 	"github.com/dwlhm/nova/internal/core/capability"
 	"github.com/dwlhm/nova/internal/core/contract"
+	"github.com/dwlhm/nova/internal/core/expr"
 	"github.com/dwlhm/nova/internal/core/parser"
 	"github.com/dwlhm/nova/internal/core/security"
 	"github.com/dwlhm/nova/internal/core/view"
 )
 
-func materializeAppContract(input LowerInput, sources map[string]parser.File, model loweredAppModel, viewIR view.IR, manifests []capability.Manifest) contract.App {
+func materializeAppContract(input LowerInput, sources map[string]parser.File, model loweredAppModel, viewIR view.IR, manifests []capability.Manifest) (contract.App, []Diagnostic) {
 	stateNames := stateNamesFromModel(model)
-	lifecycles := buildContractLifecycles(input.Modules, sources, collectStateNamesFromMap(sources, input.Modules))
+	registry := buildExprRegistry(sources)
+	lifecycles, lifecycleDiagnostics := buildContractLifecycles(input.Modules, sources, registry, collectStateNamesFromMap(sources, input.Modules))
+	viewContract, viewDiagnostics := contractView(viewIR, registry, stateNames)
+	diagnostics := append(lifecycleDiagnostics, viewDiagnostics...)
 	externalSummaries := externalOperationSummaries(input.Externals)
 	return contract.App{
 		V:                  contract.Version,
@@ -22,12 +26,97 @@ func materializeAppContract(input LowerInput, sources map[string]parser.File, mo
 		Entry:              input.Entry,
 		Permissions:        permissionStrings(input.Permissions),
 		Model:              contractModel(model),
-		View:               contractView(viewIR, stateNames),
+		View:               viewContract,
 		Effects:            contractEffects(externalSummaries),
-		Events:             contractEvents(modulePathsFromRefs(input.Modules), manifests, lifecycles),
+		Events:             mergeNavigationPlatformEmitters(mergeAppLifecycleEvents(contractEvents(modulePathsFromRefs(input.Modules), manifests, lifecycles)), contractModel(model)),
 		Lifecycles:         lifecycles,
 		ExternalOperations: contractExternalOperations(input.Externals),
+		Persistence:        buildHydrationManifest(lifecycles),
+		AppLifecycle:       contract.StandardAppLifecycleEvents(),
+	}, diagnostics
+}
+
+func mergeAppLifecycleEvents(events []contract.EventContract) []contract.EventContract {
+	byName := make(map[string]contract.EventContract, len(events)+len(contract.StandardAppLifecycleEvents()))
+	for _, event := range events {
+		byName[event.Name] = event
 	}
+	for _, name := range contract.StandardAppLifecycleEvents() {
+		existing, ok := byName[name]
+		if !ok {
+			byName[name] = contract.EventContract{Name: name, Emitters: []string{"@nova/app"}}
+			continue
+		}
+		emitters := make(map[string]bool, len(existing.Emitters)+1)
+		for _, emitter := range existing.Emitters {
+			emitters[emitter] = true
+		}
+		emitters["@nova/app"] = true
+		merged := make([]string, 0, len(emitters))
+		for emitter := range emitters {
+			merged = append(merged, emitter)
+		}
+		sort.Strings(merged)
+		existing.Emitters = merged
+		byName[name] = existing
+	}
+	out := make([]contract.EventContract, 0, len(byName))
+	for _, event := range byName {
+		out = append(out, event)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
+}
+
+func mergeNavigationPlatformEmitters(events []contract.EventContract, model contract.Model) []contract.EventContract {
+	if !hasRouteStateContract(model) {
+		return events
+	}
+	platformEmitters := contract.StandardNavigationPlatformEmitters()
+	navigationEvents := map[string]bool{
+		"@route_changed":      true,
+		"@navigate":           true,
+		"@navigation_failed":  true,
+	}
+	byName := make(map[string]contract.EventContract, len(events))
+	for _, event := range events {
+		byName[event.Name] = event
+	}
+	for name := range navigationEvents {
+		existing, ok := byName[name]
+		if !ok {
+			existing = contract.EventContract{Name: name}
+		}
+		emitters := make(map[string]bool, len(existing.Emitters)+len(platformEmitters))
+		for _, emitter := range existing.Emitters {
+			emitters[emitter] = true
+		}
+		for _, emitter := range platformEmitters {
+			emitters[emitter] = true
+		}
+		merged := make([]string, 0, len(emitters))
+		for emitter := range emitters {
+			merged = append(merged, emitter)
+		}
+		sort.Strings(merged)
+		existing.Emitters = merged
+		byName[name] = existing
+	}
+	out := make([]contract.EventContract, 0, len(byName))
+	for _, event := range byName {
+		out = append(out, event)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
+}
+
+func hasRouteStateContract(model contract.Model) bool {
+	for _, state := range model.States {
+		if state.Name == "route" {
+			return true
+		}
+	}
+	return false
 }
 
 func contractEvents(modules []string, manifests []capability.Manifest, lifecycles []contract.Lifecycle) []contract.EventContract {
@@ -98,6 +187,13 @@ func contractModel(model loweredAppModel) contract.Model {
 				Expression: transition.Expression,
 			}
 		}
+		if state.Name == "route" && !hasTransitionEvent(transitions, "@navigate") {
+			transitions = append(transitions, contract.Transition{
+				Event:      "@navigate",
+				Params:     []string{"action"},
+				Expression: contract.NavigationApplyExpression,
+			})
+		}
 		states[i] = contract.State{
 			Owner:       state.Owner,
 			Name:        state.Name,
@@ -109,7 +205,16 @@ func contractModel(model loweredAppModel) contract.Model {
 	return contract.Model{States: states}
 }
 
-func contractView(ir view.IR, stateNames map[string]bool) contract.View {
+func hasTransitionEvent(transitions []contract.Transition, event string) bool {
+	for _, transition := range transitions {
+		if transition.Event == event {
+			return true
+		}
+	}
+	return false
+}
+
+func contractView(ir view.IR, registry *expr.Registry, stateNames map[string]bool) (contract.View, []Diagnostic) {
 	bindings := make([]contract.BindingMeta, 0, len(ir.Metadata.Bindings))
 	for _, ref := range ir.Metadata.Bindings {
 		bindings = append(bindings, contract.BindingMeta{
@@ -118,24 +223,31 @@ func contractView(ir view.IR, stateNames map[string]bool) contract.View {
 			States: append([]string(nil), ref.States...),
 		})
 	}
+	nodes, diagnostics := contractNodes(ir.Nodes, registry, stateNames)
 	return contract.View{
-		Nodes:    contractNodes(ir.Nodes, stateNames),
+		Nodes:    nodes,
 		Bindings: bindings,
-	}
+	}, diagnostics
 }
 
-func contractNodes(nodes []view.Node, stateNames map[string]bool) []contract.Node {
+func contractNodes(nodes []view.Node, registry *expr.Registry, stateNames map[string]bool) ([]contract.Node, []Diagnostic) {
 	out := make([]contract.Node, len(nodes))
+	var diagnostics []Diagnostic
 	for i, node := range nodes {
-		out[i] = contractNode(node, stateNames)
+		contractNode, nodeDiagnostics := contractNode(node, registry, stateNames)
+		out[i] = contractNode
+		diagnostics = append(diagnostics, nodeDiagnostics...)
 	}
-	return out
+	return out, diagnostics
 }
 
-func contractNode(node view.Node, stateNames map[string]bool) contract.Node {
+func contractNode(node view.Node, registry *expr.Registry, stateNames map[string]bool) (contract.Node, []Diagnostic) {
+	var diagnostics []Diagnostic
 	props := make(map[string]string, len(node.Props))
 	for name, binding := range node.Props {
-		props[name] = bindingExpr(binding, stateNames)
+		exprValue, diags := bindingExpr(binding, registry, stateNames)
+		diagnostics = append(diagnostics, diags...)
+		props[name] = exprValue
 	}
 	events := make(map[string]contract.Event, len(node.Events))
 	for slot, route := range node.Events {
@@ -145,27 +257,33 @@ func contractNode(node view.Node, stateNames map[string]bool) contract.Node {
 				args = append(args, "$value")
 				continue
 			}
-			args = append(args, bindingExpr(arg, stateNames))
+			exprValue, diags := bindingExpr(arg, registry, stateNames)
+			diagnostics = append(diagnostics, diags...)
+			args = append(args, exprValue)
 		}
 		events[slot] = contract.Event{
 			Name: string(route.Event),
 			Args: args,
 		}
 	}
+	children, childDiagnostics := contractNodes(node.Children, registry, stateNames)
+	diagnostics = append(diagnostics, childDiagnostics...)
 	out := contract.Node{
 		Kind:     node.Kind,
 		Props:    props,
 		Events:   events,
-		Children: contractNodes(node.Children, stateNames),
+		Children: children,
 	}
 	if node.Key != nil {
-		out.Key = bindingExpr(*node.Key, stateNames)
+		keyExpr, diags := bindingExpr(*node.Key, registry, stateNames)
+		diagnostics = append(diagnostics, diags...)
+		out.Key = keyExpr
 	}
-	return out
+	return out, diagnostics
 }
 
-func bindingExpr(binding view.Binding, stateNames map[string]bool) string {
-	return expressionToJS(binding.Tokens, stateNames, nil)
+func bindingExpr(binding view.Binding, registry *expr.Registry, stateNames map[string]bool) (string, []Diagnostic) {
+	return lowerExpressionJS(binding.Tokens, registry, stateNames, nil)
 }
 
 func implicitValueBinding(binding view.Binding) bool {

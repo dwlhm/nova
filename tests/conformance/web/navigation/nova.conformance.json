@@ -1,0 +1,145 @@
+{
+  "target": "web",
+  "expected": {
+    "diagnosticCodes": [],
+    "artifact": {
+      "target": "web",
+      "entry": "src/App.nova",
+      "modules": ["src/App.nova"],
+      "permissions": []
+    },
+    "view": {
+      "bindings": 1,
+      "eventRoutes": 0,
+      "pages": 3,
+      "routePatterns": ["/", "/settings", "/profile"]
+    },
+    "scheduler": {
+      "steps": [
+        { "lifecycle": { "phase": "mount", "source": "runtime" } },
+        {
+          "enqueue": {
+            "source": "renderer",
+            "event": "@navigate",
+            "payload": {
+              "action": { "kind": "push", "route": { "path": "/settings" } }
+            }
+          }
+        },
+        {
+          "enqueue": {
+            "source": "renderer",
+            "event": "@navigate",
+            "payload": {
+              "action": { "kind": "push", "route": { "path": "/profile" } }
+            }
+          }
+        },
+        {
+          "enqueue": {
+            "source": "renderer",
+            "event": "@navigate",
+            "payload": { "action": { "kind": "back" } }
+          }
+        },
+        {
+          "enqueue": {
+            "source": "platform",
+            "event": "@route_changed",
+            "payload": {
+              "next": { "path": "/profile", "params": { "id": "42" } }
+            }
+          }
+        }
+      ],
+      "trace": {
+        "events": [
+          {
+            "sequence": 1,
+            "source": "renderer",
+            "name": "@navigate",
+            "payload": {
+              "action": { "kind": "push", "route": { "path": "/settings" } }
+            }
+          },
+          {
+            "sequence": 2,
+            "source": "renderer",
+            "name": "@navigate",
+            "payload": {
+              "action": { "kind": "push", "route": { "path": "/profile" } }
+            }
+          },
+          {
+            "sequence": 3,
+            "source": "renderer",
+            "name": "@navigate",
+            "payload": { "action": { "kind": "back" } }
+          },
+          {
+            "sequence": 4,
+            "source": "platform",
+            "name": "@route_changed",
+            "payload": {
+              "next": { "path": "/profile", "params": { "id": "42" } }
+            }
+          }
+        ],
+        "commits": [
+          {
+            "sequence": 1,
+            "event": "@navigate",
+            "committed": true,
+            "changes": [
+              {
+                "key": { "owner": "Router", "name": "route" },
+                "before": { "path": "/" },
+                "after": "/settings"
+              }
+            ],
+            "invalidations": [{ "owner": "Router", "name": "route" }]
+          },
+          {
+            "sequence": 2,
+            "event": "@navigate",
+            "committed": true,
+            "changes": [
+              {
+                "key": { "owner": "Router", "name": "route" },
+                "before": "/settings",
+                "after": "/profile"
+              }
+            ],
+            "invalidations": [{ "owner": "Router", "name": "route" }]
+          },
+          {
+            "sequence": 3,
+            "event": "@navigate",
+            "committed": true,
+            "changes": [
+              {
+                "key": { "owner": "Router", "name": "route" },
+                "before": "/profile",
+                "after": "/settings"
+              }
+            ],
+            "invalidations": [{ "owner": "Router", "name": "route" }]
+          },
+          {
+            "sequence": 4,
+            "event": "@route_changed",
+            "committed": true,
+            "changes": [
+              {
+                "key": { "owner": "Router", "name": "route" },
+                "before": "/settings",
+                "after": { "path": "/profile", "params": { "id": "42" } }
+              }
+            ],
+            "invalidations": [{ "owner": "Router", "name": "route" }]
+          }
+        ]
+      }
+    }
+  }
+}

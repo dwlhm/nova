@@ -30,6 +30,8 @@ type GenerateInput struct {
 	TargetManifest          build.TargetManifest
 	StyleBundle             style.Bundle
 	ExternalAdapterContents map[string]string
+	// Sources are the parsed Nova modules used to emit target helpers (NovaExpr).
+	Sources []build.SourceFile
 }
 
 type ManifestVersions struct {

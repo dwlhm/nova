@@ -1,0 +1,393 @@
+<contract type Route>
+  path: string;
+  params?: unknown;
+  query?: unknown;
+  fragment?: string;
+/|
+
+<contract type HistoryFilter>
+  "all" | "expense" | "income" | "transfer";
+/|
+
+<contract type LedgerV1>
+  version: number;
+  transactionCount: number;
+  netTotal: number;
+  incomeTotal: number;
+  expenseTotal: number;
+  transferTotal: number;
+  feeTotal: number;
+  line1: string;
+  line2: string;
+  line3: string;
+  line4: string;
+  expenseRecent1: string;
+  expenseRecent2: string;
+  incomeRecent1: string;
+  incomeRecent2: string;
+  transferRecent1: string;
+  transferRecent2: string;
+/|
+
+<func emptyLedger returns LedgerV1>
+  {
+    version <- 1;
+    transactionCount <- 0;
+    netTotal <- 0;
+    incomeTotal <- 0;
+    expenseTotal <- 0;
+    transferTotal <- 0;
+    feeTotal <- 0;
+    line1 <- "Belum ada transaksi.";
+    line2 <- "Transaksi terbaru akan muncul di sini.";
+    line3 <- "Ringkasan komposisi tampil di grafik di bawah.";
+    line4 <- "Gunakan filter untuk melihat entri per tipe.";
+    expenseRecent1 <- "Belum ada pengeluaran.";
+    expenseRecent2 <- "Pengeluaran yang dicatat akan muncul di sini.";
+    incomeRecent1 <- "Belum ada pemasukan.";
+    incomeRecent2 <- "Pemasukan yang dicatat akan muncul di sini.";
+    transferRecent1 <- "Belum ada transfer.";
+    transferRecent2 <- "Transfer yang dicatat akan muncul di sini.";
+  }
+/|
+
+<func formatCurrency amount: number returns string>
+  "Rp " + amount
+/|
+
+<func typeButtonClass path: string activePath: string base: string returns string>
+  path == activePath ? base + " type-button-selected" : base
+/|
+
+<func filterButtonClass current: HistoryFilter kind: HistoryFilter returns string>
+  current == kind ? "filter-button filter-button-selected" : "filter-button"
+/|
+
+<func inputTabClassFor path: string returns string>
+  path == "/transactions" ? "tab-button" : "tab-button tab-button-selected"
+/|
+
+<func historyTabClassFor path: string returns string>
+  path == "/transactions" ? "tab-button tab-button-selected" : "tab-button"
+/|
+
+<func chartMax income: number expense: number transfer: number returns number>
+  income > expense ? income > transfer ? income : transfer : expense > transfer ? expense : transfer
+/|
+
+<func chartMaxFromLedger ledger: LedgerV1 returns number>
+  chartMax ledger.incomeTotal ledger.expenseTotal ledger.transferTotal
+/|
+
+<func barIncomeClassForLedger ledger: LedgerV1 returns string>
+  barHeightClass ledger.incomeTotal chartMaxFromLedger ledger
+/|
+
+<func barExpenseClassForLedger ledger: LedgerV1 returns string>
+  barHeightClass ledger.expenseTotal chartMaxFromLedger ledger
+/|
+
+<func barTransferClassForLedger ledger: LedgerV1 returns string>
+  barHeightClass ledger.transferTotal chartMaxFromLedger ledger
+/|
+
+<func pieIncomeClassForLedger ledger: LedgerV1 returns string>
+  pieIncomeClassFor ledger.incomeTotal ledger.incomeTotal + ledger.expenseTotal + ledger.transferTotal
+/|
+
+<func pieExpenseClassForLedger ledger: LedgerV1 returns string>
+  pieExpenseClassFor ledger.expenseTotal ledger.incomeTotal + ledger.expenseTotal + ledger.transferTotal
+/|
+
+<func pieTransferClassForLedger ledger: LedgerV1 returns string>
+  pieTransferClassFor ledger.transferTotal ledger.incomeTotal + ledger.expenseTotal + ledger.transferTotal
+/|
+
+<func pieIncomeLabelForLedger ledger: LedgerV1 returns string>
+  piePercent ledger.incomeTotal ledger.incomeTotal + ledger.expenseTotal + ledger.transferTotal
+/|
+
+<func pieExpenseLabelForLedger ledger: LedgerV1 returns string>
+  piePercent ledger.expenseTotal ledger.incomeTotal + ledger.expenseTotal + ledger.transferTotal
+/|
+
+<func pieTransferLabelForLedger ledger: LedgerV1 returns string>
+  piePercent ledger.transferTotal ledger.incomeTotal + ledger.expenseTotal + ledger.transferTotal
+/|
+
+<func barHeightClass value: number maxValue: number returns string>
+  value == 0 ? "bar-fill bar-h-0" : value * 100 / maxValue >= 90 ? "bar-fill bar-h-90" : value * 100 / maxValue >= 80 ? "bar-fill bar-h-80" : value * 100 / maxValue >= 70 ? "bar-fill bar-h-70" : value * 100 / maxValue >= 60 ? "bar-fill bar-h-60" : value * 100 / maxValue >= 50 ? "bar-fill bar-h-50" : value * 100 / maxValue >= 40 ? "bar-fill bar-h-40" : value * 100 / maxValue >= 30 ? "bar-fill bar-h-30" : value * 100 / maxValue >= 20 ? "bar-fill bar-h-20" : value * 100 / maxValue >= 10 ? "bar-fill bar-h-10" : "bar-fill bar-h-5"
+/|
+
+<func pieWidthClass value: number total: number returns string>
+  total == 0 ? "pie-w-0" : value * 100 / total >= 66 ? "pie-w-66" : value * 100 / total >= 33 ? "pie-w-33" : value * 100 / total >= 20 ? "pie-w-20" : value * 100 / total >= 10 ? "pie-w-10" : value * 100 / total > 0 ? "pie-w-5" : "pie-w-0"
+/|
+
+<func pieIncomeClassFor value: number total: number returns string>
+  "pie-segment pie-income " + pieWidthClass value total
+/|
+
+<func pieExpenseClassFor value: number total: number returns string>
+  "pie-segment pie-expense " + pieWidthClass value total
+/|
+
+<func pieTransferClassFor value: number total: number returns string>
+  "pie-segment pie-transfer " + pieWidthClass value total
+/|
+
+<func piePercent value: number total: number returns string>
+  total == 0 ? "0%" : value * 100 / total + "%"
+/|
+
+<func expenseSummary category: string amount: number account: string note: string returns string>
+  "Pengeluaran | " + category + " | Rp " + amount + " | akun " + account + " | " + note
+/|
+
+<func incomeSummary category: string amount: number account: string note: string returns string>
+  "Pemasukan | " + category + " | Rp " + amount + " | diterima di " + account + " | " + note
+/|
+
+<func transferSummary fromAccount: string toAccount: string amount: number fee: number note: string returns string>
+  "Transfer | " + fromAccount + " -> " + toAccount + " | Rp " + amount + " | fee Rp " + fee + " | " + note
+/|
+
+<func applyExpense ledger: LedgerV1 category: string amount: number account: string note: string returns LedgerV1>
+  {
+    version <- ledger.version;
+    transactionCount <- ledger.transactionCount + 1;
+    netTotal <- ledger.netTotal - amount;
+    incomeTotal <- ledger.incomeTotal;
+    expenseTotal <- ledger.expenseTotal + amount;
+    transferTotal <- ledger.transferTotal;
+    feeTotal <- ledger.feeTotal;
+    line1 <- expenseSummary category amount account note;
+    line2 <- ledger.line1;
+    line3 <- ledger.line2;
+    line4 <- ledger.line3;
+    expenseRecent1 <- expenseSummary category amount account note;
+    expenseRecent2 <- ledger.expenseRecent1;
+    incomeRecent1 <- ledger.incomeRecent1;
+    incomeRecent2 <- ledger.incomeRecent2;
+    transferRecent1 <- ledger.transferRecent1;
+    transferRecent2 <- ledger.transferRecent2;
+  }
+/|
+
+<func applyIncome ledger: LedgerV1 category: string amount: number account: string note: string returns LedgerV1>
+  {
+    version <- ledger.version;
+    transactionCount <- ledger.transactionCount + 1;
+    netTotal <- ledger.netTotal + amount;
+    incomeTotal <- ledger.incomeTotal + amount;
+    expenseTotal <- ledger.expenseTotal;
+    transferTotal <- ledger.transferTotal;
+    feeTotal <- ledger.feeTotal;
+    line1 <- incomeSummary category amount account note;
+    line2 <- ledger.line1;
+    line3 <- ledger.line2;
+    line4 <- ledger.line3;
+    expenseRecent1 <- ledger.expenseRecent1;
+    expenseRecent2 <- ledger.expenseRecent2;
+    incomeRecent1 <- incomeSummary category amount account note;
+    incomeRecent2 <- ledger.incomeRecent1;
+    transferRecent1 <- ledger.transferRecent1;
+    transferRecent2 <- ledger.transferRecent2;
+  }
+/|
+
+<func applyTransfer ledger: LedgerV1 fromAccount: string toAccount: string amount: number fee: number note: string returns LedgerV1>
+  {
+    version <- ledger.version;
+    transactionCount <- ledger.transactionCount + 1;
+    netTotal <- ledger.netTotal - fee;
+    incomeTotal <- ledger.incomeTotal;
+    expenseTotal <- ledger.expenseTotal;
+    transferTotal <- ledger.transferTotal + amount;
+    feeTotal <- ledger.feeTotal + fee;
+    line1 <- transferSummary fromAccount toAccount amount fee note;
+    line2 <- ledger.line1;
+    line3 <- ledger.line2;
+    line4 <- ledger.line3;
+    expenseRecent1 <- ledger.expenseRecent1;
+    expenseRecent2 <- ledger.expenseRecent2;
+    incomeRecent1 <- ledger.incomeRecent1;
+    incomeRecent2 <- ledger.incomeRecent2;
+    transferRecent1 <- transferSummary fromAccount toAccount amount fee note;
+    transferRecent2 <- ledger.transferRecent1;
+  }
+/|
+
+<func ledgerFromStored value: unknown returns LedgerV1>
+  value == null ? emptyLedger() : {
+    version <- storedVersion value;
+    transactionCount <- storedTransactionCount value;
+    netTotal <- storedNetTotal value;
+    incomeTotal <- storedIncomeTotal value;
+    expenseTotal <- storedExpenseTotal value;
+    transferTotal <- storedTransferTotal value;
+    feeTotal <- storedFeeTotal value;
+    line1 <- storedLine1 value;
+    line2 <- storedLine2 value;
+    line3 <- storedLine3 value;
+    line4 <- storedLine4 value;
+    expenseRecent1 <- storedExpenseRecent1 value;
+    expenseRecent2 <- storedExpenseRecent2 value;
+    incomeRecent1 <- storedIncomeRecent1 value;
+    incomeRecent2 <- storedIncomeRecent2 value;
+    transferRecent1 <- storedTransferRecent1 value;
+    transferRecent2 <- storedTransferRecent2 value;
+  }
+/|
+
+<func storedVersion value: unknown returns number>
+  value == null ? 1 : value.version
+/|
+
+<func storedTransactionCount value: unknown returns number>
+  value == null ? 0 : value.transactionCount
+/|
+
+<func storedNetTotal value: unknown returns number>
+  value == null ? 0 : value.netTotal
+/|
+
+<func storedIncomeTotal value: unknown returns number>
+  value == null ? 0 : value.incomeTotal
+/|
+
+<func storedExpenseTotal value: unknown returns number>
+  value == null ? 0 : value.expenseTotal
+/|
+
+<func storedTransferTotal value: unknown returns number>
+  value == null ? 0 : value.transferTotal
+/|
+
+<func storedFeeTotal value: unknown returns number>
+  value == null ? 0 : value.feeTotal
+/|
+
+<func storedLine1 value: unknown returns string>
+  value == null ? "Belum ada transaksi." : value.line1
+/|
+
+<func storedLine2 value: unknown returns string>
+  value == null ? "Transaksi terbaru akan muncul di sini." : value.line2
+/|
+
+<func storedLine3 value: unknown returns string>
+  value == null ? "Export JSON ikut diperbarui setiap simpan." : value.line3
+/|
+
+<func storedLine4 value: unknown returns string>
+  value == null ? "Gunakan filter di halaman riwayat." : value.line4
+/|
+
+<func storedExpenseRecent1 value: unknown returns string>
+  value == null ? "Belum ada pengeluaran." : value.expenseRecent1
+/|
+
+<func storedExpenseRecent2 value: unknown returns string>
+  value == null ? "Pengeluaran yang dicatat akan muncul di sini." : value.expenseRecent2
+/|
+
+<func storedIncomeRecent1 value: unknown returns string>
+  value == null ? "Belum ada pemasukan." : value.incomeRecent1
+/|
+
+<func storedIncomeRecent2 value: unknown returns string>
+  value == null ? "Pemasukan yang dicatat akan muncul di sini." : value.incomeRecent2
+/|
+
+<func storedTransferRecent1 value: unknown returns string>
+  value == null ? "Belum ada transfer." : value.transferRecent1
+/|
+
+<func storedTransferRecent2 value: unknown returns string>
+  value == null ? "Transfer yang dicatat akan muncul di sini." : value.transferRecent2
+/|
+
+<func visibleLine1 ledger: LedgerV1 filter: HistoryFilter returns string>
+  filter == "expense" ? ledger.expenseRecent1 : filter == "income" ? ledger.incomeRecent1 : filter == "transfer" ? ledger.transferRecent1 : ledger.line1
+/|
+
+<func visibleLine2 ledger: LedgerV1 filter: HistoryFilter returns string>
+  filter == "expense" ? ledger.expenseRecent2 : filter == "income" ? ledger.incomeRecent2 : filter == "transfer" ? ledger.transferRecent2 : ledger.line2
+/|
+
+<func visibleLine3 ledger: LedgerV1 filter: HistoryFilter returns string>
+  filter == "all" ? ledger.line3 : "Menampilkan dua entri terakhir untuk filter ini."
+/|
+
+<func visibleLine4 ledger: LedgerV1 filter: HistoryFilter returns string>
+  filter == "all" ? ledger.line4 : "Data lengkap tetap tersimpan di perangkat."
+/|
+
+<func encodeLedger ledger: LedgerV1 returns string>
+  "{\"version\":" + ledger.version + ",\"transactionCount\":" + ledger.transactionCount + ",\"netTotal\":" + ledger.netTotal + ",\"incomeTotal\":" + ledger.incomeTotal + ",\"expenseTotal\":" + ledger.expenseTotal + ",\"transferTotal\":" + ledger.transferTotal + ",\"feeTotal\":" + ledger.feeTotal + "}"
+/|
+
+<func ledgerCount ledger: LedgerV1 returns number>
+  ledger.transactionCount
+/|
+
+<func ledgerNet ledger: LedgerV1 returns number>
+  ledger.netTotal
+/|
+
+<func ledgerIncome ledger: LedgerV1 returns number>
+  ledger.incomeTotal
+/|
+
+<func ledgerExpense ledger: LedgerV1 returns number>
+  ledger.expenseTotal
+/|
+
+<func ledgerTransfer ledger: LedgerV1 returns number>
+  ledger.transferTotal
+/|
+
+<func ledgerFee ledger: LedgerV1 returns number>
+  ledger.feeTotal
+/|
+
+<func ledgerLine1 ledger: LedgerV1 returns string>
+  ledger.line1
+/|
+
+<func ledgerLine2 ledger: LedgerV1 returns string>
+  ledger.line2
+/|
+
+<func ledgerLine3 ledger: LedgerV1 returns string>
+  ledger.line3
+/|
+
+<func ledgerLine4 ledger: LedgerV1 returns string>
+  ledger.line4
+/|
+
+<func ledgerExpenseRecent1 ledger: LedgerV1 returns string>
+  ledger.expenseRecent1
+/|
+
+<func ledgerExpenseRecent2 ledger: LedgerV1 returns string>
+  ledger.expenseRecent2
+/|
+
+<func ledgerIncomeRecent1 ledger: LedgerV1 returns string>
+  ledger.incomeRecent1
+/|
+
+<func ledgerIncomeRecent2 ledger: LedgerV1 returns string>
+  ledger.incomeRecent2
+/|
+
+<func ledgerTransferRecent1 ledger: LedgerV1 returns string>
+  ledger.transferRecent1
+/|
+
+<func ledgerTransferRecent2 ledger: LedgerV1 returns string>
+  ledger.transferRecent2
+/|
+

@@ -1,0 +1,33 @@
+{
+  "target": "android",
+  "expected": {
+    "diagnosticCodes": [],
+    "artifact": {
+      "target": "android",
+      "entry": "src/App.nova",
+      "modules": [
+        "src/App.nova",
+        "src/FinanceStore.nova",
+        "src/FinancePure.nova",
+        "src/FinancePersistence.nova"
+      ],
+      "permissions": [
+        "storage.read",
+        "storage.write"
+      ]
+    },
+    "appContract": {
+      "v": 1,
+      "target": "android",
+      "entry": "src/App.nova",
+      "stateCount": 65,
+      "forbidden": ["viewIR", "Tokens", "capabilityManifests"]
+    },
+    "view": {
+      "bindings": 76,
+      "eventRoutes": 31,
+      "pages": 4,
+      "routePatterns": ["/expense", "/income", "/transfer", "/transactions"]
+    }
+  }
+}

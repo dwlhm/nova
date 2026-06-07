@@ -2,6 +2,7 @@ package ir
 
 import (
 	"github.com/dwlhm/nova/internal/core/capability"
+	"github.com/dwlhm/nova/internal/core/expr"
 	"github.com/dwlhm/nova/internal/core/parser"
 	"github.com/dwlhm/nova/internal/core/routing"
 	"github.com/dwlhm/nova/internal/core/view"
@@ -30,16 +31,35 @@ func Lower(input LowerInput) (Bundle, []Diagnostic) {
 		return Bundle{}, diagnostics
 	}
 
-	model := buildLoweredAppModel(input.Modules, sourceMap)
-	manifests := capabilityManifests(input.Modules, sourceMap)
-	app := materializeAppContract(input, sourceMap, model, viewIR, manifests)
+	model, modelDiagnostics := buildLoweredAppModel(input.Modules, sourceMap)
+	diagnostics = append(diagnostics, modelDiagnostics...)
+	if len(modelDiagnostics) > 0 {
+		return Bundle{}, diagnostics
+	}
 
+	manifests := capabilityManifests(input.Modules, sourceMap)
+	app, appDiagnostics := materializeAppContract(input, sourceMap, model, viewIR, manifests)
+	diagnostics = append(diagnostics, appDiagnostics...)
+	if len(appDiagnostics) > 0 {
+		return Bundle{}, diagnostics
+	}
+
+	registry := buildExprRegistry(sourceMap)
+	novaExprJS, err := expr.EmitJSNovaExpr(registry)
+	if err != nil {
+		diagnostics = append(diagnostics, Diagnostic{
+			Code:    "NVA-EXPR-002",
+			Message: err.Error(),
+		})
+		return Bundle{}, diagnostics
+	}
 	return Bundle{
 		App:                 app,
 		ViewIR:              viewIR,
 		Modules:             modulePathsFromRefs(input.Modules),
 		CapabilityManifests: manifests,
 		Routes:              routeModels(viewIR),
+		NovaExprJS:          novaExprJS,
 	}, diagnostics
 }
 

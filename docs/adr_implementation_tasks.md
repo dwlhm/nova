@@ -1,6 +1,6 @@
 # ADR Implementation Tasks
 
-Checklist gap implementasi (bukan ADR). ADR aktif: **000–011** di `docs/adr/README.md`.
+Checklist gap implementasi (bukan ADR). ADR aktif: **000–015** di `docs/adr/README.md`.
 
 | ADR lama (dihapus) | ADR baru |
 | --- | --- |
@@ -20,13 +20,13 @@ Bagian di bawah masih memakai nomor lama di judul; arti tugas sama, lihat map di
 Status awal:
 
 ```txt
-Checked: 2026-05-23
+Checked: 2026-06-05
 Verification:
   go test ./...
   go run ./cmd/nova test
 Result:
   Go unit tests pass
-  2 conformance fixtures pass
+  12 conformance fixtures pass (web + android subsets; finance scheduler trace; navigation route_changed trace)
 ```
 
 ## Legend
@@ -338,6 +338,40 @@ Tasks:
 - [x] Cross-check template `class` literals vs style sheets (`NVA-STYLE-007` / `NVA-STYLE-008`).
 - [ ] Future: package style imports `@scope/pkg`.
 
+### ADR-014: Func declaration syntax
+
+Status: `[ ]` (spec locked; not implemented)
+
+Scope: header `func name(params) -> Type:` only. Body expression grammar: ADR-016 (eval ADR-013).
+
+Tasks:
+
+- [ ] Lexer: top-level keyword `func`; remove `<func` tag token.
+- [ ] Parser: `FuncParams` with `()` and `,`; mandatory `:` before body; mandatory `-> Type`.
+- [ ] Validator: `nova_func_missing_colon`, `nova_func_missing_return`, `nova_func_invalid_return_type`.
+- [ ] `nova fmt`: multiline params; `:` end of header line.
+- [ ] LSP: hover signature `func name(a: T) -> R`.
+- [ ] Migrate `examples/` and `tests/conformance/` off `<func>`.
+- [ ] Update ADR-001 / language-design summary when implemented.
+
+### ADR-015: Template declaration syntax
+
+Status: `[ ]` (spec locked; not implemented)
+
+Scope: header `template [entry] name(params) -> NodeType:` only. Template body grammar is a separate spec.
+
+Tasks:
+
+- [ ] Lexer: keywords `template`, `entry`; remove `<template` tag token.
+- [ ] Parser: parallel to ADR-014; `TemplateDecl.Entry`; `NodeType` return.
+- [ ] Plan: `template entry` selection replaces `selectTemplate` on tag template.
+- [ ] Validator: entry uniqueness; `nova_template_missing_entry` on entry module.
+- [ ] Register nominal node types (`Surface`, `Page`, …) for return type checking (declaration layer).
+- [ ] `nova fmt` + LSP hover for template signatures.
+- [ ] Migrate examples/conformance off `<template>` tag authoring.
+- [ ] Separate spec: template body (node calls, children, routing projection) — not in ADR-015.
+- [ ] Separate spec: general expression syntax used inside func/template args — not in ADR-015.
+
 ## P1: Target Runtime Gaps
 
 ### ADR-016: Web Target Runtime
@@ -404,7 +438,7 @@ Tasks:
 - [ ] Generate AndroidManifest permission entries from build permissions.
 - [ ] Implement runtime permission request/denial route in adapters.
 - [ ] Generate and invoke Java external adapter bindings.
-- [ ] Add deep link intent parsing to route data.
+- [x] Add deep link intent parsing to route data. *(partial: `nova://app` intent filter + `@route_changed` dispatch from intent URI)*
 - [ ] Add saved-state snapshot serialization/restoration path.
 - [ ] Preserve scheduler state across configuration change where possible.
 - [ ] Complete native View mapping for `image`, `scroll`, `list`, and forms primitives.
@@ -420,22 +454,24 @@ Yang sudah ada:
 
 - Route state and page projection work for basic web/android cases.
 - Internal app package defines lifecycle/navigation events and pure navigation stack helpers.
+- `@nova/app` lifecycle contract merged into app artifact (`AppLifecycle` + standard event list).
+- Web runtime binds `visibilitychange`, `pagehide`, and `pageshow` via `runtime/nova-app-js`.
+- Android `MainActivity` emits `@app_resumed`, `@app_paused`, and `@app_stopped` through scheduler enqueue.
 
 Gap:
 
-- Production runtimes do not consistently emit `@nova/app` lifecycle events.
 - Programmatic navigation framework capability is incomplete.
 - Deep link handling is incomplete.
 - Route validation/event contracts are not fully enforced by production runtime.
 
 Tasks:
 
-- [ ] Add activation/import contract for `@nova/app` lifecycle events.
-- [ ] Web: map page load, visibilitychange, pagehide/pageshow to scheduler events.
-- [ ] Android: map Activity/process lifecycle to scheduler events.
+- [x] Add activation/import contract for `@nova/app` lifecycle events.
+- [x] Web: map page load, visibilitychange, pagehide/pageshow to scheduler events.
+- [x] Android: map Activity/process lifecycle to scheduler events.
 - [ ] Implement programmatic navigation event/action flow.
-- [ ] Validate route payload shape before commit.
-- [ ] Add conformance for browser back, Android back, deep link, and route params.
+- [x] Validate route payload shape before commit. *(partial: `@route_changed` runtime validation in nova-scheduler-js + NovaRuntime.java)*
+- [~] Add conformance for browser back, Android back, deep link, and route params. *(partial: Android `nova://app` intent filter + `handleDeepLinkIntent`; web URL bootstrap via History API)*
 
 ### ADR-019: State Persistence And Hydration
 
@@ -460,7 +496,7 @@ Tasks:
 - [ ] Web: capture and restore snapshot from configured storage/session source.
 - [ ] Android: capture compact snapshot metadata in saved instance state.
 - [ ] Android: restore scheduler state after process recreation when snapshot is valid.
-- [ ] Enqueue `@app_restored(snapshot)` when applicable.
+- [~] Enqueue `@app_restored(snapshot)` when applicable. *(partial: web sessionStorage snapshot + Android saved instance state)*
 - [ ] Add redaction metadata support for future sensitive annotations.
 - [ ] Add persistence conformance for invalid snapshot, version mismatch, missing state, and sequence
       continuation.
@@ -488,7 +524,7 @@ Gap:
 
 Tasks:
 
-- [~] Expand `tests/conformance/` into language, scheduler, view, target, security, external, artifacts. *(partial: lifecycle + external_storage scheduler trace)*
+- [~] Expand `tests/conformance/` into language, scheduler, view, target, security, external, artifacts. *(partial: lifecycle + external_storage + finance + navigation scheduler traces)*
 - [ ] Add fixture schema fields for external stubs, diagnostics spans, state snapshots, and target
       smoke metadata.
 - [ ] Add web runtime harness for DOM event route and external completion.
@@ -507,13 +543,15 @@ Yang sudah ada:
 - Web dev server polls files and triggers browser full reload.
 - Android dev mode builds, installs, and launches debug APK.
 - Hot reload decision helper exists in `internal/tooling`.
+- `nova inspect` exposes app contract state cells, event routes, lifecycle hooks, and `@nova/app` lifecycle events.
+- Web external adapter smoke test fails CI when Node is missing (skips locally).
 
 Gap:
 
 - Hot reload ABI diff planner is not wired into dev mode.
 - Web dev lacks overlay, runtime trace panel, event/state inspector, and permission audit panel.
 - Android dev lacks runtime diagnostic bridge and source-mapped errors.
-- `nova inspect` is missing full capability manifest, event route table, state cells, and package graph.
+- `nova inspect` is missing full capability manifest, package graph, lock digest, and permission source chain.
 
 Tasks:
 
@@ -524,8 +562,8 @@ Tasks:
 - [ ] Add event/state inspector and trace stream in web dev mode.
 - [ ] Add permission audit panel or endpoint in web dev mode.
 - [ ] Add Android runtime diagnostic bridge or documented fallback.
-- [ ] Expand `nova inspect` with capability manifests, ViewIR metadata, event routes, state cells,
-      package graph, lock digest, and permission source chain.
+- [~] Expand `nova inspect` with capability manifests, ViewIR metadata, event routes, state cells,
+      package graph, lock digest, and permission source chain. *(partial: state cells, event routes, lifecycles, appLifecycle)*
 
 ## P2: Documentation Status Cleanup
 

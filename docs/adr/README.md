@@ -12,15 +12,26 @@ ADR mencatat keputusan yang mengikat implementasi. Ringkas; detail operasional d
 ## Mulai di sini
 
 1. [language-design.md](../language-design.md)
-2. [adr_000](adr_000_production_baseline.md)
-3. ADR sesuai area di bawah
+2. ADR aktif [013](adr_013_pure_expressions.md)–[016](adr_016_expression_pipeline.md)
+3. ADR deprecated (000–012) hanya referensi historis runtime, build, ViewIR, dll.
 
-## Indeks
+## Indeks — aktif
+
+| ADR | Topik | Status |
+| --- | --- | --- |
+| [013](adr_013_pure_expressions.md) | Pure expression eval, lowering | Accepted |
+| [014](adr_014_func_declaration.md) | Deklarasi `func` (header, `:`, signature) | Proposed (locked) |
+| [015](adr_015_template_declaration.md) | Deklarasi `template` (header, `entry`, `NodeType`) | Proposed (locked) |
+| [016](adr_016_expression_pipeline.md) | Ekspresi pure, pipeline `\|>`, special forms, anon | Accepted (locked) |
+
+## Indeks — deprecated
+
+ADR 000–012 **tidak** menjadi sumber kebenaran grammar bahasa; implementasi legacy masih di kode.
 
 | ADR | Topik |
 | --- | --- |
 | [000](adr_000_production_baseline.md) | Baseline production, pipeline |
-| [001](adr_001_language_specification.md) | Bahasa: construct, purity, syntax |
+| [001](adr_001_language_specification.md) | Bahasa: construct, purity, syntax (legacy) |
 | [002](adr_002_runtime.md) | Scheduler, lifecycle, route, persistence |
 | [003](adr_003_modules.md) | Capability, layout, package, provider binding |
 | [004](adr_004_type_system.md) | Types, serializable |
@@ -31,7 +42,7 @@ ADR mencatat keputusan yang mengikat implementasi. Ringkas; detail operasional d
 | [009](adr_009_targets.md) | Web & Android runtime |
 | [010](adr_010_packages.md) | `@nova/*`, `@env/*` |
 | [011](adr_011_tooling.md) | CLI, test, conformance, dev |
-| [012](adr_012_style_format.md) | `.nova-style`, import discovery, core/style, web-only `.css` |
+| [012](adr_012_style_format.md) | `.nova-style`, import discovery, core/style |
 
 ## Istilah
 
@@ -53,8 +64,8 @@ renderer = "@nova/android"
 
 ## ADR baru
 
-Salin [TEMPLATE.md](TEMPLATE.md). Link ADR terkait; jangan duplikasi panjang. Update conformance
-jika mengubah scheduler, ViewIR, atau permission.
+Salin [TEMPLATE.md](TEMPLATE.md). Link ADR terkait; jangan duplikasi panjang. Perubahan grammar
+ekspresi/deklarasi masuk ADR aktif (013–016) atau ADR baru yang menggantikan bagian spesifik.
 
 ## ADR lama (dihapus)
 

@@ -4,6 +4,7 @@ import (
 	"sort"
 	"strings"
 
+	externaljs "github.com/dwlhm/nova/runtime/nova-external-js"
 	"github.com/dwlhm/nova/internal/provider/build"
 )
 
@@ -33,48 +34,11 @@ func externalAdapters(operations []build.ResolvedExternalOperation, overrides ma
 	var builder strings.Builder
 	builder.WriteString(`"use strict";
 
-window.NovaExternal = window.NovaExternal || (() => {
-  function isSerializable(value, seen) {
-    if (value === undefined || value === null) return true;
-    const type = typeof value;
-    if (type === "string" || type === "boolean") return true;
-    if (type === "number") return Number.isFinite(value);
-    if (type !== "object") return false;
-    const visited = seen || new WeakSet();
-    if (visited.has(value)) return false;
-    visited.add(value);
-    let ok = false;
-    if (Array.isArray(value)) {
-      ok = value.every((item) => isSerializable(item, visited));
-    } else {
-      ok = Object.keys(value).every((key) => isSerializable(value[key], visited));
-    }
-    visited.delete(value);
-    return ok;
-  }
+`)
+	builder.WriteString(externaljs.CoreJS())
+	builder.WriteString(`
 
-  const adapters = new Map();
-  return {
-    define(source, adapter) {
-      adapters.set(source, adapter || {});
-    },
-    async invoke(effectId, input) {
-      const separator = effectId.indexOf("#");
-      if (separator <= 0) throw new Error("invalid effect id " + effectId);
-      const source = effectId.slice(0, separator);
-      const operation = effectId.slice(separator + 1);
-      const adapter = adapters.get(source);
-      if (!adapter) throw new Error("missing external adapter for " + source);
-      const handler = adapter[operation];
-      if (typeof handler !== "function") throw new Error(source + " has no operation " + operation);
-      const output = await handler({ input: input || {} });
-      if (!isSerializable(output)) {
-        throw new Error("external operation " + effectId + " returned non-serializable output");
-      }
-      return output;
-    }
-  };
-})();
+window.NovaExternal = window.NovaExternal || NovaExternalCore.create();
 
 `)
 	for _, path := range paths {

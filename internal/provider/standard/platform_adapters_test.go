@@ -38,6 +38,21 @@ func TestAndroidPlatformAdapterSource(t *testing.T) {
 	}
 }
 
+func TestAndroidStorageAdapterPersistsMapsAsJson(t *testing.T) {
+	content, ok := AndroidPlatformAdapterSource("platform/android/storage.android.java")
+	if !ok {
+		t.Fatal("missing android storage adapter source")
+	}
+	for _, token := range []string{"encodeObject", "decodeObject", "LinkedHashMap", "JSONObject"} {
+		if !contains(content, token) {
+			t.Fatalf("android storage adapter missing %q", token)
+		}
+	}
+	if !contains(content, "if (value instanceof Map<?, ?>)") {
+		t.Fatal("android storage adapter must JSON-encode map values")
+	}
+}
+
 func contains(value string, needle string) bool {
 	return len(value) >= len(needle) && (value == needle || len(needle) == 0 || indexOf(value, needle) >= 0)
 }

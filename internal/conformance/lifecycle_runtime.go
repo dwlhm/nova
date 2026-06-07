@@ -4,6 +4,7 @@ import (
 	"path"
 	"strings"
 
+	"github.com/dwlhm/nova/internal/core/expr"
 	"github.com/dwlhm/nova/internal/core/lexer"
 	"github.com/dwlhm/nova/internal/core/parser"
 	"github.com/dwlhm/nova/internal/core/scheduler"
@@ -35,7 +36,7 @@ type loweredLifecycleExternal struct {
 	OnFailure  string
 }
 
-func buildSchedulerLifecycles(plan build.BuildPlan, sources map[string]parser.File, stateNames map[string]bool) []scheduler.LifecycleHandler {
+func buildSchedulerLifecycles(plan build.BuildPlan, sources map[string]parser.File, stateNames map[string]bool, exprRegistry *expr.Registry) []scheduler.LifecycleHandler {
 	lowered := make([]loweredLifecycle, 0)
 	for _, module := range plan.Modules {
 		file, ok := sources[module.Path]
@@ -63,7 +64,7 @@ func buildSchedulerLifecycles(plan build.BuildPlan, sources map[string]parser.Fi
 	handlers := make([]scheduler.LifecycleHandler, 0, len(lowered))
 	for _, lifecycle := range lowered {
 		owner := scheduler.CapabilityRef(lifecycle.Owner)
-		run := buildLifecycleRunner(lifecycle, stateNames, plan)
+		run := buildLifecycleRunner(lifecycle, stateNames, exprRegistry, plan)
 		switch lifecycle.Phase {
 		case scheduler.PhaseMount:
 			handlers = append(handlers, scheduler.Mount(owner, run))
@@ -80,7 +81,7 @@ func buildSchedulerLifecycles(plan build.BuildPlan, sources map[string]parser.Fi
 	return handlers
 }
 
-func buildLifecycleRunner(lifecycle loweredLifecycle, stateNames map[string]bool, plan build.BuildPlan) scheduler.LifecycleFunc {
+func buildLifecycleRunner(lifecycle loweredLifecycle, stateNames map[string]bool, exprRegistry *expr.Registry, plan build.BuildPlan) scheduler.LifecycleFunc {
 	return func(ctx scheduler.LifecycleContext) (scheduler.LifecycleOutput, error) {
 		output := scheduler.LifecycleOutput{}
 		paramNames := eventParamNamesFromEnvelope(ctx.Event)
@@ -90,7 +91,7 @@ func buildLifecycleRunner(lifecycle loweredLifecycle, stateNames map[string]bool
 				if len(args) == 0 {
 					args = nil
 				}
-				payload, err := lifecycleEmitPayload(args, stateNames, paramNames, ctx)
+				payload, err := lifecycleEmitPayload(args, stateNames, paramNames, exprRegistry, ctx)
 				if err != nil {
 					return scheduler.LifecycleOutput{}, err
 				}
@@ -102,7 +103,7 @@ func buildLifecycleRunner(lifecycle loweredLifecycle, stateNames map[string]bool
 				continue
 			}
 			if step.External != nil {
-				input, err := evaluateExternalInput(step.External.Input, stateNames, paramNames, ctx)
+				input, err := evaluateExternalInput(step.External.Input, stateNames, paramNames, exprRegistry, ctx)
 				if err != nil {
 					return scheduler.LifecycleOutput{}, err
 				}
@@ -121,16 +122,16 @@ func buildLifecycleRunner(lifecycle loweredLifecycle, stateNames map[string]bool
 	}
 }
 
-func lifecycleEmitPayload(args [][]lexer.Token, stateNames map[string]bool, paramNames map[string]bool, ctx scheduler.LifecycleContext) (scheduler.DataValue, error) {
+func lifecycleEmitPayload(args [][]lexer.Token, stateNames map[string]bool, paramNames map[string]bool, exprRegistry *expr.Registry, ctx scheduler.LifecycleContext) (scheduler.DataValue, error) {
 	if len(args) == 0 {
 		return nil, nil
 	}
 	if len(args) == 1 {
-		return evaluateExpression(args[0], stateNames, paramNames, ctx.Snapshot, ctx.Event)
+		return evaluateExpressionWithRegistry(args[0], exprRegistry, stateNames, paramNames, ctx.Snapshot, ctx.Event)
 	}
 	values := make([]scheduler.DataValue, 0, len(args))
 	for _, arg := range args {
-		value, err := evaluateExpression(arg, stateNames, paramNames, ctx.Snapshot, ctx.Event)
+		value, err := evaluateExpressionWithRegistry(arg, exprRegistry, stateNames, paramNames, ctx.Snapshot, ctx.Event)
 		if err != nil {
 			return nil, err
 		}
@@ -139,10 +140,10 @@ func lifecycleEmitPayload(args [][]lexer.Token, stateNames map[string]bool, para
 	return values, nil
 }
 
-func evaluateExternalInput(fields map[string][]lexer.Token, stateNames map[string]bool, paramNames map[string]bool, ctx scheduler.LifecycleContext) (map[string]scheduler.DataValue, error) {
+func evaluateExternalInput(fields map[string][]lexer.Token, stateNames map[string]bool, paramNames map[string]bool, exprRegistry *expr.Registry, ctx scheduler.LifecycleContext) (map[string]scheduler.DataValue, error) {
 	input := make(map[string]scheduler.DataValue, len(fields))
 	for name, tokens := range fields {
-		value, err := evaluateExpression(tokens, stateNames, paramNames, ctx.Snapshot, ctx.Event)
+		value, err := evaluateExpressionWithRegistry(tokens, exprRegistry, stateNames, paramNames, ctx.Snapshot, ctx.Event)
 		if err != nil {
 			return nil, err
 		}

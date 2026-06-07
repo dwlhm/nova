@@ -133,4 +133,26 @@ describe("NovaScheduler", () => {
     scheduler.runLifecycle("mount", "", []);
     assert.equal(runtimeHost.state().count, 1);
   });
+
+  it("rejects invalid @route_changed payloads before commit", () => {
+    const runtimeHost = createHost({ route: { path: "/" } });
+    runtimeHost.hasRouteState = () => true;
+    runtimeHost.app.model.states = [{
+      name: "route",
+      transitions: [{ event: "@route_changed", params: ["next"], expression: "next" }]
+    }];
+    runtimeHost.app.events = [{
+      name: "@route_changed",
+      emitters: ["platform", "renderer"]
+    }];
+    runtimeHost.evaluate = (expression, current, payload) => {
+      if (expression === "next") return payload.next;
+      return current[expression];
+    };
+    const scheduler = NovaScheduler.create(runtimeHost);
+    scheduler.dispatch("@route_changed", [{ path: "relative" }], { source: "platform" });
+    assert.equal(runtimeHost.state().route.path, "/");
+    assert.equal(scheduler.errors.length, 1);
+    assert.match(scheduler.errors[0].message, /route path must start with \//);
+  });
 });

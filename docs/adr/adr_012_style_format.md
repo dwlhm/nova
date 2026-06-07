@@ -2,8 +2,7 @@
 
 ## Status
 
-Accepted (specification). Implementation in toolchain is incremental. **Target design** replaces
-`styles` / `scoped_styles` in `nova.toml` with explicit imports in `.nova` source.
+Deprecated — referensi historis `.nova-style`. Spesifikasi bahasa aktif: [ADR-013](adr_013_pure_expressions.md)–[ADR-016](adr_016_expression_pipeline.md).
 
 ## Depends on
 
@@ -129,7 +128,8 @@ Properties valid for **web + android** builds from `.nova-style`:
 | `text-align` | `left`, `center`, `right` |
 | `text-transform` | `none`, `uppercase` (v1) |
 | `line-height` | Unitless only in portable v1 |
-| `padding` | 1–4 values, CSS shorthand |
+| `padding` | 1–4 values, CSS shorthand (inner spacing) |
+| `margin` | 1–4 values, CSS shorthand (outer spacing) |
 | `min-height` | |
 | `background`, `background-color` | |
 | `border`, `border-color`, `border-width` | |

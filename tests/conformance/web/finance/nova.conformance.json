@@ -1,0 +1,100 @@
+{
+  "target": "web",
+  "expected": {
+    "diagnosticCodes": [],
+    "artifact": {
+      "target": "web",
+      "entry": "src/App.nova",
+      "modules": [
+        "src/App.nova",
+        "src/FinanceStore.nova",
+        "src/FinancePure.nova",
+        "src/FinancePersistence.nova"
+      ],
+      "permissions": [
+        "storage.read",
+        "storage.write"
+      ]
+    },
+    "appContract": {
+      "v": 1,
+      "target": "web",
+      "entry": "src/App.nova",
+      "stateCount": 65,
+      "forbidden": ["viewIR", "Tokens", "capabilityManifests"]
+    },
+    "view": {
+      "bindings": 76,
+      "eventRoutes": 31,
+      "pages": 4,
+      "routePatterns": ["/expense", "/income", "/transfer", "/transactions"]
+    },
+    "scheduler": {
+      "completeExternals": true,
+      "ignoreTraceErrors": false,
+      "steps": [
+        { "lifecycle": { "phase": "mount", "source": "runtime" } },
+        { "enqueue": { "source": "FinancePersistence", "event": "@save_expense" } }
+      ],
+      "trace": {
+        "events": [
+          { "sequence": 1, "source": "FinancePersistence", "name": "@restore" },
+          { "sequence": 2, "source": "FinancePersistence", "name": "@ledger_hydrated", "payload": { "value": "stub-value" } },
+          { "sequence": 3, "source": "FinancePersistence", "name": "@save_expense" }
+        ],
+        "lifecycleCalls": [
+          { "owner": "FinancePersistence", "phase": "after", "event": "@restore" },
+          { "owner": "FinancePersistence", "phase": "after", "event": "@save_expense" }
+        ],
+        "externalCalls": [
+          {
+            "source": "FinancePersistence",
+            "capability": "storage",
+            "operation": "load",
+            "input": { "key": "finance_ledger_v1" },
+            "outputType": "unknown",
+            "onSuccess": "@ledger_hydrated",
+            "onFailure": "@load_failed"
+          },
+          {
+            "source": "FinancePersistence",
+            "capability": "storage",
+            "operation": "set",
+            "input": { "key": "finance_ledger_v1" },
+            "outputType": "void",
+            "onSuccess": "",
+            "onFailure": ""
+          }
+        ],
+        "commits": [
+          {
+            "sequence": 1,
+            "event": "@restore",
+            "committed": true
+          },
+          {
+            "sequence": 2,
+            "event": "@ledger_hydrated",
+            "committed": false
+          },
+          {
+            "sequence": 3,
+            "event": "@save_expense",
+            "committed": true,
+            "changes": [
+              {
+                "key": { "owner": "FinanceLedger", "name": "transactionCount" },
+                "before": 0,
+                "after": 1
+              }
+            ],
+            "invalidations": [
+              { "owner": "FinanceLedger", "name": "transactionCount" },
+              { "owner": "FinanceLedger", "name": "ledger" }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

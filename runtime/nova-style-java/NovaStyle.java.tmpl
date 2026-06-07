@@ -1,0 +1,558 @@
+import android.graphics.Color;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.StateListDrawable;
+import android.util.TypedValue;
+import android.view.Gravity;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Locale;
+import java.util.Map;
+
+public final class NovaStyle {
+    public interface DpScaler {
+        int dp(int value);
+    }
+
+    public static final class StyleLayoutSpec {
+        public final Map<String, String> base;
+        public final Map<String, Map<String, String>> states;
+
+        public StyleLayoutSpec(Map<String, String> base, Map<String, Map<String, String>> states) {
+            this.base = base == null ? Collections.emptyMap() : Collections.unmodifiableMap(new LinkedHashMap<>(base));
+            this.states = states == null ? Collections.emptyMap() : Collections.unmodifiableMap(new LinkedHashMap<>(states));
+        }
+    }
+
+    private NovaStyle() {}
+
+    public static void applyDynamicClasses(
+            View target,
+            String nodeKind,
+            String classList,
+            Map<String, Map<String, String>> rules,
+            DpScaler dp
+    ) {
+        if (target == null) {
+            return;
+        }
+        applyProperties(target, nodeKind, mergeClassRules(classList, rules), dp);
+    }
+
+    public static void applyWithStates(
+            View target,
+            String nodeKind,
+            Map<String, String> base,
+            Map<String, Map<String, String>> states,
+            DpScaler dp
+    ) {
+        if (target == null) {
+            return;
+        }
+        Map<String, String> baseProps = base == null ? Collections.emptyMap() : base;
+        Map<String, Map<String, String>> stateProps = states == null ? Collections.emptyMap() : states;
+        if (isTextTarget(nodeKind)) {
+            applyTextColorWithStates(target, baseProps, stateProps);
+        }
+        Map<String, Boolean> overridden = layoutPropsOverriddenInStates(baseProps, stateProps);
+        applyLayoutProperties(target, nodeKind, baseProps, overridden, dp);
+        applyBackgroundWithStates(target, baseProps, stateProps, dp);
+    }
+
+    public static void bindStatefulLayout(View view, String nodeKind, StyleLayoutSpec spec, DpScaler dp) {
+        if (view == null || spec == null) {
+            return;
+        }
+        Runnable refresh = () -> applyLayoutSkin(view, nodeKind, spec, dp);
+        view.setOnTouchListener((v, event) -> {
+            v.post(refresh);
+            return false;
+        });
+        view.setOnFocusChangeListener((v, hasFocus) -> refresh.run());
+        refresh.run();
+    }
+
+    public static void applyLayoutSkin(View view, String nodeKind, StyleLayoutSpec spec, DpScaler dp) {
+        if (view == null || spec == null) {
+            return;
+        }
+        Map<String, Boolean> overridden = layoutPropsOverriddenInStates(spec.base, spec.states);
+        if (overridden.isEmpty()) {
+            return;
+        }
+        Map<String, String> effective = effectiveLayoutStyle(spec.base, spec.states);
+        if (!view.isEnabled()) {
+            effective = mergeProperties(effective, spec.states.get("disabled"));
+        } else if (view.isPressed()) {
+            effective = mergeProperties(effective, spec.states.get("active"));
+        } else if (view.isFocused()) {
+            effective = mergeProperties(effective, spec.states.get("focus"));
+        } else if (view.isSelected()) {
+            effective = mergeProperties(effective, spec.states.get("checked"));
+        }
+        applyLayoutProperties(view, nodeKind, effective, overridden, dp);
+    }
+
+    private static void applyProperties(View target, String nodeKind, Map<String, String> props, DpScaler dp) {
+        if (props.isEmpty()) {
+            return;
+        }
+        String background = props.containsKey("background-color") ? props.get("background-color") : props.get("background");
+        int borderWidth = borderWidth(props);
+        String borderColor = props.containsKey("border-color") ? props.get("border-color") : borderColorFromShorthand(props.get("border"));
+        int radius = parseLength(props.get("border-radius"));
+        if (background != null || borderWidth > 0 || radius > 0) {
+            GradientDrawable drawable = new GradientDrawable();
+            if (background != null) {
+                drawable.setColor(parseColor(background));
+            }
+            if (borderWidth > 0) {
+                drawable.setStroke(dp.dp(borderWidth), parseColor(borderColor == null ? "#000000" : borderColor));
+            }
+            if (radius > 0) {
+                drawable.setCornerRadius(dp.dp(radius));
+            }
+            target.setBackground(drawable);
+        }
+        if (isTextTarget(nodeKind) && target instanceof TextView) {
+            applyTextProperties((TextView) target, props);
+        }
+        if (props.containsKey("padding")) {
+            int[] pad = parseBoxSides(props.get("padding"));
+            target.setPadding(dp.dp(pad[0]), dp.dp(pad[1]), dp.dp(pad[2]), dp.dp(pad[3]));
+        }
+        if (props.containsKey("margin")) {
+            applyMargins(target, parseBoxSides(props.get("margin")), dp);
+        }
+        if (props.containsKey("min-height")) {
+            int minHeight = parseLength(props.get("min-height"));
+            if (minHeight >= 0) {
+                target.setMinimumHeight(dp.dp(minHeight));
+            }
+        }
+    }
+
+    private static void applyLayoutProperties(
+            View target,
+            String nodeKind,
+            Map<String, String> props,
+            Map<String, Boolean> overridden,
+            DpScaler dp
+    ) {
+        if (props.isEmpty() || overridden.isEmpty()) {
+            return;
+        }
+        if (isTextTarget(nodeKind) && target instanceof TextView) {
+            TextView text = (TextView) target;
+            if (Boolean.TRUE.equals(overridden.get("font-size"))) {
+                int size = parseLength(props.get("font-size"));
+                if (size >= 0) {
+                    text.setTextSize(TypedValue.COMPLEX_UNIT_SP, size);
+                }
+            }
+            if (Boolean.TRUE.equals(overridden.get("font-weight"))) {
+                text.setTypeface(Typeface.DEFAULT, isBold(props.get("font-weight")) ? Typeface.BOLD : Typeface.NORMAL);
+            }
+            if (Boolean.TRUE.equals(overridden.get("text-transform"))) {
+                text.setAllCaps("uppercase".equalsIgnoreCase(props.get("text-transform")));
+            }
+            if (Boolean.TRUE.equals(overridden.get("text-align"))) {
+                if ("center".equalsIgnoreCase(props.get("text-align"))) {
+                    text.setGravity(Gravity.CENTER);
+                }
+            }
+            if (Boolean.TRUE.equals(overridden.get("line-height"))) {
+                float lineHeight = parseFloat(props.get("line-height"));
+                if (lineHeight >= 0f) {
+                    text.setLineSpacing(0f, lineHeight);
+                }
+            }
+        }
+        if (Boolean.TRUE.equals(overridden.get("padding"))) {
+            int[] pad = parseBoxSides(props.get("padding"));
+            target.setPadding(dp.dp(pad[0]), dp.dp(pad[1]), dp.dp(pad[2]), dp.dp(pad[3]));
+        }
+        if (Boolean.TRUE.equals(overridden.get("margin"))) {
+            applyMargins(target, parseBoxSides(props.get("margin")), dp);
+        }
+        if (Boolean.TRUE.equals(overridden.get("min-height"))) {
+            int minHeight = parseLength(props.get("min-height"));
+            if (minHeight >= 0) {
+                target.setMinimumHeight(dp.dp(minHeight));
+            }
+        }
+        if (isLinearTarget(nodeKind) && Boolean.TRUE.equals(overridden.get("align-content"))) {
+            if ("center".equalsIgnoreCase(props.get("align-content")) && target instanceof LinearLayout) {
+                ((LinearLayout) target).setGravity(Gravity.CENTER_VERTICAL);
+            }
+        }
+    }
+
+    private static void applyTextProperties(TextView text, Map<String, String> props) {
+        if (props.containsKey("color")) {
+            text.setTextColor(parseColor(props.get("color")));
+        }
+        if (props.containsKey("font-size")) {
+            int size = parseLength(props.get("font-size"));
+            if (size >= 0) {
+                text.setTextSize(TypedValue.COMPLEX_UNIT_SP, size);
+            }
+        }
+        if (props.containsKey("font-weight")) {
+            text.setTypeface(Typeface.DEFAULT, isBold(props.get("font-weight")) ? Typeface.BOLD : Typeface.NORMAL);
+        }
+    }
+
+    private static void applyTextColorWithStates(View target, Map<String, String> base, Map<String, Map<String, String>> states) {
+        if (!(target instanceof TextView)) {
+            return;
+        }
+        TextView text = (TextView) target;
+        String baseColor = colorLiteral(base, "color");
+        String[][] stateEntries = new String[][] {
+                {"disabled", "-android.R.attr.state_enabled"},
+                {"active", "android.R.attr.state_pressed"},
+                {"focus", "android.R.attr.state_focused"},
+                {"checked", "android.R.attr.state_checked"}
+        };
+        int[][] attrs = new int[stateEntries.length + 1][];
+        int[] colors = new int[stateEntries.length + 1];
+        int count = 0;
+        for (String[] entry : stateEntries) {
+            Map<String, String> state = states.get(entry[0]);
+            if (state == null) {
+                continue;
+            }
+            String color = colorLiteral(state, "color");
+            if (color == null) {
+                continue;
+            }
+            attrs[count] = new int[] { resolveAttr(entry[1]) };
+            colors[count] = parseColor(color);
+            count++;
+        }
+        if (count == 0) {
+            if (baseColor != null) {
+                text.setTextColor(parseColor(baseColor));
+            }
+            return;
+        }
+        attrs[count] = new int[] {};
+        colors[count] = baseColor == null ? colors[count - 1] : parseColor(baseColor);
+        int[][] attrRows = new int[count + 1][];
+        int[] colorRows = new int[count + 1];
+        System.arraycopy(attrs, 0, attrRows, 0, count + 1);
+        System.arraycopy(colors, 0, colorRows, 0, count + 1);
+        text.setTextColor(new android.content.res.ColorStateList(attrRows, colorRows));
+    }
+
+    private static void applyBackgroundWithStates(View target, Map<String, String> base, Map<String, Map<String, String>> states, DpScaler dp) {
+        String[][] stateEntries = new String[][] {
+                {"disabled", "-android.R.attr.state_enabled"},
+                {"active", "android.R.attr.state_pressed"},
+                {"focus", "android.R.attr.state_focused"},
+                {"checked", "android.R.attr.state_checked"}
+        };
+        StateListDrawable list = new StateListDrawable();
+        int added = 0;
+        for (String[] entry : stateEntries) {
+            Map<String, String> state = states.get(entry[0]);
+            if (state == null || !hasBackground(state)) {
+                continue;
+            }
+            Map<String, String> merged = mergeProperties(base, state);
+            if (!hasBackground(merged)) {
+                continue;
+            }
+            GradientDrawable drawable = buildBackgroundDrawable(merged, dp);
+            list.addState(new int[] { resolveAttr(entry[1]) }, drawable);
+            added++;
+        }
+        if (added == 0) {
+            if (hasBackground(base)) {
+                target.setBackground(buildBackgroundDrawable(base, dp));
+            }
+            return;
+        }
+        list.addState(new int[] {}, buildBackgroundDrawable(base, dp));
+        target.setBackground(list);
+    }
+
+    private static GradientDrawable buildBackgroundDrawable(Map<String, String> props, DpScaler dp) {
+        GradientDrawable drawable = new GradientDrawable();
+        String background = colorLiteral(props, "background-color", "background");
+        drawable.setColor(parseColor(background == null ? "#00000000" : background));
+        int borderWidth = borderWidth(props);
+        String borderColor = colorLiteral(props, "border-color");
+        if (borderColor == null) {
+            borderColor = borderColorFromShorthand(props.get("border"));
+        }
+        if (borderWidth > 0 || borderColor != null) {
+            drawable.setStroke(dp.dp(borderWidth), parseColor(borderColor == null ? "#00000000" : borderColor));
+        }
+        int radius = parseLength(props.get("border-radius"));
+        if (radius > 0) {
+            drawable.setCornerRadius(dp.dp(radius));
+        }
+        return drawable;
+    }
+
+    private static Map<String, String> mergeClassRules(String classList, Map<String, Map<String, String>> rules) {
+        Map<String, String> merged = new LinkedHashMap<>();
+        if (classList == null || rules == null) {
+            return merged;
+        }
+        for (String cls : classList.trim().split("\\s+")) {
+            if (cls.isEmpty()) {
+                continue;
+            }
+            Map<String, String> rule = rules.get(cls);
+            if (rule != null) {
+                merged.putAll(rule);
+            }
+        }
+        return merged;
+    }
+
+    private static Map<String, String> mergeProperties(Map<String, String> base, Map<String, String> overlay) {
+        Map<String, String> merged = new LinkedHashMap<>(base == null ? Collections.emptyMap() : base);
+        if (overlay != null) {
+            merged.putAll(overlay);
+        }
+        return merged;
+    }
+
+    private static Map<String, String> effectiveLayoutStyle(Map<String, String> base, Map<String, Map<String, String>> states) {
+        Map<String, String> out = new LinkedHashMap<>();
+        copyLayoutProps(out, base);
+        for (String pseudo : new String[] {"disabled", "active", "focus", "checked"}) {
+            copyLayoutProps(out, states.get(pseudo));
+        }
+        return out;
+    }
+
+    private static void copyLayoutProps(Map<String, String> out, Map<String, String> props) {
+        if (props == null) {
+            return;
+        }
+        for (String name : new String[] {"font-size", "font-weight", "text-transform", "text-align", "line-height", "padding", "margin", "min-height", "align-content"}) {
+            if (props.containsKey(name)) {
+                out.put(name, props.get(name));
+            }
+        }
+    }
+
+    private static Map<String, Boolean> layoutPropsOverriddenInStates(Map<String, String> base, Map<String, Map<String, String>> states) {
+        Map<String, Boolean> overridden = new LinkedHashMap<>();
+        for (Map<String, String> state : states.values()) {
+            for (Map.Entry<String, String> entry : state.entrySet()) {
+                if (!isLayoutProp(entry.getKey())) {
+                    continue;
+                }
+                String baseValue = base.get(entry.getKey());
+                if (baseValue == null || !baseValue.equals(entry.getValue())) {
+                    overridden.put(entry.getKey(), true);
+                }
+            }
+        }
+        return overridden;
+    }
+
+    private static boolean isLayoutProp(String name) {
+        switch (name) {
+            case "font-size":
+            case "font-weight":
+            case "text-transform":
+            case "text-align":
+            case "line-height":
+            case "padding":
+            case "margin":
+            case "min-height":
+            case "align-content":
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private static boolean isTextTarget(String nodeKind) {
+        return "text".equals(nodeKind) || "#text".equals(nodeKind) || "button".equals(nodeKind)
+                || "text_input".equals(nodeKind) || "number_input".equals(nodeKind) || "select".equals(nodeKind);
+    }
+
+    private static boolean isLinearTarget(String nodeKind) {
+        return "surface".equals(nodeKind) || "column".equals(nodeKind);
+    }
+
+    private static boolean hasBackground(Map<String, String> props) {
+        return colorLiteral(props, "background-color", "background") != null
+                || props.containsKey("border")
+                || props.containsKey("border-color")
+                || props.containsKey("border-width")
+                || props.containsKey("border-radius");
+    }
+
+    private static int borderWidth(Map<String, String> props) {
+        if (props.containsKey("border-width")) {
+            return parseLength(props.get("border-width"));
+        }
+        String border = props.get("border");
+        if (border == null || border.trim().isEmpty()) {
+            return 0;
+        }
+        String[] parts = border.trim().split("\\s+");
+        if (parts.length == 0) {
+            return 0;
+        }
+        return parseLength(parts[0]);
+    }
+
+    private static String borderColorFromShorthand(String border) {
+        if (border == null) {
+            return null;
+        }
+        for (String part : border.trim().split("\\s+")) {
+            if (part.startsWith("#")) {
+                return part;
+            }
+        }
+        return null;
+    }
+
+    private static String colorLiteral(Map<String, String> props, String... names) {
+        if (props == null) {
+            return null;
+        }
+        for (String name : names) {
+            String value = props.get(name);
+            if (value == null || value.trim().isEmpty()) {
+                continue;
+            }
+            for (String field : value.trim().split("\\s+")) {
+                if (field.startsWith("#")) {
+                    return field.replace(",", "");
+                }
+            }
+        }
+        return null;
+    }
+
+    private static int parseLength(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            return -1;
+        }
+        try {
+            return Integer.parseInt(value.replace("dp", "").replace("sp", "").trim());
+        } catch (NumberFormatException ignored) {
+            return -1;
+        }
+    }
+
+    private static float parseFloat(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            return -1f;
+        }
+        try {
+            return Float.parseFloat(value.replace("em", "").replace("dp", "").replace("sp", "").trim());
+        } catch (NumberFormatException ignored) {
+            return -1f;
+        }
+    }
+
+    private static int parseColor(String value) {
+        if (value == null || value.isEmpty()) {
+            return Color.TRANSPARENT;
+        }
+        try {
+            return Color.parseColor(value);
+        } catch (IllegalArgumentException ignored) {
+            return Color.TRANSPARENT;
+        }
+    }
+
+    private static boolean isBold(String value) {
+        if (value == null) {
+            return false;
+        }
+        String cleaned = value.trim().toLowerCase(Locale.US);
+        if ("bold".equals(cleaned) || "bolder".equals(cleaned)) {
+            return true;
+        }
+        try {
+            return Integer.parseInt(cleaned) >= 600;
+        } catch (NumberFormatException ignored) {
+            return false;
+        }
+    }
+
+    private static int[] parseBoxSides(String value) {
+        int[] sides = new int[] {0, 0, 0, 0};
+        if (value == null || value.trim().isEmpty()) {
+            return sides;
+        }
+        String[] parts = value.trim().split("\\s+");
+        int[] parsed = new int[parts.length];
+        for (int index = 0; index < parts.length; index++) {
+            parsed[index] = Math.max(0, parseLength(parts[index]));
+        }
+        switch (parts.length) {
+            case 1:
+                sides[0] = sides[1] = sides[2] = sides[3] = parsed[0];
+                break;
+            case 2:
+                sides[0] = sides[2] = parsed[0];
+                sides[1] = sides[3] = parsed[1];
+                break;
+            case 3:
+                sides[0] = parsed[0];
+                sides[1] = parsed[2];
+                sides[2] = parsed[1];
+                sides[3] = parsed[2];
+                break;
+            default:
+                if (parts.length >= 4) {
+                    sides[0] = parsed[0];
+                    sides[1] = parsed[1];
+                    sides[2] = parsed[2];
+                    sides[3] = parsed[3];
+                }
+                break;
+        }
+        return sides;
+    }
+
+    private static void applyMargins(View target, int[] margin, DpScaler dp) {
+        ViewGroup.LayoutParams raw = target.getLayoutParams();
+        ViewGroup.MarginLayoutParams params;
+        if (raw instanceof ViewGroup.MarginLayoutParams) {
+            params = (ViewGroup.MarginLayoutParams) raw;
+        } else if (raw != null) {
+            params = new ViewGroup.MarginLayoutParams(raw);
+        } else {
+            params = new ViewGroup.MarginLayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        }
+        params.setMargins(dp.dp(margin[0]), dp.dp(margin[1]), dp.dp(margin[2]), dp.dp(margin[3]));
+        target.setLayoutParams(params);
+    }
+
+    private static int resolveAttr(String expr) {
+        if ("-android.R.attr.state_enabled".equals(expr)) {
+            return -android.R.attr.state_enabled;
+        }
+        if ("android.R.attr.state_pressed".equals(expr)) {
+            return android.R.attr.state_pressed;
+        }
+        if ("android.R.attr.state_focused".equals(expr)) {
+            return android.R.attr.state_focused;
+        }
+        if ("android.R.attr.state_checked".equals(expr)) {
+            return android.R.attr.state_checked;
+        }
+        return 0;
+    }
+}

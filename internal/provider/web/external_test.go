@@ -1,12 +1,23 @@
 package web
 
 import (
+	"os"
 	"os/exec"
 	"strings"
 	"testing"
 
 	"github.com/dwlhm/nova/internal/provider/build"
 )
+
+func requireNode(t *testing.T) {
+	t.Helper()
+	if _, err := exec.LookPath("node"); err != nil {
+		if os.Getenv("CI") != "" {
+			t.Fatalf("node is required in CI: %v", err)
+		}
+		t.Skip("node not available")
+	}
+}
 
 func TestWebExternalAdaptersPreferProjectOverrideContent(t *testing.T) {
 	override := `export function register(NovaExternal) {
@@ -27,9 +38,7 @@ func TestWebExternalAdaptersPreferProjectOverrideContent(t *testing.T) {
 }
 
 func TestNovaExternalInvokeContract(t *testing.T) {
-	if _, err := exec.LookPath("node"); err != nil {
-		t.Skip("node not available")
-	}
+	requireNode(t)
 
 	bundle := externalAdapters([]build.ResolvedExternalOperation{
 		{CapabilitySource: "@env/storage", Operation: "set", Implementation: build.Implementation{Path: "platform/web/storage.web.js"}},
@@ -40,6 +49,13 @@ func TestNovaExternalInvokeContract(t *testing.T) {
 
 	script := "global.window = global;\n" + bundle.Content + `
 (async () => {
+  NovaExternal.checkPermission({ permissions: ["storage.write"], externalOperations: [{ id: "@env/storage#set", permissions: ["storage.write"], output: "void" }] }, "@env/storage#set");
+  try {
+    NovaExternal.checkPermission({ permissions: [], externalOperations: [{ id: "@env/storage#set", permissions: ["storage.write"], output: "void" }] }, "@env/storage#set");
+    throw new Error("expected permission denial");
+  } catch (error) {
+    if (!String(error.message).includes("permission denied")) throw error;
+  }
   NovaExternal.define("@test/mock", {
     async ok() { return null; },
     async fail() { throw new Error("boom"); },

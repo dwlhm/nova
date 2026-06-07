@@ -60,7 +60,7 @@ func TestGenerateWebArtifactIncludesRuntimeViewIRAndMetadata(t *testing.T) {
 		t.Fatalf("unexpected diagnostics: %+v", diagnostics)
 	}
 
-	assertArtifactFile(t, files, "build/web/index.html", "<script src=\"assets/nova-scheduler.js\"></script>\n  <script src=\"assets/nova-renderer.js\"></script>\n  <script src=\"assets/external-adapters.js\"></script>\n  <script src=\"assets/nova-runtime.js\"></script>")
+	assertArtifactFile(t, files, "build/web/index.html", "<script src=\"assets/nova-scheduler.js\"></script>\n  <script src=\"assets/nova-renderer.js\"></script>\n  <script src=\"assets/external-adapters.js\"></script>\n  <script src=\"assets/nova-app-lifecycle.js\"></script>\n  <script src=\"assets/nova-runtime.js\"></script>")
 	assertArtifactFile(t, files, "build/web/assets/external-adapters.js", "NovaExternal")
 	assertArtifactFile(t, files, "build/web/index.html", "assets/styles/src/App.css")
 	assertArtifactFile(t, files, "build/web/assets/styles/src/App.css", ".app { color: red; }")
@@ -317,10 +317,10 @@ func TestGenerateAndroidArtifactIncludesGradleAndGeneratedBindings(t *testing.T)
 	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "dispatch(\"@increment\"")
 	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "private final NovaScheduler scheduler = new NovaScheduler(this)")
 	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "public Map<String, Object> schedulerState()")
-	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "node_0.setPadding(dp(12), dp(12), dp(12), dp(12));")
-	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "GradientDrawable node_0Style = new GradientDrawable();")
-	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "node_0_0.setTextSize(TypedValue.COMPLEX_UNIT_SP, 34);")
-	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "node_0_0.setTypeface(Typeface.DEFAULT, Typeface.BOLD);")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "NovaStyle.applyWithStates")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/NovaStyle.java", "applyWithStates")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "\"font-size\", \"34px\"")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "\"font-weight\", \"800\"")
 	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/NovaRuntime.java", "public final class NovaRuntime")
 	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/NovaRuntime.java", "public static Object evaluate(")
 	assertArtifactFile(t, files, "build/android/nova-scheduler/src/main/java/nova/scheduler/NovaScheduler.java", "public final class NovaScheduler")
@@ -384,13 +384,12 @@ func TestGenerateAndroidArtifactAppliesStyleStateSelectors(t *testing.T) {
 		t.Fatalf("unexpected diagnostics: %+v", diagnostics)
 	}
 
-	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "new ColorStateList(")
-	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "-android.R.attr.state_enabled")
-	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "StateListDrawable")
-	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "android.R.attr.state_pressed")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "NovaStyle.applyWithStates")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/NovaStyle.java", "applyWithStates")
 	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "bindStatefulLayout_")
-	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "applyLayoutSkin_")
-	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "fontSizeSp = 18f")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "NovaStyle.bindStatefulLayout")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "layoutSpec_")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "\"font-size\", \"18\"")
 }
 
 func TestGenerateAndroidArtifactRequiresUserTargetConfig(t *testing.T) {
@@ -606,7 +605,7 @@ func TestGenerateAndroidArtifactSupportsMultiPageRouteProjection(t *testing.T) {
 		t.Fatalf("unexpected diagnostics: %+v", diagnostics)
 	}
 
-	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "state.put(\"route\", record(entry(\"path\", \"/\")))")
+	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "state.put(\"route\", evaluate(\"({ path: \\\"/\\\" })\", state, Collections.emptyMap()))")
 	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "dispatch(\"@route_changed\", Arrays.<Object>asList(evaluate(\"({ path: \\\"/settings\\\" })\", state, Collections.emptyMap()))")
 	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "public void onBackPressed()")
 	assertArtifactFile(t, files, "build/android/app/src/main/java/nova/generated/MainActivity.java", "private final List<Object> routeBackStack")

@@ -41,11 +41,15 @@ func TestBuildContractLifecyclesLowersEmitAndExternal(t *testing.T) {
 			},
 		},
 	}
-	lifecycles := buildContractLifecycles(
+	lifecycles, diagnostics := buildContractLifecycles(
 		[]ModuleRef{{Path: "src/FinancePersistence.nova"}},
 		map[string]parser.File{"src/FinancePersistence.nova": file},
+		buildExprRegistry(map[string]parser.File{"src/FinancePersistence.nova": file}),
 		map[string]bool{"exportJson": true},
 	)
+	if len(diagnostics) > 0 {
+		t.Fatalf("diagnostics = %+v", diagnostics)
+	}
 	if len(lifecycles) != 2 {
 		t.Fatalf("lifecycles = %d, want 2", len(lifecycles))
 	}
@@ -98,11 +102,15 @@ func TestBuildContractLifecyclesLowersExternalCompletionEvents(t *testing.T) {
 			}},
 		}},
 	}
-	lifecycles := buildContractLifecycles(
+	lifecycles, diagnostics := buildContractLifecycles(
 		[]ModuleRef{{Path: "src/Persist.nova"}},
 		map[string]parser.File{"src/Persist.nova": file},
+		buildExprRegistry(map[string]parser.File{"src/Persist.nova": file}),
 		map[string]bool{"payload": true},
 	)
+	if len(diagnostics) > 0 {
+		t.Fatalf("diagnostics = %+v", diagnostics)
+	}
 	if len(lifecycles) != 1 {
 		t.Fatalf("lifecycles = %d, want 1", len(lifecycles))
 	}

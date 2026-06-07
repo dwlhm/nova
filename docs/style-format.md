@@ -153,8 +153,13 @@ Untuk sentuh, pakai **`state … active`**, bukan `hover`.
 ### Properti portable (v1)
 
 `color`, `font-size`, `font-weight`, `text-align`, `text-transform`, `line-height`, `padding`,
-`min-height`, `background` / `background-color`, `border` (+ color/width), `border-radius`,
+`margin`, `min-height`, `background` / `background-color`, `border` (+ color/width), `border-radius`,
 `align-content` (terbatas di Android).
+
+| Properti | Box model |
+| --- | --- |
+| `padding` | Jarak **dalam** (konten → border) |
+| `margin` | Jarak **luar** (border → tetangga); di Android → `MarginLayoutParams` |
 
 ### Web-only CSS
 

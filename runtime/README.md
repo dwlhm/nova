@@ -9,6 +9,7 @@ also depend on them directly when building custom host runtimes.
 | [nova-scheduler-js](nova-scheduler-js/) | Web (browser) | `npm install @nova/scheduler` |
 | [nova-renderer-js](nova-renderer-js/) | Web (browser) | `npm install @nova/renderer` |
 | [nova-scheduler-java](nova-scheduler-java/) | Android (JVM) | Gradle `implementation(project(":nova-scheduler"))` |
+| [nova-runtime-java](nova-runtime-java/) | Android (JVM) | Copied into app namespace as `NovaRuntime.java` |
 
 Semantic contract: [ADR-002](../docs/adr/adr_002_runtime.md).
 

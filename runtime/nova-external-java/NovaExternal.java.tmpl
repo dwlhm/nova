@@ -1,0 +1,140 @@
+import android.content.Context;
+
+import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import nova.scheduler.NovaScheduler;
+
+public final class NovaExternal {
+    public static final class OperationSpec {
+        public final String output;
+        public final List<String> permissions;
+
+        public OperationSpec(String output, List<String> permissions) {
+            this.output = output == null ? "" : output;
+            this.permissions = permissions == null ? Collections.emptyList() : permissions;
+        }
+    }
+
+    private NovaExternal() {}
+
+    public static void invoke(
+            Context context,
+            NovaScheduler scheduler,
+            String owner,
+            String effectId,
+            Map<String, Object> input,
+            String onSuccess,
+            String onFailure
+    ) {
+        try {
+            Object output = invokeSync(context, effectId, input);
+            if (onSuccess != null && !onSuccess.isEmpty()) {
+                scheduler.enqueueLifecycle(
+                        owner,
+                        onSuccess,
+                        output == null ? Collections.emptyList() : Collections.singletonList(output)
+                );
+            }
+        } catch (Exception error) {
+            if (onFailure != null && !onFailure.isEmpty()) {
+                String message = error.getMessage() == null ? String.valueOf(error) : error.getMessage();
+                scheduler.enqueueLifecycle(owner, onFailure, Collections.singletonList(message));
+            }
+        }
+    }
+
+    public static Object invokeSync(Context context, String effectId, Map<String, Object> input) throws Exception {
+        checkPermission(effectId);
+        Object output = NovaExternalAdapters.invoke(context, effectId, input == null ? Collections.emptyMap() : input);
+        return validateOutput(effectId, output);
+    }
+
+    public static void checkPermission(String effectId) {
+        OperationSpec spec = NovaExternalBindings.spec(effectId);
+        if (spec == null) {
+            return;
+        }
+        List<String> granted = NovaExternalBindings.PROJECT_PERMISSIONS;
+        for (String permission : spec.permissions) {
+            if (permission == null || permission.isEmpty()) {
+                continue;
+            }
+            if (!granted.contains(permission)) {
+                throw new SecurityException("permission denied: " + permission);
+            }
+        }
+    }
+
+    public static Object validateOutput(String effectId, Object output) {
+        OperationSpec spec = NovaExternalBindings.spec(effectId);
+        if (spec == null) {
+            ensureSerializable(output);
+            return output;
+        }
+        if ("void".equals(spec.output) && output != null) {
+            throw new IllegalStateException("external operation " + effectId + " expected void output");
+        }
+        if ("string".equals(spec.output) && output != null && !(output instanceof String)) {
+            throw new IllegalStateException("external operation " + effectId + " expected string output");
+        }
+        ensureSerializable(output);
+        return output;
+    }
+
+    public static boolean isSerializableData(Object value) {
+        return isSerializableData(value, Collections.newSetFromMap(new IdentityHashMap<>()));
+    }
+
+    private static void ensureSerializable(Object value) {
+        if (!isSerializableData(value)) {
+            throw new IllegalStateException("external operation returned non-serializable output");
+        }
+    }
+
+    private static boolean isSerializableData(Object value, Set<Object> visited) {
+        if (value == null) {
+            return true;
+        }
+        if (value instanceof String || value instanceof Boolean) {
+            return true;
+        }
+        if (value instanceof Number number) {
+            double numeric = number.doubleValue();
+            return !Double.isNaN(numeric) && !Double.isInfinite(numeric);
+        }
+        if (!(value instanceof Map<?, ?> || value instanceof List<?>)) {
+            return false;
+        }
+        if (visited.contains(value)) {
+            return false;
+        }
+        visited.add(value);
+        if (value instanceof List<?> list) {
+            for (Object item : list) {
+                if (!isSerializableData(item, visited)) {
+                    visited.remove(value);
+                    return false;
+                }
+            }
+            visited.remove(value);
+            return true;
+        }
+        Map<?, ?> map = (Map<?, ?>) value;
+        for (Map.Entry<?, ?> entry : map.entrySet()) {
+            if (!(entry.getKey() instanceof String)) {
+                visited.remove(value);
+                return false;
+            }
+            if (!isSerializableData(entry.getValue(), visited)) {
+                visited.remove(value);
+                return false;
+            }
+        }
+        visited.remove(value);
+        return true;
+    }
+}

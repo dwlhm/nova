@@ -52,7 +52,7 @@ func TestHostIOImportsStayAtEdges(t *testing.T) {
 	}
 
 	hostImports := set("net", "net/http", "os", "os/exec", "path/filepath")
-	hostPackages := set("cmd/nova", "internal/cli", "internal/bundler", "internal/conformance", "internal/packageio")
+	hostPackages := set("cmd/nova", "internal/cli", "internal/bundler", "internal/conformance", "internal/packageio", "internal/lsp")
 	failures := make([]string, 0)
 	for importer, imports := range importsByPackage {
 		if hostPackages[importer] {
@@ -158,10 +158,16 @@ func allowedInternalImports() map[string]map[string]bool {
 			"internal/core/scheduler",
 			"internal/core/types",
 		),
+		"internal/core/expr": set(
+			"internal/core/lexer",
+			"internal/core/parser",
+			"internal/core/scheduler",
+		),
 		"internal/core/format": set(),
 		"internal/core/ir": set(
 			"internal/core/capability",
 			"internal/core/contract",
+			"internal/core/expr",
 			"internal/core/lexer",
 			"internal/core/parser",
 			"internal/core/routing",
@@ -198,6 +204,7 @@ func allowedInternalImports() map[string]map[string]bool {
 		"internal/core/semantic": set(
 			"internal/core/ast",
 			"internal/core/lexer",
+			"internal/core/parser",
 			"internal/core/validator",
 		),
 		"internal/core/persistence": set(
@@ -249,10 +256,16 @@ func allowedInternalImports() map[string]map[string]bool {
 		"internal/provider/capability/view/codegen/android": set(
 			"internal/core/contract",
 			"internal/core/routing",
+			"internal/core/security",
 			"internal/core/style",
 			"internal/provider/build",
 			"internal/provider/capability/view/target/android",
 			"internal/provider/shared",
+			"runtime/nova-runtime-java",
+			"runtime/nova-style-java",
+			"runtime/nova-external-java",
+			"runtime/nova-renderer-java",
+			"runtime/nova-app-js",
 		),
 		"internal/provider/capability/view/codegen/web": set(
 			"internal/core/contract",
@@ -303,6 +316,9 @@ func allowedInternalImports() map[string]map[string]bool {
 			"internal/provider/shared",
 		),
 		"internal/provider/capability/view/external/runtime": set(
+			"internal/core/expr",
+			"internal/core/parser",
+			"internal/provider/build",
 			"internal/provider/capability/view/codegen/android",
 			"internal/provider/capability/view/codegen/web",
 			"internal/provider/capability/view/external",
@@ -357,6 +373,15 @@ func allowedInternalImports() map[string]map[string]bool {
 			"internal/provider/shared",
 		),
 		"internal/provider/capability/view/external/scroll": set(
+			"internal/core/contract",
+			"internal/provider/capability/view/codegen/android",
+			"internal/provider/capability/view/external",
+			"internal/provider/capability/view/external/primitive",
+			"internal/provider/capability/view/registry/android",
+			"internal/provider/capability/view/registry/web",
+			"internal/provider/shared",
+		),
+		"internal/provider/capability/view/external/select": set(
 			"internal/core/contract",
 			"internal/provider/capability/view/codegen/android",
 			"internal/provider/capability/view/external",
@@ -422,6 +447,7 @@ func allowedInternalImports() map[string]map[string]bool {
 			"internal/provider/capability/view/external/row",
 			"internal/provider/capability/view/external/runtime",
 			"internal/provider/capability/view/external/scroll",
+			"internal/provider/capability/view/external/select",
 			"internal/provider/capability/view/external/stack",
 			"internal/provider/capability/view/external/style",
 			"internal/provider/capability/view/external/surface",
@@ -449,18 +475,23 @@ func allowedInternalImports() map[string]map[string]bool {
 			"internal/provider/shared",
 			"internal/provider/standard",
 			"internal/provider/target",
+			"runtime/nova-external-js",
+			"runtime/nova-app-js",
 			"runtime/nova-renderer-js",
 			"runtime/nova-scheduler-js",
 		),
 		"internal/provider/android": set(
 			"internal/provider/build",
 			"internal/provider/capability/view/android",
+			"internal/core/contract",
 			"internal/core/diagnostic",
 			"internal/core/security",
 			"internal/project",
 			"internal/provider/shared",
 			"internal/provider/standard",
 			"internal/provider/target",
+			"runtime/nova-runtime-java",
+			"runtime/nova-external-java",
 			"runtime/nova-scheduler-java",
 		),
 		"internal/provider/build": set(
@@ -495,6 +526,7 @@ func allowedInternalImports() map[string]map[string]bool {
 			"internal/dev",
 			"internal/core/ast",
 			"internal/core/compile",
+			"internal/core/contract",
 			"internal/core/diagnostic",
 			"internal/core/format",
 			"internal/core/ir",
@@ -507,11 +539,13 @@ func allowedInternalImports() map[string]map[string]bool {
 		"internal/conformance": set(
 			"internal/provider/artifact",
 			"internal/provider/build",
+			"internal/core/app",
 			"internal/core/ast",
 			"internal/core/compile",
 			"internal/core/contract",
 			"internal/core/diagnostic",
 			"internal/core/effect",
+			"internal/core/expr",
 			"internal/core/ir",
 			"internal/core/lexer",
 			"internal/packageio",

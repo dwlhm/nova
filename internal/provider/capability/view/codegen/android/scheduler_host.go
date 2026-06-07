@@ -1,5 +1,7 @@
 package androidcodegen
 
+import "github.com/dwlhm/nova/internal/core/contract"
+
 func javaSchedulerActivityHost() string {
 	return `    private void dispatch(String eventName, List<Object> args) {
         scheduler.dispatch("renderer", eventName, args);
@@ -42,6 +44,9 @@ func javaSchedulerActivityHost() string {
 
     @Override
     public Object schedulerEvaluate(String expression, Map<String, Object> state, Map<String, Object> payload) {
+        if ("` + contract.NavigationApplyExpression + `".equals(expression)) {
+            return NovaNavigation.applyRoute(routeBackStack, routePatterns(), state, payload);
+        }
         return evaluate(expression, state, payload);
     }
 

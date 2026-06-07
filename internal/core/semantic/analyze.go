@@ -3,6 +3,7 @@ package semantic
 import (
 	"github.com/dwlhm/nova/internal/core/ast"
 	"github.com/dwlhm/nova/internal/core/lexer"
+	"github.com/dwlhm/nova/internal/core/parser"
 	"github.com/dwlhm/nova/internal/core/validator"
 )
 
@@ -22,12 +23,13 @@ func Analyze(file ast.RawFile) (ast.CheckedFile, []Diagnostic) {
 }
 
 // AnalyzeModule runs semantic analysis on a raw module.
-func AnalyzeModule(module ast.RawModule) (ast.CheckedModule, []Diagnostic) {
-	checked, diagnostics := Analyze(module.File)
+func AnalyzeModule(module ast.RawModule, modules map[string]parser.File) (ast.CheckedModule, []Diagnostic) {
+	imports := validator.CapabilityImportsForModule(module.Path, module.File, modules)
+	diagnostics := convertDiagnostics(validator.ValidateWithImports(module.File, imports))
 	if len(diagnostics) > 0 {
 		return ast.CheckedModule{}, diagnostics
 	}
-	return ast.CheckedModule{Path: module.Path, File: checked}, nil
+	return ast.CheckedModule{Path: module.Path, File: ast.CheckedFile{File: module.File}}, nil
 }
 
 func convertDiagnostics(items []validator.Diagnostic) []Diagnostic {

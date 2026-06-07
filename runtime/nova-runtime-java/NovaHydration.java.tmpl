@@ -1,0 +1,109 @@
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+import nova.scheduler.NovaScheduler;
+
+public final class NovaHydration {
+    public interface InputEvaluator {
+        Object evaluate(String expression);
+    }
+
+    public interface ExternalInvoker {
+        Object invoke(String effectId, Map<String, Object> input) throws Exception;
+    }
+
+    private NovaHydration() {}
+
+    public static void restorePersistedState(
+            HydrationManifest manifest,
+            NovaScheduler scheduler,
+            InputEvaluator evaluator,
+            ExternalInvoker invoker
+    ) {
+        if (manifest == null || manifest.loads == null || manifest.loads.isEmpty() || scheduler == null) {
+            return;
+        }
+        for (HydrationLoadStep step : manifest.loads) {
+            try {
+                Object output = invoker.invoke(step.effectId, evaluateInput(step.input, evaluator));
+                scheduler.commitTransition(
+                        step.successEvent,
+                        output == null ? Collections.emptyList() : Collections.singletonList(output)
+                );
+            } catch (Exception error) {
+                if (step.failureEvent != null && !step.failureEvent.isEmpty()) {
+                    scheduler.commitTransition(
+                            step.failureEvent,
+                            Collections.singletonList(error.getMessage() == null ? String.valueOf(error) : error.getMessage())
+                    );
+                }
+                return;
+            }
+        }
+        if (manifest.terminalEvent != null && !manifest.terminalEvent.isEmpty()) {
+            scheduler.commitTransition(manifest.terminalEvent, Collections.emptyList());
+        }
+    }
+
+    public static boolean shouldSkipAfterEvent(HydrationManifest manifest, String eventName) {
+        if (manifest == null || manifest.skipAfterEvents == null || eventName == null) {
+            return false;
+        }
+        return manifest.skipAfterEvents.contains(eventName);
+    }
+
+    private static Map<String, Object> evaluateInput(Map<String, String> input, InputEvaluator evaluator) {
+        if (input == null || input.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        for (Map.Entry<String, String> entry : input.entrySet()) {
+            out.put(entry.getKey(), evaluator.evaluate(entry.getValue()));
+        }
+        return out;
+    }
+
+    public static final class HydrationManifest {
+        public final String bootstrapEvent;
+        public final List<HydrationLoadStep> loads;
+        public final String terminalEvent;
+        public final List<String> skipAfterEvents;
+
+        public HydrationManifest(
+                String bootstrapEvent,
+                List<HydrationLoadStep> loads,
+                String terminalEvent,
+                List<String> skipAfterEvents
+        ) {
+            this.bootstrapEvent = bootstrapEvent == null ? "" : bootstrapEvent;
+            this.loads = loads == null ? Collections.emptyList() : Collections.unmodifiableList(new ArrayList<>(loads));
+            this.terminalEvent = terminalEvent == null ? "" : terminalEvent;
+            this.skipAfterEvents = skipAfterEvents == null ? Collections.emptyList() : Collections.unmodifiableList(new ArrayList<>(skipAfterEvents));
+        }
+    }
+
+    public static final class HydrationLoadStep {
+        public final String triggerEvent;
+        public final String effectId;
+        public final Map<String, String> input;
+        public final String successEvent;
+        public final String failureEvent;
+
+        public HydrationLoadStep(
+                String triggerEvent,
+                String effectId,
+                Map<String, String> input,
+                String successEvent,
+                String failureEvent
+        ) {
+            this.triggerEvent = triggerEvent == null ? "" : triggerEvent;
+            this.effectId = effectId == null ? "" : effectId;
+            this.input = input == null ? Collections.emptyMap() : Collections.unmodifiableMap(new LinkedHashMap<>(input));
+            this.successEvent = successEvent == null ? "" : successEvent;
+            this.failureEvent = failureEvent == null ? "" : failureEvent;
+        }
+    }
+}
